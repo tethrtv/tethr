@@ -1,0 +1,33 @@
+x-tethr: &tethr
+  restart: unless-stopped
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  tethr:
+    <<: *tethr
+    image: ghcr.io/tethrtv/tethr:${PRODUCTION_TAG:-main}
+
+  tethr-staging:
+    <<: *tethr
+    image: ghcr.io/tethrtv/tethr:${STAGING_TAG:-main}
+    mem_limit: 256m
+    cpus: 0.5
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

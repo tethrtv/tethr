@@ -1,0 +1,14 @@
+FROM --platform=$BUILDPLATFORM golang:1.27.3 AS build
+ARG TARGETOS TARGETARCH VERSION=dev
+ENV GOTOOLCHAIN=local
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o /tethr ./cmd/tethr
+
+FROM gcr.io/distroless/static-debian13:nonroot
+COPY --from=build /tethr /tethr
+EXPOSE 8080
+ENTRYPOINT ["/tethr"]

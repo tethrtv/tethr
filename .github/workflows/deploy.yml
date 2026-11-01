@@ -1,0 +1,83 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then v=$GITHUB_REF_NAME; else v=${GITHUB_SHA::7}; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "ghcr.io/tethrtv/tethr:$v"
+            if [ "$GITHUB_REF_TYPE" = branch ]; then echo "ghcr.io/tethrtv/tethr:main"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.version.outputs.tags }}
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  staging:
+    if: github.ref_type == 'branch' && vars.DEPLOY_HOST != ''
+    needs: image
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging-api.tethr.tv
+    steps:
+      - uses: actions/checkout@v7
+      - name: deploy
+        run: deploy/ship.sh staging "$VERSION" https://staging-api.tethr.tv
+        env:
+          VERSION: ${{ needs.image.outputs.version }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+  production:
+    if: github.ref_type == 'tag' && vars.DEPLOY_HOST != ''
+    needs: image
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://api.tethr.tv
+    steps:
+      - uses: actions/checkout@v7
+      - name: deploy
+        run: deploy/ship.sh production "$VERSION" https://api.tethr.tv
+        env:
+          VERSION: ${{ needs.image.outputs.version }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
