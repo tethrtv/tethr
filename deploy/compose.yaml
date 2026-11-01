@@ -1,33 +1,91 @@
-x-tethr: &tethr
-  restart: unless-stopped
-  read_only: true
-  security_opt:
-    - no-new-privileges:true
+x-logging: &logging
   logging:
     driver: json-file
     options:
       max-size: 10m
       max-file: "3"
 
+x-tethr: &tethr
+  <<: *logging
+  restart: unless-stopped
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  depends_on:
+    postgres:
+      condition: service_healthy
+
 services:
   tethr:
     <<: *tethr
     image: ghcr.io/tethrtv/tethr:${PRODUCTION_TAG:-main}
+    environment:
+      DATABASE_URL: postgres://tethr:${TETHR_DB_PASSWORD:?}@postgres:5432/tethr?sslmode=disable
 
   tethr-staging:
     <<: *tethr
     image: ghcr.io/tethrtv/tethr:${STAGING_TAG:-main}
     mem_limit: 256m
     cpus: 0.5
+    environment:
+      DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable
+
+  postgres:
+    <<: *logging
+    image: postgres:18
+    restart: unless-stopped
+    shm_size: 256m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=wal-g wal-push %p
+      - -c
+      - archive_timeout=300
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      PGHOST: /var/run/postgresql
+      PGUSER: postgres
+      WALG_S3_PREFIX: ${WALG_S3_PREFIX:?}
+      WALG_LIBSODIUM_KEY: ${WALG_LIBSODIUM_KEY:?}
+      WALG_LIBSODIUM_KEY_TRANSFORM: hex
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:?}
+      AWS_REGION: auto
+      AWS_S3_FORCE_PATH_STYLE: "true"
+    volumes:
+      - postgres:/var/lib/postgresql
+      - /usr/local/bin/wal-g:/usr/local/bin/wal-g:ro
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: pg_isready
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   cloudflared:
+    <<: *logging
     image: cloudflare/cloudflared:2026.10.7
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?}
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
+
+configs:
+  postgres-init:
+    content: |
+      CREATE ROLE tethr LOGIN PASSWORD '${TETHR_DB_PASSWORD:?}';
+      CREATE DATABASE tethr OWNER tethr;
+      REVOKE CONNECT ON DATABASE tethr FROM PUBLIC;
+      CREATE ROLE tethr_staging LOGIN PASSWORD '${STAGING_DB_PASSWORD:?}';
+      CREATE DATABASE tethr_staging OWNER tethr_staging;
+      REVOKE CONNECT ON DATABASE tethr_staging FROM PUBLIC;
+
+volumes:
+  postgres:
