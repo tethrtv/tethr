@@ -1,0 +1,84 @@
+:root {
+  color-scheme: light;
+  --paper: #fbfbf8;
+  --paper-2: #f2f2ec;
+  --ink: #141412;
+  --ink-2: #53534c;
+  --ink-3: #85857d;
+  --rule: rgba(20, 20, 18, 0.13);
+  --rule-2: rgba(20, 20, 18, 0.28);
+  --hl: #d4fa3c;
+  --hl-blend: multiply;
+  --hl-ink: #141412;
+  --font: "Archivo Variable", "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --narrow: 74%;
+  --wide: 116%;
+  --gutter: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #1a1916;
+    --paper-2: #23221e;
+    --ink: #edece5;
+    --ink-2: #aeaca1;
+    --ink-3: #7c7a71;
+    --rule: rgba(237, 236, 229, 0.13);
+    --rule-2: rgba(237, 236, 229, 0.3);
+    --hl: rgba(212, 250, 60, 0.3);
+    --hl-blend: normal;
+    --hl-ink: #f4f8e4;
+  }
+}
+
+@media (max-width: 899px) {
+  :root {
+    --gutter: 16px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+p,
+dl,
+dd {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #d4fa3c;
+  color: #141412;
+}

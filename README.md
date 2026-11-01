@@ -19,7 +19,7 @@ make run
 
 `make gen` regenerates the database code after a change to `migrations/` or `internal/store/queries/`.
 
-The server listens on `localhost:8080`.
+The server listens on `localhost:8080`. The website is in `web/`: run `pnpm install` and `pnpm dev` there.
 
 ## Contributing
 
