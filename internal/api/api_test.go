@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -260,5 +261,226 @@ func TestInviteOnly(t *testing.T) {
 	}
 	if rec := do(t, h, "POST", "/v1/accounts", `{"email":"sam@example.com","name":"Sam","username":"sam","invite":"`+code+`"}`); rec.Code != http.StatusAccepted {
 		t.Errorf("with an invite = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestConnectingApps(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{
+		DB:             dbtest.New(t),
+		Mail:           mail,
+		AppURL:         "https://staging.tethr.tv",
+		AllowedOrigins: []string{"https://staging.tethr.tv"},
+		Cookie:         CookieConfig{Name: "tethr_session"},
+	}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+	ctx := context.Background()
+	app, err := core.CreateApp(ctx, s.DB, "Zuno", []string{"zuno://trakt/callback"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var me Me
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/me", "", cookie).Body.Bytes(), &me)
+	profile := strconv.FormatInt(me.Profiles[0].Id, 10)
+
+	device, err := core.StartDeviceCode(ctx, s.DB, app.ClientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := strings.ToLower(device.UserCode[:4] + "-" + device.UserCode[4:])
+	if rec := do(t, h, "GET", "/v1/devices/"+code, "", cookie); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"app_name":"Zuno"`) {
+		t.Errorf("look up = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "GET", "/v1/devices/AAAAAAAA", "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown code = %d", rec.Code)
+	}
+	if rec := do(t, h, "POST", "/v1/devices/"+code+"/approve", `{"profile_id":`+profile+`}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("signed out approval = %d", rec.Code)
+	}
+	if rec := do(t, h, "POST", "/v1/devices/"+code+"/approve", `{"profile_id":`+profile+`}`, cookie); rec.Code != http.StatusNoContent {
+		t.Fatalf("approve = %d %s", rec.Code, rec.Body)
+	}
+	if _, err := core.PollDeviceCode(ctx, s.DB, app.ClientID, "", device.Code, "Zuno/2.3"); err != nil {
+		t.Fatal(err)
+	}
+
+	query := "?client_id=" + app.ClientID + "&redirect_uri=zuno%3A%2F%2Ftrakt%2Fcallback"
+	if rec := do(t, h, "GET", "/v1/authorize"+query, "", cookie); rec.Code != http.StatusOK {
+		t.Errorf("check authorize = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "GET", "/v1/authorize?client_id="+app.ClientID+"&redirect_uri=https%3A%2F%2Fevil.example", "", cookie); rec.Code != http.StatusBadRequest {
+		t.Errorf("unregistered redirect = %d", rec.Code)
+	}
+	rec := do(t, h, "POST", "/v1/authorize", `{"client_id":"`+app.ClientID+`","redirect_uri":"zuno://trakt/callback","profile_id":`+profile+`,"state":"xyz"}`, cookie)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `zuno://trakt/callback?code=`) || !strings.Contains(rec.Body.String(), `state=xyz`) {
+		t.Errorf("authorize = %d %s", rec.Code, rec.Body)
+	}
+
+	var connections []Connection
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/connections", "", cookie).Body.Bytes(), &connections)
+	if len(connections) != 1 || connections[0].AppName != "Zuno" || *connections[0].UserAgent != "Zuno/2.3" {
+		t.Fatalf("connections = %+v", connections)
+	}
+	path := "/v1/connections/" + strconv.FormatInt(connections[0].Id, 10)
+	if rec := do(t, h, "PATCH", path, `{"label":"Living room"}`, cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("rename = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("disconnect = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("disconnect twice = %d", rec.Code)
+	}
+}
+
+func bearer(t *testing.T, h http.Handler, method, path, body, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestNativeTracking(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+	ctx := context.Background()
+
+	rec := do(t, h, "POST", "/v1/profiles", `{"name":"Sam","kind":"person"}`, cookie)
+	var sam Profile
+	_ = json.Unmarshal(rec.Body.Bytes(), &sam)
+	app, err := core.CreateApp(ctx, s.DB, "Zuno", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	device, err := core.StartDeviceCode(ctx, s.DB, app.ClientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := do(t, h, "POST", "/v1/devices/"+device.UserCode+"/approve", `{"profile_id":`+strconv.FormatInt(sam.Id, 10)+`}`, cookie); rec.Code != http.StatusNoContent {
+		t.Fatalf("approve = %d %s", rec.Code, rec.Body)
+	}
+	tokens, err := core.PollDeviceCode(ctx, s.DB, app.ClientID, "", device.Code, "Zuno")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := tokens.Access
+
+	if rec := bearer(t, h, "GET", "/v1/profile", "", token); !strings.Contains(rec.Body.String(), `"username":"nathan-sam"`) {
+		t.Errorf("app profile = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "GET", "/v1/profile", "", cookie); !strings.Contains(rec.Body.String(), `"username":"nathan"`) {
+		t.Errorf("website profile = %d %s", rec.Code, rec.Body)
+	}
+	if rec := bearer(t, h, "GET", "/v1/profile", "", "nope"); rec.Code != http.StatusUnauthorized {
+		t.Errorf("bad token = %d", rec.Code)
+	}
+
+	episode := `{"event":"%s","progress":%d,"item":{"type":"episode","show":{"tmdb":1396},"season":1,"number":2}}`
+	rec = bearer(t, h, "POST", "/v1/scrobble", fmt.Sprintf(episode, "start", 1), token)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"result":"watching"`) {
+		t.Fatalf("start = %d %s", rec.Code, rec.Body)
+	}
+	rec = bearer(t, h, "POST", "/v1/scrobble", fmt.Sprintf(episode, "stop", 40), token)
+	var paused ScrobbleResult
+	_ = json.Unmarshal(rec.Body.Bytes(), &paused)
+	if paused.Result != Paused || paused.Item.Episode == nil || paused.Item.Episode.Number != 2 || *paused.Item.Title.Ids.Tmdb != 1396 {
+		t.Errorf("early stop = %s", rec.Body)
+	}
+	var resume []ResumePoint
+	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/playback", "", token).Body.Bytes(), &resume)
+	if len(resume) != 1 || resume[0].Id != *paused.Id {
+		t.Errorf("playback = %+v", resume)
+	}
+	if rec := bearer(t, h, "POST", "/v1/scrobble", fmt.Sprintf(episode, "stop", 97), token); !strings.Contains(rec.Body.String(), `"result":"watched"`) {
+		t.Errorf("stop = %s", rec.Body)
+	}
+	if rec := bearer(t, h, "POST", "/v1/scrobble", fmt.Sprintf(episode, "stop", 98), token); rec.Code != http.StatusConflict {
+		t.Errorf("second stop = %d", rec.Code)
+	}
+	if rec := bearer(t, h, "POST", "/v1/scrobble", `{"event":"stop","progress":90,"item":{"type":"movie"}}`, token); rec.Code != http.StatusNotFound {
+		t.Errorf("no ids = %d", rec.Code)
+	}
+
+	rec = bearer(t, h, "POST", "/v1/history", `{"items":[{"item":{"type":"movie","ids":{"imdb":"tt0133093"}},"watched_at":"2024-05-01T20:00:00Z"},{"item":{"type":"movie","ids":{"imdb":"tt0133093"}},"watched_at":"2024-05-01T20:00:00Z"},{"item":{"type":"show","ids":{"tmdb":1399}}}]}`, token)
+	if !strings.Contains(rec.Body.String(), `"added":1,"existing":1`) || !strings.Contains(rec.Body.String(), `"not_found":[{"ids":{"tmdb":1399},"type":"show"}]`) {
+		t.Errorf("add history = %s", rec.Body)
+	}
+	var history HistoryPage
+	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/history?limit=1", "", token).Body.Bytes(), &history)
+	if history.Total != 2 || len(history.Items) != 1 || history.Items[0].Item.Type != ItemTypeEpisode {
+		t.Fatalf("history = %+v", history)
+	}
+	var mine HistoryPage
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/history", "", cookie).Body.Bytes(), &mine)
+	if mine.Total != 0 {
+		t.Errorf("Sam's watches showed up in Nathan's history: %+v", mine)
+	}
+	watch := "/v1/history/" + strconv.FormatInt(history.Items[0].Id, 10)
+	if rec := bearer(t, h, "DELETE", watch, "", token); rec.Code != http.StatusNoContent {
+		t.Errorf("remove watch = %d", rec.Code)
+	}
+	if rec := bearer(t, h, "DELETE", watch, "", token); rec.Code != http.StatusNotFound {
+		t.Errorf("remove watch twice = %d", rec.Code)
+	}
+
+	if rec := bearer(t, h, "POST", "/v1/watchlist", `{"items":[{"item":{"type":"show","ids":{"tmdb":1399}},"notes":"after Andor"},{"item":{"type":"season","show":{"tmdb":1399},"season":2}}]}`, token); !strings.Contains(rec.Body.String(), `"added":2`) {
+		t.Errorf("watchlist add = %s", rec.Body)
+	}
+	var listed []Listing
+	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/watchlist", "", token).Body.Bytes(), &listed)
+	if len(listed) != 2 || *listed[0].Notes != "after Andor" || listed[1].Item.Type != ItemTypeSeason || *listed[1].Item.Season != 2 {
+		t.Fatalf("watchlist = %+v", listed)
+	}
+	if rec := bearer(t, h, "DELETE", "/v1/watchlist/"+strconv.FormatInt(listed[1].Id, 10), "", token); rec.Code != http.StatusNoContent {
+		t.Errorf("watchlist remove = %d", rec.Code)
+	}
+
+	var activity Activity
+	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/activity", "", token).Body.Bytes(), &activity)
+	if !activity.Latest.Equal(activity.Watchlist) || activity.History.IsZero() || activity.Playback.After(activity.History) {
+		t.Errorf("activity = %+v", activity)
+	}
+}
+
+func TestDevelopers(t *testing.T) {
+	h, mail := newTestServer(t)
+	cookie := signIn(t, h, mail)
+
+	rec := do(t, h, "POST", "/v1/apps", `{"name":"My Player","redirect_uris":["myplayer://callback"]}`, cookie)
+	var registered RegisteredApp
+	_ = json.Unmarshal(rec.Body.Bytes(), &registered)
+	if rec.Code != http.StatusCreated || registered.ClientSecret == "" || registered.App.RedirectUris[0] != "myplayer://callback" {
+		t.Fatalf("register = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/v1/apps", `{"name":"Bad","redirect_uris":["http://evil.example"]}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_redirect") {
+		t.Errorf("bad redirect = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/v1/apps", `{"name":"Nope"}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("signed out = %d", rec.Code)
+	}
+
+	path := "/v1/apps/" + strconv.FormatInt(registered.App.Id, 10)
+	if rec := do(t, h, "PATCH", path, `{"name":"My Player 2"}`, cookie); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"redirect_uris":["myplayer://callback"]`) {
+		t.Errorf("rename = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", path+"/secret", "", cookie); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), registered.ClientSecret) {
+		t.Errorf("new secret = %d %s", rec.Code, rec.Body)
+	}
+	var apps []DeveloperApp
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/apps", "", cookie).Body.Bytes(), &apps)
+	if len(apps) != 1 || apps[0].Name != "My Player 2" {
+		t.Errorf("apps = %+v", apps)
+	}
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("revoke = %d", rec.Code)
+	}
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("revoke twice = %d", rec.Code)
 	}
 }

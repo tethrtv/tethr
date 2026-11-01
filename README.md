@@ -19,7 +19,7 @@ make run
 
 `make gen` regenerates the database code after a change to `migrations/` or `internal/store/queries/`.
 
-The server listens on `localhost:8080`. The website is in `web/`: run `pnpm install` and `pnpm dev` there.
+The server listens on `localhost:8080`. To connect a player, register it with `go run ./cmd/tethr app "Player name"` (add redirect URIs after the name for apps that sign in through a browser), which prints its client ID and secret. The website is in `web/`: run `pnpm install` and `pnpm dev` there.
 
 ## Contributing
 
