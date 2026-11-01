@@ -10,19 +10,41 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/tethrtv/tethr/migrations"
 )
 
 var version = "dev"
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	run := serve
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		run = migrate
+	}
 	if err := run(log); err != nil {
 		log.Error("tethr stopped", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(log *slog.Logger) error {
+func migrate(log *slog.Logger) error {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		return errors.New("DATABASE_URL is not set")
+	}
+	results, err := migrations.Up(context.Background(), url)
+	if err != nil {
+		return err
+	}
+	for _, r := range results {
+		log.Info("migrated", "version", r.Source.Version, "file", r.Source.Path)
+	}
+	log.Info("database is up to date")
+	return nil
+}
+
+func serve(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

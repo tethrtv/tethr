@@ -2,7 +2,7 @@ FROM --platform=$BUILDPLATFORM golang:1.27.3 AS build
 ARG TARGETOS TARGETARCH VERSION=dev
 ENV GOTOOLCHAIN=local
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
