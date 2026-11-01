@@ -43,10 +43,32 @@ mv tags.env.new tags.env
 
 compose="docker compose --env-file .env --env-file tags.env"
 $compose pull "$service"
+$compose up -d --wait postgres
+$compose run --rm --no-deps "$service" migrate
 $compose up -d cloudflared "$service"
 docker image prune -f >/dev/null
 SCRIPT
 chmod 755 /usr/local/bin/tethr-deploy
+
+walg=v3.0.9
+case $(dpkg --print-architecture) in
+  amd64) asset=wal-g-pg-24.04-amd64 ;;
+  arm64) asset=wal-g-pg-24.04-aarch64 ;;
+esac
+curl -fsSL -o /tmp/wal-g "https://github.com/wal-g/wal-g/releases/download/$walg/$asset"
+echo "$(curl -fsSL "https://github.com/wal-g/wal-g/releases/download/$walg/$asset.sha256" | cut -d' ' -f1)  /tmp/wal-g" | sha256sum -c -
+install -m 755 /tmp/wal-g /usr/local/bin/wal-g
+rm /tmp/wal-g
+
+cat > /usr/local/bin/tethr-backup <<'SCRIPT'
+#!/bin/sh
+set -eu
+docker exec -u postgres tethr-postgres-1 sh -c 'wal-g backup-push "$PGDATA" && wal-g delete retain FULL 7 --confirm'
+url=$(sed -n 's/^HEALTHCHECK_URL=//p' /srv/tethr/.env)
+[ -z "$url" ] || curl -fsS -m 10 --retry 3 "$url" >/dev/null
+SCRIPT
+chmod 755 /usr/local/bin/tethr-backup
+echo '30 3 * * * deploy /usr/local/bin/tethr-backup 2>&1 | logger -t tethr-backup' > /etc/cron.d/tethr-backup
 
 ufw allow OpenSSH
 ufw --force enable
@@ -61,4 +83,4 @@ else
   echo "No SSH key found for $admin, so password logins are still on. Add your key, then rerun this script." >&2
 fi
 
-echo "Done. Put the Cloudflare tunnel token in /srv/tethr/.env as TUNNEL_TOKEN=..."
+echo "Done. Fill in /srv/tethr/.env before the next deploy; deploy/env.example lists what it needs."
