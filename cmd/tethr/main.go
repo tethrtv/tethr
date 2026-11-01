@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"syscall"
 	"time"
 )
+
+var version = "dev"
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -32,7 +35,7 @@ func run(log *slog.Logger) error {
 
 	errs := make(chan error, 1)
 	go func() { errs <- srv.ListenAndServe() }()
-	log.Info("listening", "addr", addr)
+	log.Info("listening", "addr", addr, "version", version)
 
 	select {
 	case err := <-errs:
@@ -53,6 +56,10 @@ func run(log *slog.Logger) error {
 
 func routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"name": "tethr", "version": version})
+	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

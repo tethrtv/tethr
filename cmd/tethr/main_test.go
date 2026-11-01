@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,5 +32,23 @@ func TestUnknownPath(t *testing.T) {
 	routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("GET /nope = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestRoot(t *testing.T) {
+	rec := httptest.NewRecorder()
+	routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET / = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	var got struct{ Name, Version string }
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "tethr" || got.Version != version {
+		t.Errorf("GET / = %+v, want name tethr and version %q", got, version)
 	}
 }
