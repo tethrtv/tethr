@@ -6,6 +6,7 @@ import { Button } from '../components/Button'
 import { CodeInput } from '../components/CodeInput'
 import { Plain } from '../components/Plain'
 import { pendingEmail } from '../pendingEmail'
+import { returnTo } from '../returnTo'
 import styles from './Auth.module.css'
 
 export function CheckEmail() {
@@ -23,7 +24,7 @@ export function CheckEmail() {
     },
     onSuccess: (me) => {
       queries.setQueryData(['me'], me)
-      navigate({ to: '/' })
+      navigate({ href: returnTo.take() })
     },
     onError: () => setCode(''),
   })

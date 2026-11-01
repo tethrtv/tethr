@@ -1,7 +1,6 @@
 .comb {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
   border-bottom: 2px solid var(--ink);
   cursor: text;
 }
@@ -49,7 +48,7 @@
   background: var(--ink);
 }
 
-.cell:nth-of-type(3)::after {
+.half::after {
   height: 30px;
   width: 2px;
 }

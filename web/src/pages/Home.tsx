@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useEffect, useState } from 'react'
 import { api, type Me, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
@@ -11,6 +11,7 @@ import { addPasskey, passkeysSupported } from '../passkeys'
 import styles from './Home.module.css'
 
 type Profile = components['schemas']['Profile']
+type Connection = components['schemas']['Connection']
 const kinds = { owner: 'You', person: 'Person', kids: 'Kids', guest: 'Guest' } as const
 const when = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'never'
@@ -56,10 +57,11 @@ export function Home() {
         <header className={styles.head}>
           <h1 className={styles.title}>{account.name}</h1>
           <p className={styles.lead}>
-            Signed in as <strong>{account.email}</strong>. Up next, history and connected apps arrive here soon.
+            Signed in as <strong>{account.email}</strong>. Up next and history arrive here soon.
           </p>
         </header>
         <Household me={me.data} />
+        <ConnectedApps />
         <SigningIn />
         <DeleteAccount me={me.data} />
       </div>
@@ -200,6 +202,112 @@ function ProfileRow({ profile, onChange }: { profile: Profile; onChange: () => v
   )
 }
 
+function ConnectedApps() {
+  const connections = useQuery({
+    queryKey: ['connections'],
+    queryFn: async () => (await api.GET('/v1/connections')).data ?? [],
+  })
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>Connected apps</h2>
+      <p className={styles.note}>
+        Open the app, choose Tethr, and it will show a short code.{' '}
+        <Link to="/activate" className={styles.inline}>
+          Enter the code here
+        </Link>
+        . Disconnecting an app stops it logging, and never touches your history. Building a player?{' '}
+        <Link to="/developers" className={styles.inline}>
+          Register it here
+        </Link>
+        .
+      </p>
+      {connections.data?.length ? (
+        <ul className={styles.rows}>
+          {connections.data.map((c) => (
+            <ConnectionRow key={c.id} connection={c} />
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  )
+}
+
+function ConnectionRow({ connection: c }: { connection: Connection }) {
+  const queries = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [label, setLabel] = useState(c.label ?? '')
+  const refresh = () => queries.invalidateQueries({ queryKey: ['connections'] })
+
+  const rename = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PATCH('/v1/connections/{id}', { params: { path: { id: c.id } }, body: { label } })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setRenaming(false)
+      refresh()
+    },
+  })
+  const disconnect = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE('/v1/connections/{id}', { params: { path: { id: c.id } } })
+      if (error) throw error
+    },
+    onSuccess: refresh,
+  })
+
+  if (renaming) {
+    return (
+      <li className={styles.editing}>
+        <Field label={`Name for ${c.app_name}`} value={label} onChange={setLabel} placeholder="Living room" />
+        <div className={styles.rowActions}>
+          <Button variant="primary" onClick={() => rename.mutate()} aria-busy={rename.isPending}>
+            Save
+          </Button>
+          <Button variant="text" onClick={() => setRenaming(false)}>
+            Cancel
+          </Button>
+        </div>
+        {rename.isError && <p className={styles.error}>{problemMessage(rename.error)}</p>}
+      </li>
+    )
+  }
+
+  return (
+    <li className={styles.row}>
+      <span className={styles.name}>
+        {c.app_name}
+        {c.label && <span className={styles.handle}> {c.label}</span>}
+      </span>
+      <span className={styles.kind}>Logs as {c.profile_name}</span>
+      <span className={styles.kind}>Last used {when(c.last_used_at ?? c.created_at)}</span>
+      <span className={styles.rowActions}>
+        {confirming ? (
+          <>
+            <span className={styles.warn}>It’ll need a new code to come back.</span>
+            <Button variant="text" onClick={() => setConfirming(false)}>
+              Keep it
+            </Button>
+            <Button variant="text" className={styles.danger} onClick={() => disconnect.mutate()}>
+              Disconnect
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="text" onClick={() => setRenaming(true)}>
+              Rename
+            </Button>
+            <Button variant="text" className={styles.danger} onClick={() => setConfirming(true)}>
+              Disconnect
+            </Button>
+          </>
+        )}
+      </span>
+    </li>
+  )
+}
+
 function SigningIn() {
   const passkeys = useQuery({
     queryKey: ['passkeys'],
@@ -298,7 +406,6 @@ function SigningIn() {
             </li>
           ))}
         </ul>
-        <p className={styles.note}>TVs and apps will be listed under Connected apps.</p>
       </div>
     </section>
   )

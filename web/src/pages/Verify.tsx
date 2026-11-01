@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { api, problemMessage } from '../api/client'
 import { Plain } from '../components/Plain'
+import { returnTo } from '../returnTo'
 import styles from './Auth.module.css'
 
 export function Verify() {
@@ -19,7 +20,7 @@ export function Verify() {
     },
     onSuccess: (me) => {
       queries.setQueryData(['me'], me)
-      navigate({ to: '/', replace: true })
+      navigate({ href: returnTo.take(), replace: true })
     },
   })
 

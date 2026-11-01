@@ -1,0 +1,110 @@
+.code {
+  font-stretch: 80%;
+  font-weight: 650;
+  font-family: inherit;
+  overflow-wrap: anywhere;
+}
+
+.secret {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  background: var(--hl-soft);
+}
+
+.secretRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.secretValue {
+  flex: 1;
+  min-width: 0;
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  font-family: inherit;
+  overflow-wrap: anywhere;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1fr) auto;
+  gap: 6px 20px;
+  align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.appMain {
+  display: grid;
+  gap: 2px;
+}
+
+.clientID {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-stretch: 80%;
+  font-weight: 650;
+  cursor: copy;
+  justify-self: start;
+  text-align: left;
+  text-decoration: underline dotted var(--rule-2);
+  text-underline-offset: 3px;
+}
+
+.redirects {
+  display: grid;
+  gap: 2px;
+  font-size: 0.9375rem;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 56px;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+  margin-top: 14px;
+  max-width: 520px;
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: #141412;
+}
+
+.links {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+}

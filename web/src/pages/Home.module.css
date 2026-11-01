@@ -89,6 +89,11 @@
   font-size: 0.9375rem;
 }
 
+.inline {
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .warn {
   color: var(--ink-2);
 }

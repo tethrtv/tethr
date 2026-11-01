@@ -7,6 +7,7 @@ import { Field } from '../components/Field'
 import { Plain } from '../components/Plain'
 import { passkeysSupported, signInWithPasskey } from '../passkeys'
 import { pendingEmail } from '../pendingEmail'
+import { returnTo } from '../returnTo'
 import styles from './Auth.module.css'
 
 export function SignIn() {
@@ -17,7 +18,7 @@ export function SignIn() {
     mutationFn: signInWithPasskey,
     onSuccess: (me) => {
       queries.setQueryData(['me'], me)
-      navigate({ to: '/' })
+      navigate({ href: returnTo.take() })
     },
   })
   const send = useMutation({
