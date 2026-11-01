@@ -29,6 +29,6 @@ Every change, including the maintainer's, goes through a pull request and has to
 
 The server is licensed under the GNU Affero General Public License v3.0. See `LICENSE`. If you run a modified copy for other people, you have to share your changes.
 
-Tethr's API spec and client libraries are MIT licensed, so any app can use them. The skip marker data is published under the Open Database License.
+The API spec in `spec/tethr/` is MIT licensed, so any app can build against it. The skip marker data is published under the Open Database License.
 
 Copyright © 2026 Ellisn Ltd and contributors.

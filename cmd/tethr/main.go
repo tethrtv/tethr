@@ -4,23 +4,37 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tethrtv/tethr/internal/api"
+	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/internal/mail"
 	"github.com/tethrtv/tethr/migrations"
 )
+
+const localDatabase = "postgres://tethr:tethr@localhost:5432/tethr?sslmode=disable"
 
 var version = "dev"
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	run := serve
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		run = migrate
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "migrate":
+			run = migrate
+		case "invite":
+			run = invite
+		}
 	}
 	if err := run(log); err != nil {
 		log.Error("tethr stopped", "err", err)
@@ -29,11 +43,7 @@ func main() {
 }
 
 func migrate(log *slog.Logger) error {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
-		return errors.New("DATABASE_URL is not set")
-	}
-	results, err := migrations.Up(context.Background(), url)
+	results, err := migrations.Up(context.Background(), envOr("DATABASE_URL", localDatabase))
 	if err != nil {
 		return err
 	}
@@ -44,14 +54,65 @@ func migrate(log *slog.Logger) error {
 	return nil
 }
 
+func invite(*slog.Logger) error {
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	code, err := core.CreateInvite(ctx, db, strings.Join(os.Args[2:], " "))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n%s/join?invite=%s\n", code, envOr("APP_URL", "http://localhost:5173"), code)
+	return nil
+}
+
 func serve(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	appURL := envOr("APP_URL", "http://localhost:5173")
+	origins := strings.Split(envOr("ALLOWED_ORIGINS", appURL), ",")
+	wa, err := webauthn.New(&webauthn.Config{
+		RPID:          envOr("WEBAUTHN_RP_ID", "localhost"),
+		RPDisplayName: "Tethr",
+		RPOrigins:     origins,
+	})
+	if err != nil {
+		return err
+	}
+	v1 := &api.Server{
+		DB:             db,
+		WebAuthn:       wa,
+		RequireInvite:  os.Getenv("SIGNUPS") == "invite",
+		Log:            log,
+		AppURL:         appURL,
+		AllowedOrigins: origins,
+		Cookie: api.CookieConfig{
+			Name:   envOr("SESSION_COOKIE", "tethr_session"),
+			Domain: os.Getenv("COOKIE_DOMAIN"),
+			Secure: strings.HasPrefix(appURL, "https://"),
+		},
+		Mail: mail.SMTP{
+			Addr:     envOr("SMTP_ADDR", "localhost:1025"),
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     envOr("MAIL_FROM", "Tethr <sign-in@mail.tethr.tv>"),
+		},
+	}
+
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           routes(),
+		Handler:           routes(v1.Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -76,8 +137,10 @@ func serve(log *slog.Logger) error {
 	return nil
 }
 
-func routes() http.Handler {
+func routes(v1 http.Handler) http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("/v1/", v1)
+	api.Docs(mux)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"name": "tethr", "version": version})

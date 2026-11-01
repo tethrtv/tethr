@@ -5,6 +5,13 @@ x-logging: &logging
       max-size: 10m
       max-file: "3"
 
+x-mail: &mail
+  COOKIE_DOMAIN: .tethr.tv
+  SMTP_ADDR: smtp.resend.com:587
+  SMTP_USERNAME: resend
+  SMTP_PASSWORD: ${RESEND_API_KEY:?}
+  MAIL_FROM: Tethr <sign-in@mail.tethr.tv>
+
 x-tethr: &tethr
   <<: *logging
   restart: unless-stopped
@@ -20,7 +27,12 @@ services:
     <<: *tethr
     image: ghcr.io/tethrtv/tethr:${PRODUCTION_TAG:-main}
     environment:
+      <<: *mail
       DATABASE_URL: postgres://tethr:${TETHR_DB_PASSWORD:?}@postgres:5432/tethr?sslmode=disable
+      APP_URL: https://tethr.tv
+      SESSION_COOKIE: tethr_session
+      WEBAUTHN_RP_ID: tethr.tv
+      SIGNUPS: invite
 
   tethr-staging:
     <<: *tethr
@@ -28,7 +40,11 @@ services:
     mem_limit: 256m
     cpus: 0.5
     environment:
+      <<: *mail
       DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable
+      APP_URL: https://staging.tethr.tv
+      SESSION_COOKIE: tethr_staging_session
+      WEBAUTHN_RP_ID: staging.tethr.tv
 
   postgres:
     <<: *logging

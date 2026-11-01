@@ -1,0 +1,530 @@
+openapi: 3.0.3
+info:
+  title: Tethr API
+  version: 0.1.0
+  description: |
+    Tethr's own API: accounts, households and, soon, everything players need to log what people watch.
+
+    Signing in works without passwords. Ask for a sign-in email, then exchange the link's token, or the email address and the 6-digit code, for a session. The session lives in an HTTP-only cookie, so browsers send it with `credentials: 'include'`.
+
+    Errors come back as `{"code": "...", "message": "..."}`. `code` is stable for programs to check, and `message` is written for people.
+
+    Support for players built for the Trakt API is on the way. They'll talk to Tethr at the same address, using the paths they already know.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
+servers:
+  - url: https://api.tethr.tv
+  - url: https://staging-api.tethr.tv
+paths:
+  /v1/accounts:
+    post:
+      operationId: createAccount
+      summary: Start a sign-up by emailing a sign-in link
+      description: Always answers 202 for an email address that already has an account, so the endpoint can't be used to find out who has signed up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUp'
+      responses:
+        '202':
+          description: A sign-in link and code are on their way
+        '400':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /v1/auth/email-link:
+    post:
+      operationId: requestEmailLink
+      summary: Email a sign-in link and code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailLinkRequest'
+      responses:
+        '202':
+          description: If the address has an account, a sign-in link and code are on their way
+        '400':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /v1/auth/verify:
+    post:
+      operationId: verify
+      summary: Exchange a link token, or an email and code, for a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Verification'
+      responses:
+        '200':
+          description: Signed in
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /v1/auth/sign-out:
+    post:
+      operationId: signOut
+      summary: End the current session
+      responses:
+        '204':
+          description: Signed out
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+  /v1/auth/passkey/options:
+    post:
+      operationId: passkeySignInOptions
+      summary: Start signing in with a passkey
+      responses:
+        '200':
+          description: Options to pass to the browser's WebAuthn API
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasskeyOptions'
+  /v1/auth/passkey:
+    post:
+      operationId: passkeySignIn
+      summary: Finish signing in with a passkey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasskeyResponse'
+      responses:
+        '200':
+          description: Signed in
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/Problem'
+  /v1/passkeys:
+    get:
+      operationId: listPasskeys
+      summary: The signed-in account's passkeys
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Passkeys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Passkey'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: addPasskey
+      summary: Finish adding a passkey
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasskeyResponse'
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Passkey'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/passkeys/options:
+    post:
+      operationId: addPasskeyOptions
+      summary: Start adding a passkey
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Options to pass to the browser's WebAuthn API
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasskeyOptions'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/passkeys/{id}:
+    delete:
+      operationId: removePasskey
+      summary: Remove a passkey
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/profiles:
+    post:
+      operationId: addProfile
+      summary: Add someone to the household
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewProfile'
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/profiles/{id}:
+    patch:
+      operationId: updateProfile
+      summary: Rename a profile, change its username or privacy
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileChanges'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: removeProfile
+      summary: Remove someone from the household, and their history
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Removed
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/sessions:
+    get:
+      operationId: listSessions
+      summary: Where the account is signed in
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Sessions, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/sessions/{id}:
+    delete:
+      operationId: endSession
+      summary: Sign out one device
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Signed out
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/sessions/sign-out-others:
+    post:
+      operationId: signOutOthers
+      summary: Sign out everywhere except here
+      security:
+        - session: []
+      responses:
+        '204':
+          description: Signed out elsewhere
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/me:
+    delete:
+      operationId: deleteAccount
+      summary: Delete the account, its household and everything in it
+      description: Send the owner's username to confirm. This can't be undone.
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username:
+                  type: string
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+    get:
+      operationId: getMe
+      summary: The signed-in account and its household's profiles
+      security:
+        - session: []
+      responses:
+        '200':
+          description: The signed-in account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Problem'
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: tethr_session
+  responses:
+    Problem:
+      description: Something went wrong; `code` says what
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    SignUp:
+      type: object
+      required: [email, name, username]
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+        username:
+          type: string
+          description: 2 to 24 lowercase letters, numbers and dashes, starting with a letter or number.
+        invite:
+          type: string
+          description: Needed while sign-ups are invite-only.
+    EmailLinkRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+    Verification:
+      type: object
+      description: Either `token` from the link, or `email` and `code` from the email.
+      properties:
+        token:
+          type: string
+        email:
+          type: string
+        code:
+          type: string
+    Me:
+      type: object
+      required: [account, profiles]
+      properties:
+        account:
+          $ref: '#/components/schemas/Account'
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Profile'
+    Account:
+      type: object
+      required: [id, email, name, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Profile:
+      type: object
+      required: [id, username, name, kind, private]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [owner, person, kids, guest]
+        private:
+          type: boolean
+    Problem:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: username_taken
+        message:
+          type: string
+    NewProfile:
+      type: object
+      required: [name, kind]
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [person, kids, guest]
+        username:
+          type: string
+          description: Left out, one is made from the owner's username and the name.
+    ProfileChanges:
+      type: object
+      properties:
+        name:
+          type: string
+        username:
+          type: string
+        private:
+          type: boolean
+    Session:
+      type: object
+      required: [id, created_at, last_seen_at, current]
+      properties:
+        id:
+          type: integer
+          format: int64
+        user_agent:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+    Passkey:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+    PasskeyOptions:
+      type: object
+      required: [challenge, options]
+      properties:
+        challenge:
+          type: string
+          description: Send this back with the browser's response.
+        options:
+          type: object
+          additionalProperties: true
+          description: WebAuthn options in their JSON form.
+    PasskeyResponse:
+      type: object
+      required: [challenge, credential]
+      properties:
+        challenge:
+          type: string
+        credential:
+          type: object
+          additionalProperties: true
+          description: The browser's WebAuthn response in its JSON form.
+        name:
+          type: string
+          description: A name for a new passkey, such as "iCloud Keychain".

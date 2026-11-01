@@ -19,10 +19,51 @@ type Account struct {
 	UpdatedAt       time.Time
 }
 
+type AuthChallenge struct {
+	ID          int64
+	TokenHash   []byte
+	AccountID   *int64
+	Kind        string
+	SessionData []byte
+	ExpiresAt   time.Time
+}
+
+type EmailLink struct {
+	ID        int64
+	Email     string
+	AccountID int64
+	Purpose   string
+	TokenHash []byte
+	CodeHash  []byte
+	Attempts  int32
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+	CreatedAt time.Time
+}
+
 type Household struct {
 	ID             int64
 	OwnerAccountID int64
 	CreatedAt      time.Time
+}
+
+type Invite struct {
+	ID              int64
+	Code            string
+	Note            *string
+	UsedByAccountID *int64
+	UsedAt          *time.Time
+	CreatedAt       time.Time
+}
+
+type Passkey struct {
+	ID           int64
+	AccountID    int64
+	CredentialID []byte
+	Credential   []byte
+	Name         string
+	CreatedAt    time.Time
+	LastUsedAt   *time.Time
 }
 
 type Profile struct {
@@ -39,4 +80,16 @@ type Profile struct {
 	Position    int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type Session struct {
+	ID         int64
+	AccountID  int64
+	ProfileID  *int64
+	TokenHash  []byte
+	UserAgent  *string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	RevokedAt  *time.Time
 }
