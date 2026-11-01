@@ -57,9 +57,11 @@ services:
       AWS_ENDPOINT: ${AWS_ENDPOINT:?}
       AWS_REGION: auto
       AWS_S3_FORCE_PATH_STYLE: "true"
+      S3_ENABLE_VERSIONING: disabled
     volumes:
       - postgres:/var/lib/postgresql
       - /usr/local/bin/wal-g:/usr/local/bin/wal-g:ro
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
     configs:
       - source: postgres-init
         target: /docker-entrypoint-initdb.d/init.sql
