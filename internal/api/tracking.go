@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/tethrtv/tethr/internal/core"
 )
 
@@ -354,6 +355,9 @@ func toItem(i core.Item) Item {
 	}
 	if e := i.Episode; e != nil {
 		episode := &Episode{Season: int(e.SeasonNumber), Number: int(e.EpisodeNumber), Ids: Ids{Tethr: &e.ID}}
+		if e.FirstAired != nil {
+			episode.FirstAired = &openapi_types.Date{Time: *e.FirstAired}
+		}
 		if e.TmdbEpisodeID != nil {
 			tmdb := int(*e.TmdbEpisodeID)
 			episode.Ids.Tmdb = &tmdb
@@ -361,4 +365,61 @@ func toItem(i core.Item) Item {
 		out.Episode = episode
 	}
 	return out
+}
+
+func (s *Server) GetUpNext(ctx context.Context, _ GetUpNextRequestObject) (GetUpNextResponseObject, error) {
+	c, ok, err := s.caller(ctx)
+	if !ok {
+		return GetUpNext401JSONResponse{notConnected}, err
+	}
+	entries, err := core.UpNext(ctx, s.DB, c.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(GetUpNext200JSONResponse, 0, len(entries))
+	for _, e := range entries {
+		next := core.Item{Title: e.Show.Title, Episode: &e.Next}
+		entry := UpNextEntry{
+			Show:          toItem(e.Show).Title,
+			Next:          *toItem(next).Episode,
+			LastWatchedAt: e.LastWatchedAt,
+			Aired:         int(e.Aired),
+			Watched:       int(e.Watched),
+		}
+		if e.Resume != nil {
+			entry.Resume = &Resume{Id: e.Resume.ID, Progress: e.Resume.Progress}
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func (s *Server) HideFromUpNext(ctx context.Context, req HideFromUpNextRequestObject) (HideFromUpNextResponseObject, error) {
+	c, ok, err := s.caller(ctx)
+	if !ok {
+		return HideFromUpNext401JSONResponse{notConnected}, err
+	}
+	err = core.HideFromUpNext(ctx, s.DB, c.ProfileID, req.Id)
+	if errors.Is(err, core.ErrNotFound) {
+		return HideFromUpNext404JSONResponse(problem("not_found", "There’s no show with that ID.")), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return HideFromUpNext204Response{}, nil
+}
+
+func (s *Server) ShowInUpNext(ctx context.Context, req ShowInUpNextRequestObject) (ShowInUpNextResponseObject, error) {
+	c, ok, err := s.caller(ctx)
+	if !ok {
+		return ShowInUpNext401JSONResponse{notConnected}, err
+	}
+	err = core.ShowInUpNext(ctx, s.DB, c.ProfileID, req.Id)
+	if errors.Is(err, core.ErrNotFound) {
+		return ShowInUpNext404JSONResponse(problem("not_found", "That show isn’t hidden.")), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ShowInUpNext204Response{}, nil
 }

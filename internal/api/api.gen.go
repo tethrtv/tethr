@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for ItemType.
@@ -322,6 +323,8 @@ type EmailLinkRequest struct {
 
 // Episode defines model for Episode.
 type Episode struct {
+	FirstAired *openapi_types.Date `json:"first_aired,omitempty"`
+
 	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
 	Ids    Ids `json:"ids"`
 	Number int `json:"number"`
@@ -493,6 +496,12 @@ type RegisteredApp struct {
 	ClientSecret string       `json:"client_secret"`
 }
 
+// Resume Where the next episode was paused, if it was started.
+type Resume struct {
+	Id       int64   `json:"id"`
+	Progress float64 `json:"progress"`
+}
+
 // ResumePoint defines model for ResumePoint.
 type ResumePoint struct {
 	Id       int64     `json:"id"`
@@ -565,6 +574,21 @@ type Title struct {
 	// Name From Wikidata. Missing until Tethr has one; fetch names and artwork from TMDB yourself.
 	Name *string `json:"name,omitempty"`
 	Year *int    `json:"year,omitempty"`
+}
+
+// UpNextEntry defines model for UpNextEntry.
+type UpNextEntry struct {
+	// Aired Episodes aired so far, not counting specials.
+	Aired         int       `json:"aired"`
+	LastWatchedAt time.Time `json:"last_watched_at"`
+	Next          Episode   `json:"next"`
+
+	// Resume Where the next episode was paused, if it was started.
+	Resume *Resume `json:"resume,omitempty"`
+	Show   Title   `json:"show"`
+
+	// Watched How many of those have been watched.
+	Watched int `json:"watched"`
 }
 
 // Verification Either `token` from the link, or `email` and `code` from the email.
@@ -798,6 +822,15 @@ type ServerInterface interface {
 	// EndSession Sign out one device
 	// (DELETE /v1/sessions/{id})
 	EndSession(w http.ResponseWriter, r *http.Request, id Id)
+	// GetUpNext The next episode of every show you're partway through
+	// (GET /v1/up-next)
+	GetUpNext(w http.ResponseWriter, r *http.Request)
+	// ShowInUpNext Put a hidden show back in Up next
+	// (DELETE /v1/up-next/hidden/{id})
+	ShowInUpNext(w http.ResponseWriter, r *http.Request, id Id)
+	// HideFromUpNext Hide a show from Up next
+	// (PUT /v1/up-next/hidden/{id})
+	HideFromUpNext(w http.ResponseWriter, r *http.Request, id Id)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(w http.ResponseWriter, r *http.Request, params ListWatchlistParams)
@@ -1641,6 +1674,72 @@ func (siw *ServerInterfaceWrapper) EndSession(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetUpNext operation middleware
+func (siw *ServerInterfaceWrapper) GetUpNext(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUpNext(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ShowInUpNext operation middleware
+func (siw *ServerInterfaceWrapper) ShowInUpNext(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShowInUpNext(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// HideFromUpNext operation middleware
+func (siw *ServerInterfaceWrapper) HideFromUpNext(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.HideFromUpNext(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWatchlist operation middleware
 func (siw *ServerInterfaceWrapper) ListWatchlist(w http.ResponseWriter, r *http.Request) {
 
@@ -1871,6 +1970,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/watchlist", wrapper.AddToWatchlist)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/watchlist/{id}", wrapper.RemoveFromWatchlist)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.GetActivity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.HideFromUpNext)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/apps", wrapper.ListApps)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/apps", wrapper.RegisterApp)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/apps/{id}", wrapper.RevokeApp)
@@ -3715,6 +3817,129 @@ func (response EndSession404JSONResponse) VisitEndSessionResponse(w http.Respons
 	return err
 }
 
+type GetUpNextRequestObject struct {
+}
+
+type GetUpNextResponseObject interface {
+	VisitGetUpNextResponse(w http.ResponseWriter) error
+}
+
+type GetUpNext200JSONResponse []UpNextEntry
+
+func (response GetUpNext200JSONResponse) VisitGetUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUpNext401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetUpNext401JSONResponse) VisitGetUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShowInUpNextRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type ShowInUpNextResponseObject interface {
+	VisitShowInUpNextResponse(w http.ResponseWriter) error
+}
+
+type ShowInUpNext204Response struct {
+}
+
+func (response ShowInUpNext204Response) VisitShowInUpNextResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ShowInUpNext401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ShowInUpNext401JSONResponse) VisitShowInUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShowInUpNext404JSONResponse Problem
+
+func (response ShowInUpNext404JSONResponse) VisitShowInUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type HideFromUpNextRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type HideFromUpNextResponseObject interface {
+	VisitHideFromUpNextResponse(w http.ResponseWriter) error
+}
+
+type HideFromUpNext204Response struct {
+}
+
+func (response HideFromUpNext204Response) VisitHideFromUpNextResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type HideFromUpNext401JSONResponse struct{ ProblemJSONResponse }
+
+func (response HideFromUpNext401JSONResponse) VisitHideFromUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type HideFromUpNext404JSONResponse Problem
+
+func (response HideFromUpNext404JSONResponse) VisitHideFromUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListWatchlistRequestObject struct {
 	Params ListWatchlistParams
 }
@@ -3964,6 +4189,15 @@ type StrictServerInterface interface {
 	// EndSession Sign out one device
 	// (DELETE /v1/sessions/{id})
 	EndSession(ctx context.Context, request EndSessionRequestObject) (EndSessionResponseObject, error)
+	// GetUpNext The next episode of every show you're partway through
+	// (GET /v1/up-next)
+	GetUpNext(ctx context.Context, request GetUpNextRequestObject) (GetUpNextResponseObject, error)
+	// ShowInUpNext Put a hidden show back in Up next
+	// (DELETE /v1/up-next/hidden/{id})
+	ShowInUpNext(ctx context.Context, request ShowInUpNextRequestObject) (ShowInUpNextResponseObject, error)
+	// HideFromUpNext Hide a show from Up next
+	// (PUT /v1/up-next/hidden/{id})
+	HideFromUpNext(ctx context.Context, request HideFromUpNextRequestObject) (HideFromUpNextResponseObject, error)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(ctx context.Context, request ListWatchlistRequestObject) (ListWatchlistResponseObject, error)
@@ -5082,6 +5316,82 @@ func (sh *strictHandler) EndSession(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EndSessionResponseObject); ok {
 		if err := validResponse.VisitEndSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUpNext operation middleware
+func (sh *strictHandler) GetUpNext(w http.ResponseWriter, r *http.Request) {
+	var request GetUpNextRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUpNext(ctx, request.(GetUpNextRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUpNext")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUpNextResponseObject); ok {
+		if err := validResponse.VisitGetUpNextResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ShowInUpNext operation middleware
+func (sh *strictHandler) ShowInUpNext(w http.ResponseWriter, r *http.Request, id Id) {
+	var request ShowInUpNextRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ShowInUpNext(ctx, request.(ShowInUpNextRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ShowInUpNext")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ShowInUpNextResponseObject); ok {
+		if err := validResponse.VisitShowInUpNextResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// HideFromUpNext operation middleware
+func (sh *strictHandler) HideFromUpNext(w http.ResponseWriter, r *http.Request, id Id) {
+	var request HideFromUpNextRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.HideFromUpNext(ctx, request.(HideFromUpNextRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "HideFromUpNext")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(HideFromUpNextResponseObject); ok {
+		if err := validResponse.VisitHideFromUpNextResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

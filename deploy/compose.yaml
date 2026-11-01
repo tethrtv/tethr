@@ -33,6 +33,7 @@ services:
       SESSION_COOKIE: tethr_session
       WEBAUTHN_RP_ID: tethr.tv
       SIGNUPS: invite
+      TMDB_TOKEN: ${TMDB_TOKEN:-}
 
   tethr-staging:
     <<: *tethr
@@ -45,6 +46,7 @@ services:
       APP_URL: https://staging.tethr.tv
       SESSION_COOKIE: tethr_staging_session
       WEBAUTHN_RP_ID: staging.tethr.tv
+      TMDB_TOKEN: ${TMDB_TOKEN:-}
 
   postgres:
     <<: *logging

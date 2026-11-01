@@ -17,7 +17,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/api"
 	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/internal/jobs"
 	"github.com/tethrtv/tethr/internal/mail"
+	"github.com/tethrtv/tethr/internal/tmdb"
 	"github.com/tethrtv/tethr/internal/traktcompat"
 	"github.com/tethrtv/tethr/migrations"
 )
@@ -128,6 +130,12 @@ func serve(log *slog.Logger) error {
 			Password: os.Getenv("SMTP_PASSWORD"),
 			From:     envOr("MAIL_FROM", "Tethr <sign-in@mail.tethr.tv>"),
 		},
+	}
+
+	if token := os.Getenv("TMDB_TOKEN"); token != "" {
+		go jobs.Outlines{DB: db, TMDB: &tmdb.Client{Token: token}, Log: log}.Run(ctx)
+	} else {
+		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in")
 	}
 
 	addr := ":" + envOr("PORT", "8080")
