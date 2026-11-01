@@ -18,6 +18,7 @@ import (
 	"github.com/tethrtv/tethr/internal/api"
 	"github.com/tethrtv/tethr/internal/core"
 	"github.com/tethrtv/tethr/internal/mail"
+	"github.com/tethrtv/tethr/internal/traktcompat"
 	"github.com/tethrtv/tethr/migrations"
 )
 
@@ -34,6 +35,8 @@ func main() {
 			run = migrate
 		case "invite":
 			run = invite
+		case "app":
+			run = app
 		}
 	}
 	if err := run(log); err != nil {
@@ -66,6 +69,24 @@ func invite(*slog.Logger) error {
 		return err
 	}
 	fmt.Printf("%s\n%s/join?invite=%s\n", code, envOr("APP_URL", "http://localhost:5173"), code)
+	return nil
+}
+
+func app(*slog.Logger) error {
+	if len(os.Args) < 3 {
+		return errors.New("usage: tethr app <name> [redirect-uri...]")
+	}
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	a, err := core.CreateApp(ctx, db, os.Args[2], os.Args[3:])
+	if err != nil {
+		return err
+	}
+	fmt.Printf("client id:     %s\nclient secret: %s\n", a.ClientID, a.ClientSecret)
 	return nil
 }
 
@@ -112,7 +133,7 @@ func serve(log *slog.Logger) error {
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           routes(v1.Handler()),
+		Handler:           routes(v1.Handler(), &traktcompat.Server{DB: db, AppURL: appURL, Log: log}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -137,9 +158,10 @@ func serve(log *slog.Logger) error {
 	return nil
 }
 
-func routes(v1 http.Handler) http.Handler {
+func routes(v1 http.Handler, trakt *traktcompat.Server) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", v1)
+	trakt.Routes(mux)
 	api.Docs(mux)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

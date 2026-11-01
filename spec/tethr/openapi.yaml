@@ -9,7 +9,9 @@ info:
 
     Errors come back as `{"code": "...", "message": "..."}`. `code` is stable for programs to check, and `message` is written for people.
 
-    Support for players built for the Trakt API is on the way. They'll talk to Tethr at the same address, using the paths they already know.
+    Apps sign in on someone's behalf with OAuth: TVs show a code that people enter at `/activate` on the website, and phones and computers send them to `/oauth/authorize` in a browser. Each connection logs to one profile the person chooses. Send the access token as `Authorization: Bearer ...` to the tracking endpoints: scrobble, history, playback, the watchlist and activity.
+
+    Players built for the Trakt API can use the paths they already know instead, at the same address.
   license:
     name: MIT
     url: https://opensource.org/license/mit
@@ -350,8 +352,666 @@ paths:
                 $ref: '#/components/schemas/Me'
         '401':
           $ref: '#/components/responses/Problem'
+  /v1/devices/{code}:
+    get:
+      operationId: getDevice
+      summary: Look up a code shown on a TV or other device
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceCode'
+      responses:
+        '200':
+          description: The code is waiting for approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/devices/{code}/approve:
+    post:
+      operationId: approveDevice
+      summary: Connect the device to one of your profiles
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceCode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileChoice'
+      responses:
+        '204':
+          description: Approved; the device picks up its tokens on its next poll
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/devices/{code}/deny:
+    post:
+      operationId: denyDevice
+      summary: Turn the device away
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceCode'
+      responses:
+        '204':
+          description: Denied
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/authorize:
+    get:
+      operationId: getAuthorization
+      summary: Check an app's sign-in request before asking the person
+      security:
+        - session: []
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The app and redirect are known
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizingApp'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: authorize
+      summary: Approve an app's sign-in request for one of your profiles
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+      responses:
+        '200':
+          description: Send the browser to `redirect_to`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationRedirect'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/connections:
+    get:
+      operationId: listConnections
+      summary: List the apps connected to your household
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Connected apps, most recently used first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Connection'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/connections/{id}:
+    patch:
+      operationId: renameConnection
+      summary: Give a connected app a name, like "Living room"
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionChanges'
+      responses:
+        '204':
+          description: Renamed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: disconnect
+      summary: Disconnect an app
+      description: Its tokens stop working at once. History it logged stays.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Disconnected
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/profile:
+    get:
+      operationId: getProfile
+      summary: The profile you're logging to
+      security:
+        - session: []
+        - bearer: []
+      responses:
+        '200':
+          description: For an app, the profile it was connected to. For the website, your own.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/scrobble:
+    post:
+      operationId: scrobble
+      summary: Report playback starting, pausing or stopping
+      description: Send `start` when playback begins or resumes, `pause` when it pauses, and `stop` when it ends. A stop at 80% or more logs a watch and clears the resume point; a stop below that keeps a resume point instead.
+      security:
+        - session: []
+        - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScrobbleRequest'
+      responses:
+        '200':
+          description: What Tethr did with it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrobbleResult'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/history:
+    get:
+      operationId: listHistory
+      summary: Watches, newest first
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, episode]
+        - name: title_id
+          in: query
+          description: Only watches of this film or show.
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+      responses:
+        '200':
+          description: A page of watches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryPage'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: addHistory
+      summary: Log watches that happened elsewhere
+      description: Films and episodes only. A watch already logged for the same item at the same time is skipped.
+      security:
+        - session: []
+        - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewWatches'
+      responses:
+        '200':
+          description: What was added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResult'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+  /v1/history/{id}:
+    delete:
+      operationId: removeWatch
+      summary: Remove one watch
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/playback:
+    get:
+      operationId: listPlayback
+      summary: Resume points, most recent first
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, episode]
+      responses:
+        '200':
+          description: Resume points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResumePoint'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/playback/{id}:
+    delete:
+      operationId: removePlayback
+      summary: Forget a resume point
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/watchlist:
+    get:
+      operationId: listWatchlist
+      summary: The watchlist, in order
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, show, season, episode]
+      responses:
+        '200':
+          description: Watchlist entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Listing'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: addToWatchlist
+      summary: Add to the watchlist
+      description: Watching a film or episode takes it off the watchlist by itself.
+      security:
+        - session: []
+        - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewListings'
+      responses:
+        '200':
+          description: What was added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResult'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+  /v1/watchlist/{id}:
+    delete:
+      operationId: removeFromWatchlist
+      summary: Take one entry off the watchlist
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/activity:
+    get:
+      operationId: getActivity
+      summary: When history, playback and the watchlist last changed
+      description: Cheap to call. Poll this and only fetch the lists whose time has moved on.
+      security:
+        - session: []
+        - bearer: []
+      responses:
+        '200':
+          description: Latest change times
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/apps:
+    get:
+      operationId: listApps
+      summary: Apps you've registered
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Your apps, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeveloperApp'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: registerApp
+      summary: Register an app to get a client ID
+      description: The secret comes back once. Leave out `redirect_uris` for apps that only sign in with TV codes.
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewApp'
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredApp'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/apps/{id}:
+    patch:
+      operationId: updateApp
+      summary: Rename an app or change where sign-in returns to
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppChanges'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeveloperApp'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: revokeApp
+      summary: Revoke an app
+      description: Everyone signed in with it is signed out, and its client ID stops working. History it logged stays.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/apps/{id}/secret:
+    post:
+      operationId: newAppSecret
+      summary: Replace an app's secret
+      description: The old secret stops working at once. People stay signed in.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: The new secret, shown once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSecret'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /oauth/device/code:
+    post:
+      tags: [oauth]
+      operationId: startDeviceSignIn
+      summary: Start signing in a TV or other device
+      description: Show `user_code` and `verification_url` to the person, then poll `/oauth/device/token` every `interval` seconds. Errors from the `/oauth` endpoints use OAuth's shape, with `error` and `error_description`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id]
+              properties:
+                client_id:
+                  type: string
+      responses:
+        '200':
+          description: A code to show
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceSignIn'
+        '403':
+          $ref: '#/components/responses/OAuthError'
+  /oauth/device/token:
+    post:
+      tags: [oauth]
+      operationId: pollDeviceSignIn
+      summary: Check whether the code has been approved
+      description: 400 means keep waiting, 429 means slow down, 404 the code is unknown, 409 it's been used, 410 it's expired and 418 it was denied.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, client_id]
+              properties:
+                code:
+                  type: string
+                  description: The `device_code`, not the code the person types.
+                client_id:
+                  type: string
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '400':
+          $ref: '#/components/responses/OAuthError'
+        '404':
+          $ref: '#/components/responses/OAuthError'
+        '409':
+          $ref: '#/components/responses/OAuthError'
+        '410':
+          $ref: '#/components/responses/OAuthError'
+        '418':
+          $ref: '#/components/responses/OAuthError'
+        '429':
+          $ref: '#/components/responses/OAuthError'
+  /oauth/authorize:
+    get:
+      tags: [oauth]
+      operationId: authorizeInBrowser
+      summary: Send the person here in a browser to approve an app
+      description: Tethr redirects to the website, asks which profile to log to, then sends the browser to `redirect_uri` with `code` and `state`. Use PKCE (`S256`) for apps that can't keep a secret.
+      parameters:
+        - {name: response_type, in: query, required: true, schema: {type: string, enum: [code]}}
+        - {name: client_id, in: query, required: true, schema: {type: string}}
+        - {name: redirect_uri, in: query, required: true, schema: {type: string}}
+        - {name: state, in: query, schema: {type: string}}
+        - {name: code_challenge, in: query, schema: {type: string}}
+        - {name: code_challenge_method, in: query, schema: {type: string, enum: [S256]}}
+      responses:
+        '302':
+          description: On to the website
+  /oauth/token:
+    post:
+      tags: [oauth]
+      operationId: exchangeToken
+      summary: Swap an authorisation code or refresh token for new tokens
+      description: Refreshing replaces both tokens; the old refresh token stops working.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, refresh_token]
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                code:
+                  type: string
+                redirect_uri:
+                  type: string
+                code_verifier:
+                  type: string
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '400':
+          $ref: '#/components/responses/OAuthError'
+        '401':
+          $ref: '#/components/responses/OAuthError'
+  /oauth/revoke:
+    post:
+      tags: [oauth]
+      operationId: revokeToken
+      summary: Sign an app out
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, client_id]
+              properties:
+                token:
+                  type: string
+                client_id:
+                  type: string
+      responses:
+        '200':
+          description: Revoked
 components:
   parameters:
+    DeviceCode:
+      name: code
+      in: path
+      required: true
+      schema:
+        type: string
     Id:
       name: id
       in: path
@@ -364,7 +1024,23 @@ components:
       type: apiKey
       in: cookie
       name: tethr_session
+    bearer:
+      type: http
+      scheme: bearer
+      description: An access token from `/oauth/device/token` or `/oauth/token`.
   responses:
+    OAuthError:
+      description: OAuth's error shape
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error:
+                type: string
+              error_description:
+                type: string
     Problem:
       description: Something went wrong; `code` says what
       content:
@@ -528,3 +1204,383 @@ components:
         name:
           type: string
           description: A name for a new passkey, such as "iCloud Keychain".
+    Device:
+      type: object
+      required: [code, app_name]
+      properties:
+        code:
+          type: string
+        app_name:
+          type: string
+    ProfileChoice:
+      type: object
+      required: [profile_id]
+      properties:
+        profile_id:
+          type: integer
+          format: int64
+    AuthorizingApp:
+      type: object
+      required: [app_name]
+      properties:
+        app_name:
+          type: string
+    AuthorizationRequest:
+      type: object
+      required: [client_id, redirect_uri, profile_id]
+      properties:
+        client_id:
+          type: string
+        redirect_uri:
+          type: string
+        profile_id:
+          type: integer
+          format: int64
+        state:
+          type: string
+        code_challenge:
+          type: string
+        code_challenge_method:
+          type: string
+    AuthorizationRedirect:
+      type: object
+      required: [redirect_to]
+      properties:
+        redirect_to:
+          type: string
+    Connection:
+      type: object
+      required: [id, app_name, profile_id, profile_name, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        app_name:
+          type: string
+        profile_id:
+          type: integer
+          format: int64
+        profile_name:
+          type: string
+        label:
+          type: string
+        user_agent:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+    ConnectionChanges:
+      type: object
+      required: [label]
+      properties:
+        label:
+          type: string
+    DeviceSignIn:
+      type: object
+      required: [device_code, user_code, verification_url, expires_in, interval]
+      properties:
+        device_code:
+          type: string
+        user_code:
+          type: string
+        verification_url:
+          type: string
+        expires_in:
+          type: integer
+        interval:
+          type: integer
+    Tokens:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, scope, created_at]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+          description: Seconds until the access token runs out.
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+          description: Unix seconds.
+    Ids:
+      type: object
+      description: Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+      properties:
+        tethr:
+          type: integer
+          format: int64
+        tmdb:
+          type: integer
+        imdb:
+          type: string
+        tvdb:
+          type: integer
+    ItemRef:
+      type: object
+      description: A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [movie, show, season, episode]
+        ids:
+          $ref: '#/components/schemas/Ids'
+        show:
+          $ref: '#/components/schemas/Ids'
+        season:
+          type: integer
+        number:
+          type: integer
+    Title:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          $ref: '#/components/schemas/Ids'
+        name:
+          type: string
+          description: From Wikidata. Missing until Tethr has one; fetch names and artwork from TMDB yourself.
+        year:
+          type: integer
+    Episode:
+      type: object
+      required: [ids, season, number]
+      properties:
+        ids:
+          $ref: '#/components/schemas/Ids'
+        season:
+          type: integer
+        number:
+          type: integer
+    Item:
+      type: object
+      required: [type, title]
+      properties:
+        type:
+          type: string
+          enum: [movie, show, season, episode]
+        title:
+          $ref: '#/components/schemas/Title'
+        season:
+          type: integer
+          description: For a season.
+        episode:
+          $ref: '#/components/schemas/Episode'
+    ScrobbleRequest:
+      type: object
+      required: [event, progress, item]
+      properties:
+        event:
+          type: string
+          enum: [start, pause, stop]
+        progress:
+          type: number
+          format: double
+          description: Percent watched, 0 to 100.
+        duration_seconds:
+          type: number
+          format: double
+          description: The file's length, if you know it.
+        item:
+          $ref: '#/components/schemas/ItemRef'
+    ScrobbleResult:
+      type: object
+      required: [result, progress, item]
+      properties:
+        result:
+          type: string
+          enum: [watching, paused, watched]
+        id:
+          type: integer
+          format: int64
+          description: The resume point's ID when paused, or the watch's ID when watched.
+        progress:
+          type: number
+          format: double
+        item:
+          $ref: '#/components/schemas/Item'
+    Watch:
+      type: object
+      required: [id, watched_at, action, item]
+      properties:
+        id:
+          type: integer
+          format: int64
+        watched_at:
+          type: string
+          format: date-time
+        action:
+          type: string
+          enum: [scrobble, checkin, watch]
+        item:
+          $ref: '#/components/schemas/Item'
+    HistoryPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Watch'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        limit:
+          type: integer
+    NewWatches:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [item]
+            properties:
+              item:
+                $ref: '#/components/schemas/ItemRef'
+              watched_at:
+                type: string
+                format: date-time
+                description: Left out, it's now.
+    NewListings:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [item]
+            properties:
+              item:
+                $ref: '#/components/schemas/ItemRef'
+              notes:
+                type: string
+    SyncResult:
+      type: object
+      required: [added, existing, not_found]
+      properties:
+        added:
+          type: integer
+        existing:
+          type: integer
+        not_found:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemRef'
+    ResumePoint:
+      type: object
+      required: [id, progress, paused_at, item]
+      properties:
+        id:
+          type: integer
+          format: int64
+        progress:
+          type: number
+          format: double
+        paused_at:
+          type: string
+          format: date-time
+        item:
+          $ref: '#/components/schemas/Item'
+    Listing:
+      type: object
+      required: [id, rank, listed_at, item]
+      properties:
+        id:
+          type: integer
+          format: int64
+        rank:
+          type: integer
+        listed_at:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        item:
+          $ref: '#/components/schemas/Item'
+    Activity:
+      type: object
+      required: [latest, history, playback, watchlist]
+      properties:
+        latest:
+          type: string
+          format: date-time
+        history:
+          type: string
+          format: date-time
+        playback:
+          type: string
+          format: date-time
+        watchlist:
+          type: string
+          format: date-time
+    DeveloperApp:
+      type: object
+      required: [id, name, client_id, redirect_uris, connections, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        client_id:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        connections:
+          type: integer
+          format: int64
+          description: Profiles connected to it right now.
+        created_at:
+          type: string
+          format: date-time
+    NewApp:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Shown to people when they connect it. Up to 60 characters.
+        redirect_uris:
+          type: array
+          description: Where browser sign-in returns to. https, a custom scheme like `myplayer://callback`, or http on localhost.
+          items:
+            type: string
+    AppChanges:
+      type: object
+      properties:
+        name:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+    RegisteredApp:
+      type: object
+      required: [app, client_secret]
+      properties:
+        app:
+          $ref: '#/components/schemas/DeveloperApp'
+        client_secret:
+          type: string
+    AppSecret:
+      type: object
+      required: [client_secret]
+      properties:
+        client_secret:
+          type: string

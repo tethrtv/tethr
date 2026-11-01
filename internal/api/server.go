@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -42,6 +43,7 @@ type contextKey int
 const (
 	sessionKey contextKey = iota
 	userAgentKey
+	bearerKey
 )
 
 func (s *Server) Handler() http.Handler {
@@ -63,6 +65,9 @@ func (s *Server) withRequest(next http.Handler) http.Handler {
 		if c, err := r.Cookie(s.Cookie.Name); err == nil {
 			ctx = context.WithValue(ctx, sessionKey, c.Value)
 		}
+		if token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+			ctx = context.WithValue(ctx, bearerKey, token)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -79,7 +84,7 @@ func (s *Server) origins(next http.Handler) http.Handler {
 		if r.Method == http.MethodOptions {
 			if allowed {
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 				w.Header().Set("Access-Control-Max-Age", "600")
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -262,9 +267,10 @@ func writeProblem(w http.ResponseWriter, status int, code, message string) {
 	_, _ = fmt.Fprintf(w, `{"code":%q,"message":%q}`+"\n", code, message)
 }
 
-func value(s *string) string {
-	if s == nil {
-		return ""
+func value[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
 	}
-	return *s
+	return *p
 }

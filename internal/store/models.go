@@ -19,6 +19,23 @@ type Account struct {
 	UpdatedAt       time.Time
 }
 
+type ActivityMark struct {
+	ProfileID int64
+	Area      string
+	At        time.Time
+}
+
+type App struct {
+	ID               int64
+	OwnerAccountID   *int64
+	ClientID         string
+	ClientSecretHash []byte
+	Name             string
+	RedirectUris     []string
+	CreatedAt        time.Time
+	RevokedAt        *time.Time
+}
+
 type AuthChallenge struct {
 	ID          int64
 	TokenHash   []byte
@@ -26,6 +43,19 @@ type AuthChallenge struct {
 	Kind        string
 	SessionData []byte
 	ExpiresAt   time.Time
+}
+
+type DeviceCode struct {
+	ID              int64
+	AppID           int64
+	DeviceCodeHash  []byte
+	UserCode        string
+	Status          string
+	ProfileID       *int64
+	ExpiresAt       time.Time
+	IntervalSeconds int32
+	LastPolledAt    *time.Time
+	CreatedAt       time.Time
 }
 
 type EmailLink struct {
@@ -39,6 +69,21 @@ type EmailLink struct {
 	ExpiresAt time.Time
 	UsedAt    *time.Time
 	CreatedAt time.Time
+}
+
+type Episode struct {
+	ID            int64
+	ShowID        int64
+	SeasonNumber  int32
+	EpisodeNumber int32
+	TmdbEpisodeID *int32
+	CreatedAt     time.Time
+}
+
+type ExternalID struct {
+	TitleID  int64
+	Provider string
+	Value    string
 }
 
 type Household struct {
@@ -56,6 +101,66 @@ type Invite struct {
 	CreatedAt       time.Time
 }
 
+type List struct {
+	ID          int64
+	ProfileID   int64
+	Kind        string
+	Name        string
+	Slug        string
+	Description *string
+	Privacy     string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type ListItem struct {
+	ID           int64
+	ListID       int64
+	TitleID      int64
+	SeasonNumber *int32
+	EpisodeID    *int64
+	Rank         int32
+	Notes        *string
+	ListedAt     time.Time
+}
+
+type OauthCode struct {
+	ID                  int64
+	AppID               int64
+	ProfileID           int64
+	CodeHash            []byte
+	RedirectUri         string
+	CodeChallenge       *string
+	CodeChallengeMethod *string
+	ExpiresAt           time.Time
+	UsedAt              *time.Time
+}
+
+type OauthGrant struct {
+	ID          int64
+	AppID       int64
+	ProfileID   int64
+	AnyProfile  bool
+	Scopes      []string
+	Label       *string
+	UserAgent   *string
+	ApprovedVia string
+	CreatedAt   time.Time
+	LastUsedAt  *time.Time
+	RevokedAt   *time.Time
+}
+
+type OauthToken struct {
+	ID               int64
+	GrantID          int64
+	AccessTokenHash  []byte
+	RefreshTokenHash []byte
+	AccessExpiresAt  time.Time
+	RefreshExpiresAt time.Time
+	CreatedAt        time.Time
+	RevokedAt        *time.Time
+}
+
 type Passkey struct {
 	ID           int64
 	AccountID    int64
@@ -64,6 +169,17 @@ type Passkey struct {
 	Name         string
 	CreatedAt    time.Time
 	LastUsedAt   *time.Time
+}
+
+type Playback struct {
+	ID              int64
+	ProfileID       int64
+	TitleID         int64
+	EpisodeID       *int64
+	Progress        float64
+	PausedAt        time.Time
+	GrantID         *int64
+	DurationSeconds *float64
 }
 
 type Profile struct {
@@ -92,4 +208,37 @@ type Session struct {
 	LastSeenAt time.Time
 	ExpiresAt  time.Time
 	RevokedAt  *time.Time
+}
+
+type Title struct {
+	ID        int64
+	Kind      string
+	Slug      string
+	Name      *string
+	Year      *int16
+	TmdbID    *int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type WatchEvent struct {
+	ID              int64
+	ProfileID       int64
+	TitleID         int64
+	EpisodeID       *int64
+	WatchedAt       time.Time
+	Action          string
+	GrantID         *int64
+	DurationSeconds *float64
+	CreatedAt       time.Time
+}
+
+type Watching struct {
+	ProfileID int64
+	TitleID   int64
+	EpisodeID *int64
+	GrantID   *int64
+	Progress  float64
+	StartedAt time.Time
+	ExpiresAt time.Time
 }

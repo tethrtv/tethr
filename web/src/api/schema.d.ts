@@ -268,6 +268,439 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Look up a code shown on a TV or other device */
+        get: operations["getDevice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{code}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Connect the device to one of your profiles */
+        post: operations["approveDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{code}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn the device away */
+        post: operations["denyDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check an app's sign-in request before asking the person */
+        get: operations["getAuthorization"];
+        put?: never;
+        /** Approve an app's sign-in request for one of your profiles */
+        post: operations["authorize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the apps connected to your household */
+        get: operations["listConnections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an app
+         * @description Its tokens stop working at once. History it logged stays.
+         */
+        delete: operations["disconnect"];
+        options?: never;
+        head?: never;
+        /** Give a connected app a name, like "Living room" */
+        patch: operations["renameConnection"];
+        trace?: never;
+    };
+    "/v1/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The profile you're logging to */
+        get: operations["getProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/scrobble": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report playback starting, pausing or stopping
+         * @description Send `start` when playback begins or resumes, `pause` when it pauses, and `stop` when it ends. A stop at 80% or more logs a watch and clears the resume point; a stop below that keeps a resume point instead.
+         */
+        post: operations["scrobble"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Watches, newest first */
+        get: operations["listHistory"];
+        put?: never;
+        /**
+         * Log watches that happened elsewhere
+         * @description Films and episodes only. A watch already logged for the same item at the same time is skipped.
+         */
+        post: operations["addHistory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/history/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one watch */
+        delete: operations["removeWatch"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/playback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume points, most recent first */
+        get: operations["listPlayback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/playback/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Forget a resume point */
+        delete: operations["removePlayback"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/watchlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The watchlist, in order */
+        get: operations["listWatchlist"];
+        put?: never;
+        /**
+         * Add to the watchlist
+         * @description Watching a film or episode takes it off the watchlist by itself.
+         */
+        post: operations["addToWatchlist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/watchlist/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take one entry off the watchlist */
+        delete: operations["removeFromWatchlist"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * When history, playback and the watchlist last changed
+         * @description Cheap to call. Poll this and only fetch the lists whose time has moved on.
+         */
+        get: operations["getActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Apps you've registered */
+        get: operations["listApps"];
+        put?: never;
+        /**
+         * Register an app to get a client ID
+         * @description The secret comes back once. Leave out `redirect_uris` for apps that only sign in with TV codes.
+         */
+        post: operations["registerApp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an app
+         * @description Everyone signed in with it is signed out, and its client ID stops working. History it logged stays.
+         */
+        delete: operations["revokeApp"];
+        options?: never;
+        head?: never;
+        /** Rename an app or change where sign-in returns to */
+        patch: operations["updateApp"];
+        trace?: never;
+    };
+    "/v1/apps/{id}/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace an app's secret
+         * @description The old secret stops working at once. People stay signed in.
+         */
+        post: operations["newAppSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start signing in a TV or other device
+         * @description Show `user_code` and `verification_url` to the person, then poll `/oauth/device/token` every `interval` seconds. Errors from the `/oauth` endpoints use OAuth's shape, with `error` and `error_description`.
+         */
+        post: operations["startDeviceSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/device/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check whether the code has been approved
+         * @description 400 means keep waiting, 429 means slow down, 404 the code is unknown, 409 it's been used, 410 it's expired and 418 it was denied.
+         */
+        post: operations["pollDeviceSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Send the person here in a browser to approve an app
+         * @description Tethr redirects to the website, asks which profile to log to, then sends the browser to `redirect_uri` with `code` and `state`. Use PKCE (`S256`) for apps that can't keep a secret.
+         */
+        get: operations["authorizeInBrowser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Swap an authorisation code or refresh token for new tokens
+         * @description Refreshing replaces both tokens; the old refresh token stops working.
+         */
+        post: operations["exchangeToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign an app out */
+        post: operations["revokeToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -363,8 +796,239 @@ export interface components {
             /** @description A name for a new passkey, such as "iCloud Keychain". */
             name?: string;
         };
+        Device: {
+            code: string;
+            app_name: string;
+        };
+        ProfileChoice: {
+            /** Format: int64 */
+            profile_id: number;
+        };
+        AuthorizingApp: {
+            app_name: string;
+        };
+        AuthorizationRequest: {
+            client_id: string;
+            redirect_uri: string;
+            /** Format: int64 */
+            profile_id: number;
+            state?: string;
+            code_challenge?: string;
+            code_challenge_method?: string;
+        };
+        AuthorizationRedirect: {
+            redirect_to: string;
+        };
+        Connection: {
+            /** Format: int64 */
+            id: number;
+            app_name: string;
+            /** Format: int64 */
+            profile_id: number;
+            profile_name: string;
+            label?: string;
+            user_agent?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used_at?: string;
+        };
+        ConnectionChanges: {
+            label: string;
+        };
+        DeviceSignIn: {
+            device_code: string;
+            user_code: string;
+            verification_url: string;
+            expires_in: number;
+            interval: number;
+        };
+        Tokens: {
+            access_token: string;
+            token_type: string;
+            /** @description Seconds until the access token runs out. */
+            expires_in: number;
+            refresh_token: string;
+            scope: string;
+            /**
+             * Format: int64
+             * @description Unix seconds.
+             */
+            created_at: number;
+        };
+        /** @description Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB. */
+        Ids: {
+            /** Format: int64 */
+            tethr?: number;
+            tmdb?: number;
+            imdb?: string;
+            tvdb?: number;
+        };
+        /** @description A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`. */
+        ItemRef: {
+            /** @enum {string} */
+            type: "movie" | "show" | "season" | "episode";
+            ids?: components["schemas"]["Ids"];
+            show?: components["schemas"]["Ids"];
+            season?: number;
+            number?: number;
+        };
+        Title: {
+            ids: components["schemas"]["Ids"];
+            /** @description From Wikidata. Missing until Tethr has one; fetch names and artwork from TMDB yourself. */
+            name?: string;
+            year?: number;
+        };
+        Episode: {
+            ids: components["schemas"]["Ids"];
+            season: number;
+            number: number;
+        };
+        Item: {
+            /** @enum {string} */
+            type: "movie" | "show" | "season" | "episode";
+            title: components["schemas"]["Title"];
+            /** @description For a season. */
+            season?: number;
+            episode?: components["schemas"]["Episode"];
+        };
+        ScrobbleRequest: {
+            /** @enum {string} */
+            event: "start" | "pause" | "stop";
+            /**
+             * Format: double
+             * @description Percent watched, 0 to 100.
+             */
+            progress: number;
+            /**
+             * Format: double
+             * @description The file's length, if you know it.
+             */
+            duration_seconds?: number;
+            item: components["schemas"]["ItemRef"];
+        };
+        ScrobbleResult: {
+            /** @enum {string} */
+            result: "watching" | "paused" | "watched";
+            /**
+             * Format: int64
+             * @description The resume point's ID when paused, or the watch's ID when watched.
+             */
+            id?: number;
+            /** Format: double */
+            progress: number;
+            item: components["schemas"]["Item"];
+        };
+        Watch: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            watched_at: string;
+            /** @enum {string} */
+            action: "scrobble" | "checkin" | "watch";
+            item: components["schemas"]["Item"];
+        };
+        HistoryPage: {
+            items: components["schemas"]["Watch"][];
+            /** Format: int64 */
+            total: number;
+            page: number;
+            limit: number;
+        };
+        NewWatches: {
+            items: {
+                item: components["schemas"]["ItemRef"];
+                /**
+                 * Format: date-time
+                 * @description Left out, it's now.
+                 */
+                watched_at?: string;
+            }[];
+        };
+        NewListings: {
+            items: {
+                item: components["schemas"]["ItemRef"];
+                notes?: string;
+            }[];
+        };
+        SyncResult: {
+            added: number;
+            existing: number;
+            not_found: components["schemas"]["ItemRef"][];
+        };
+        ResumePoint: {
+            /** Format: int64 */
+            id: number;
+            /** Format: double */
+            progress: number;
+            /** Format: date-time */
+            paused_at: string;
+            item: components["schemas"]["Item"];
+        };
+        Listing: {
+            /** Format: int64 */
+            id: number;
+            rank: number;
+            /** Format: date-time */
+            listed_at: string;
+            notes?: string;
+            item: components["schemas"]["Item"];
+        };
+        Activity: {
+            /** Format: date-time */
+            latest: string;
+            /** Format: date-time */
+            history: string;
+            /** Format: date-time */
+            playback: string;
+            /** Format: date-time */
+            watchlist: string;
+        };
+        DeveloperApp: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            client_id: string;
+            redirect_uris: string[];
+            /**
+             * Format: int64
+             * @description Profiles connected to it right now.
+             */
+            connections: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        NewApp: {
+            /** @description Shown to people when they connect it. Up to 60 characters. */
+            name: string;
+            /** @description Where browser sign-in returns to. https, a custom scheme like `myplayer://callback`, or http on localhost. */
+            redirect_uris?: string[];
+        };
+        AppChanges: {
+            name?: string;
+            redirect_uris?: string[];
+        };
+        RegisteredApp: {
+            app: components["schemas"]["DeveloperApp"];
+            client_secret: string;
+        };
+        AppSecret: {
+            client_secret: string;
+        };
     };
     responses: {
+        /** @description OAuth's error shape */
+        OAuthError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    error: string;
+                    error_description?: string;
+                };
+            };
+        };
         /** @description Something went wrong; `code` says what */
         Problem: {
             headers: {
@@ -376,6 +1040,7 @@ export interface components {
         };
     };
     parameters: {
+        DeviceCode: string;
         Id: number;
     };
     requestBodies: never;
@@ -804,6 +1469,730 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    getDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: components["parameters"]["DeviceCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The code is waiting for approval */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Device"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    approveDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: components["parameters"]["DeviceCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileChoice"];
+            };
+        };
+        responses: {
+            /** @description Approved; the device picks up its tokens on its next poll */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    denyDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: components["parameters"]["DeviceCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Denied */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getAuthorization: {
+        parameters: {
+            query: {
+                client_id: string;
+                redirect_uri: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The app and redirect are known */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizingApp"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    authorize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizationRequest"];
+            };
+        };
+        responses: {
+            /** @description Send the browser to `redirect_to` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizationRedirect"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connected apps, most recently used first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    disconnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    renameConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionChanges"];
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description For an app, the profile it was connected to. For the website, your own. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    scrobble: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScrobbleRequest"];
+            };
+        };
+        responses: {
+            /** @description What Tethr did with it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScrobbleResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listHistory: {
+        parameters: {
+            query?: {
+                type?: "movie" | "episode";
+                /** @description Only watches of this film or show. */
+                title_id?: number;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of watches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewWatches"];
+            };
+        };
+        responses: {
+            /** @description What was added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    removeWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listPlayback: {
+        parameters: {
+            query?: {
+                type?: "movie" | "episode";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resume points */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumePoint"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    removePlayback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listWatchlist: {
+        parameters: {
+            query?: {
+                type?: "movie" | "show" | "season" | "episode";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watchlist entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Listing"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addToWatchlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewListings"];
+            };
+        };
+        responses: {
+            /** @description What was added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    removeFromWatchlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest change times */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    listApps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Your apps, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeveloperApp"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    registerApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewApp"];
+            };
+        };
+        responses: {
+            /** @description Registered */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisteredApp"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    revokeApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppChanges"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeveloperApp"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    newAppSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new secret, shown once */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppSecret"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    startDeviceSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    client_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A code to show */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceSignIn"];
+                };
+            };
+            403: components["responses"]["OAuthError"];
+        };
+    };
+    pollDeviceSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The `device_code`, not the code the person types. */
+                    code: string;
+                    client_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Approved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tokens"];
+                };
+            };
+            400: components["responses"]["OAuthError"];
+            404: components["responses"]["OAuthError"];
+            409: components["responses"]["OAuthError"];
+            410: components["responses"]["OAuthError"];
+            418: components["responses"]["OAuthError"];
+            429: components["responses"]["OAuthError"];
+        };
+    };
+    authorizeInBrowser: {
+        parameters: {
+            query: {
+                response_type: "code";
+                client_id: string;
+                redirect_uri: string;
+                state?: string;
+                code_challenge?: string;
+                code_challenge_method?: "S256";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description On to the website */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exchangeToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    grant_type: "authorization_code" | "refresh_token";
+                    client_id: string;
+                    client_secret?: string;
+                    code?: string;
+                    redirect_uri?: string;
+                    code_verifier?: string;
+                    refresh_token?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description New tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tokens"];
+                };
+            };
+            400: components["responses"]["OAuthError"];
+            401: components["responses"]["OAuthError"];
+        };
+    };
+    revokeToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    client_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
 }

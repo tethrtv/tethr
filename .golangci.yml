@@ -11,6 +11,8 @@ linters:
   settings:
     misspell:
       locale: UK
+      ignore-rules:
+        - favorites
 
 formatters:
   enable:
