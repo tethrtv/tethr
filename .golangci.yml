@@ -1,0 +1,17 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+    - nilerr
+    - unconvert
+
+  settings:
+    misspell:
+      locale: UK
+
+formatters:
+  enable:
+    - gofmt
