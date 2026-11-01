@@ -1,0 +1,54 @@
+.plain {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: calc(14px + env(safe-area-inset-top)) var(--gutter) 14px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-stretch: var(--wide);
+  font-weight: 800;
+  font-size: 1.375rem;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.end {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 0.9375rem;
+}
+
+.main {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 20px;
+  padding: 8vh var(--gutter) 48px;
+}
+
+.main > * {
+  width: min(560px, 100%);
+}
+
+.wide > * {
+  width: min(820px, 100%);
+}
+
+@media (max-width: 560px) {
+  .main {
+    padding-top: 28px;
+  }
+}
