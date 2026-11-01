@@ -10,6 +10,8 @@
   --hl: #d4fa3c;
   --hl-blend: multiply;
   --hl-ink: #141412;
+  --hl-soft: rgba(196, 240, 30, 0.42);
+  --danger: #b8321f;
   --font: "Archivo Variable", "Archivo", "Helvetica Neue", Arial, sans-serif;
   --narrow: 74%;
   --wide: 116%;
@@ -29,6 +31,8 @@
     --hl: rgba(212, 250, 60, 0.3);
     --hl-blend: normal;
     --hl-ink: #f4f8e4;
+    --hl-soft: rgba(212, 250, 60, 0.16);
+    --danger: #ff7a62;
   }
 }
 
@@ -70,6 +74,12 @@ dd {
 }
 
 a {
+  color: inherit;
+}
+
+button,
+input {
+  font: inherit;
   color: inherit;
 }
 

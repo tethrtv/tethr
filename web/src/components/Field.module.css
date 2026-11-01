@@ -1,0 +1,44 @@
+.field {
+  display: grid;
+  gap: 2px;
+}
+
+.field label {
+  font-weight: 650;
+  font-size: 0.9375rem;
+}
+
+.input {
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 0 6px;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  font-size: 1.1875rem;
+  font-weight: 560;
+  outline: none;
+  transition: background-color 120ms ease;
+}
+
+.input:focus {
+  background: var(--hl-soft);
+}
+
+.bad .input {
+  border-bottom-color: var(--danger);
+}
+
+.note {
+  color: var(--ink-3);
+  padding-top: 4px;
+  font-size: 0.875rem;
+}
+
+.bad .note {
+  color: var(--danger);
+  font-weight: 560;
+}

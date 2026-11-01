@@ -91,9 +91,13 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - name: generated api types are current
+        run: pnpm gen && git diff --exit-code src/api/schema.d.ts
       - run: pnpm check
       - run: pnpm test
       - run: pnpm build
+        env:
+          VITE_API_URL: https://staging-api.tethr.tv
       - name: preview
         if: github.event_name == 'pull_request' && vars.CLOUDFLARE_ACCOUNT_ID != ''
         run: pnpm dlx wrangler@4.156.0 pages deploy dist --project-name tethr --branch "$GITHUB_HEAD_REF"
