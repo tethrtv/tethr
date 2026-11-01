@@ -48,8 +48,8 @@ func (q *Queries) CreateHousehold(ctx context.Context, ownerAccountID int64) (Ho
 }
 
 const createProfile = `-- name: CreateProfile :one
-INSERT INTO profiles (household_id, account_id, username, name, kind)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO profiles (household_id, account_id, username, name, kind, position)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at
 `
 
@@ -59,6 +59,7 @@ type CreateProfileParams struct {
 	Username    string
 	Name        string
 	Kind        string
+	Position    int32
 }
 
 func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (Profile, error) {
@@ -68,6 +69,7 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 		arg.Username,
 		arg.Name,
 		arg.Kind,
+		arg.Position,
 	)
 	var i Profile
 	err := row.Scan(
@@ -88,6 +90,79 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 	return i, err
 }
 
+const deleteAccount = `-- name: DeleteAccount :exec
+DELETE FROM accounts WHERE id = $1
+`
+
+func (q *Queries) DeleteAccount(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteAccount, id)
+	return err
+}
+
+const deleteProfile = `-- name: DeleteProfile :exec
+DELETE FROM profiles WHERE id = $1
+`
+
+func (q *Queries) DeleteProfile(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteProfile, id)
+	return err
+}
+
+const householdOfAccount = `-- name: HouseholdOfAccount :one
+SELECT id, owner_account_id, created_at FROM households WHERE owner_account_id = $1
+`
+
+func (q *Queries) HouseholdOfAccount(ctx context.Context, ownerAccountID int64) (Household, error) {
+	row := q.db.QueryRow(ctx, householdOfAccount, ownerAccountID)
+	var i Household
+	err := row.Scan(&i.ID, &i.OwnerAccountID, &i.CreatedAt)
+	return i, err
+}
+
+const householdProfile = `-- name: HouseholdProfile :one
+SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at
+FROM profiles p
+JOIN households h ON h.id = p.household_id
+WHERE p.id = $1 AND h.owner_account_id = $2
+`
+
+type HouseholdProfileParams struct {
+	ID             int64
+	OwnerAccountID int64
+}
+
+func (q *Queries) HouseholdProfile(ctx context.Context, arg HouseholdProfileParams) (Profile, error) {
+	row := q.db.QueryRow(ctx, householdProfile, arg.ID, arg.OwnerAccountID)
+	var i Profile
+	err := row.Scan(
+		&i.ID,
+		&i.HouseholdID,
+		&i.AccountID,
+		&i.Uuid,
+		&i.Username,
+		&i.Name,
+		&i.Kind,
+		&i.Hue,
+		&i.Private,
+		&i.Paused,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const nextProfilePosition = `-- name: NextProfilePosition :one
+SELECT (coalesce(max(position), 0) + 1)::integer FROM profiles WHERE household_id = $1
+`
+
+func (q *Queries) NextProfilePosition(ctx context.Context, householdID int64) (int32, error) {
+	row := q.db.QueryRow(ctx, nextProfilePosition, householdID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const ownerProfile = `-- name: OwnerProfile :one
 SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at
 FROM profiles p
@@ -97,6 +172,49 @@ WHERE h.owner_account_id = $1 AND p.kind = 'owner'
 
 func (q *Queries) OwnerProfile(ctx context.Context, ownerAccountID int64) (Profile, error) {
 	row := q.db.QueryRow(ctx, ownerProfile, ownerAccountID)
+	var i Profile
+	err := row.Scan(
+		&i.ID,
+		&i.HouseholdID,
+		&i.AccountID,
+		&i.Uuid,
+		&i.Username,
+		&i.Name,
+		&i.Kind,
+		&i.Hue,
+		&i.Private,
+		&i.Paused,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateProfile = `-- name: UpdateProfile :one
+UPDATE profiles
+SET name = coalesce($1, name),
+    username = coalesce($2, username),
+    private = coalesce($3, private),
+    updated_at = now()
+WHERE id = $4
+RETURNING id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at
+`
+
+type UpdateProfileParams struct {
+	Name     *string
+	Username *string
+	Private  *bool
+	ID       int64
+}
+
+func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (Profile, error) {
+	row := q.db.QueryRow(ctx, updateProfile,
+		arg.Name,
+		arg.Username,
+		arg.Private,
+		arg.ID,
+	)
 	var i Profile
 	err := row.Scan(
 		&i.ID,

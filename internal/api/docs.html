@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tethr API</title>
+<link rel="icon" href="https://tethr.tv/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --scalar-font: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --scalar-radius: 3px;
+    --scalar-radius-lg: 4px;
+    --scalar-radius-xl: 4px;
+  }
+  .light-mode {
+    --scalar-background-1: #fbfbf8;
+    --scalar-background-2: #f2f2ec;
+    --scalar-background-3: #e8e8e1;
+    --scalar-color-1: #141412;
+    --scalar-color-2: #53534c;
+    --scalar-color-3: #85857d;
+    --scalar-color-accent: #141412;
+    --scalar-background-accent: rgba(196, 240, 30, 0.42);
+    --scalar-border-color: rgba(20, 20, 18, 0.13);
+  }
+  .dark-mode {
+    --scalar-background-1: #1a1916;
+    --scalar-background-2: #23221e;
+    --scalar-background-3: #2d2c27;
+    --scalar-color-1: #edece5;
+    --scalar-color-2: #aeaca1;
+    --scalar-color-3: #7c7a71;
+    --scalar-color-accent: #d4fa3c;
+    --scalar-background-accent: rgba(212, 250, 60, 0.16);
+    --scalar-border-color: rgba(237, 236, 229, 0.13);
+  }
+  .light-mode, .dark-mode {
+    --scalar-color-green: #2c8a3e;
+    --scalar-color-blue: #2a78d6;
+    --scalar-color-orange: #c98500;
+    --scalar-color-red: #b8321f;
+  }
+  .section-header-wrapper h1, .section-header h1 { font-stretch: 116%; font-weight: 800; letter-spacing: -0.012em; }
+  .explore-scalar, .generate-sdk-button, .scalar-reference-intro-clients .card-footer .scalar-button { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0"></script>
+<script>
+  Scalar.createApiReference('#app', {
+    url: '/openapi.yaml',
+    servers: [{ url: window.location.origin }],
+    hideTestRequestButton: true,
+    theme: 'none',
+    withDefaultFonts: false,
+    hideClientButton: true,
+    showDeveloperTools: 'never',
+    agent: { disabled: true },
+    telemetry: false,
+    metaData: { title: 'Tethr API' },
+  })
+</script>
+</body>
+</html>
