@@ -78,12 +78,22 @@ type Episode struct {
 	EpisodeNumber int32
 	TmdbEpisodeID *int32
 	CreatedAt     time.Time
+	FirstAired    *time.Time
+	RemovedAt     *time.Time
 }
 
 type ExternalID struct {
 	TitleID  int64
 	Provider string
 	Value    string
+}
+
+type HiddenItem struct {
+	ProfileID    int64
+	Section      string
+	TitleID      int64
+	SeasonNumber *int32
+	HiddenAt     time.Time
 }
 
 type Household struct {
@@ -211,14 +221,16 @@ type Session struct {
 }
 
 type Title struct {
-	ID        int64
-	Kind      string
-	Slug      string
-	Name      *string
-	Year      *int16
-	TmdbID    *int32
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                 int64
+	Kind               string
+	Slug               string
+	Name               *string
+	Year               *int16
+	TmdbID             *int32
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	OutlineRefreshedAt *time.Time
+	TmdbMissingAt      *time.Time
 }
 
 type WatchEvent struct {

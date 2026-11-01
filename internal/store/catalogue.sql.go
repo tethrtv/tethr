@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"time"
 )
 
 const addExternalID = `-- name: AddExternalID :exec
@@ -25,8 +26,32 @@ func (q *Queries) AddExternalID(ctx context.Context, arg AddExternalIDParams) er
 	return err
 }
 
+const addOutlineEpisode = `-- name: AddOutlineEpisode :exec
+INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id, first_aired)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type AddOutlineEpisodeParams struct {
+	ShowID        int64
+	SeasonNumber  int32
+	EpisodeNumber int32
+	TmdbEpisodeID *int32
+	FirstAired    *time.Time
+}
+
+func (q *Queries) AddOutlineEpisode(ctx context.Context, arg AddOutlineEpisodeParams) error {
+	_, err := q.db.Exec(ctx, addOutlineEpisode,
+		arg.ShowID,
+		arg.SeasonNumber,
+		arg.EpisodeNumber,
+		arg.TmdbEpisodeID,
+		arg.FirstAired,
+	)
+	return err
+}
+
 const catalogueEpisodes = `-- name: CatalogueEpisodes :many
-SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at FROM episodes WHERE id = ANY($1::bigint[])
+SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes WHERE id = ANY($1::bigint[])
 `
 
 func (q *Queries) CatalogueEpisodes(ctx context.Context, ids []int64) ([]Episode, error) {
@@ -45,6 +70,8 @@ func (q *Queries) CatalogueEpisodes(ctx context.Context, ids []int64) ([]Episode
 			&i.EpisodeNumber,
 			&i.TmdbEpisodeID,
 			&i.CreatedAt,
+			&i.FirstAired,
+			&i.RemovedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -107,9 +134,9 @@ func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]Catalogue
 const createEpisode = `-- name: CreateEpisode :one
 INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (show_id, season_number, episode_number)
+ON CONFLICT (show_id, season_number, episode_number) WHERE removed_at IS NULL
 DO UPDATE SET tmdb_episode_id = coalesce(episodes.tmdb_episode_id, excluded.tmdb_episode_id)
-RETURNING id, show_id, season_number, episode_number, tmdb_episode_id, created_at
+RETURNING id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at
 `
 
 type CreateEpisodeParams struct {
@@ -134,6 +161,8 @@ func (q *Queries) CreateEpisode(ctx context.Context, arg CreateEpisodeParams) (E
 		&i.EpisodeNumber,
 		&i.TmdbEpisodeID,
 		&i.CreatedAt,
+		&i.FirstAired,
+		&i.RemovedAt,
 	)
 	return i, err
 }
@@ -142,7 +171,7 @@ const createTitle = `-- name: CreateTitle :one
 INSERT INTO titles (id, kind, slug, tmdb_id)
 SELECT n, $1, 't-' || n, $2 FROM nextval('catalogue_id') AS n
 ON CONFLICT (kind, tmdb_id) DO UPDATE SET updated_at = titles.updated_at
-RETURNING id, kind, slug, name, year, tmdb_id, created_at, updated_at
+RETURNING id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at
 `
 
 type CreateTitleParams struct {
@@ -162,12 +191,98 @@ func (q *Queries) CreateTitle(ctx context.Context, arg CreateTitleParams) (Title
 		&i.TmdbID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OutlineRefreshedAt,
+		&i.TmdbMissingAt,
 	)
 	return i, err
 }
 
+const deleteEpisode = `-- name: DeleteEpisode :exec
+DELETE FROM episodes WHERE id = $1
+`
+
+func (q *Queries) DeleteEpisode(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteEpisode, id)
+	return err
+}
+
+const dropClashingListItems = `-- name: DropClashingListItems :exec
+DELETE FROM list_items l
+WHERE l.episode_id = $1
+  AND EXISTS (SELECT 1 FROM list_items m WHERE m.list_id = l.list_id AND m.episode_id = $2)
+`
+
+type DropClashingListItemsParams struct {
+	FromID *int64
+	IntoID *int64
+}
+
+func (q *Queries) DropClashingListItems(ctx context.Context, arg DropClashingListItemsParams) error {
+	_, err := q.db.Exec(ctx, dropClashingListItems, arg.FromID, arg.IntoID)
+	return err
+}
+
+const dropClashingPlayback = `-- name: DropClashingPlayback :exec
+DELETE FROM playback p
+WHERE p.episode_id = $1
+  AND EXISTS (SELECT 1 FROM playback q WHERE q.profile_id = p.profile_id AND q.episode_id = $2)
+`
+
+type DropClashingPlaybackParams struct {
+	FromID *int64
+	IntoID *int64
+}
+
+func (q *Queries) DropClashingPlayback(ctx context.Context, arg DropClashingPlaybackParams) error {
+	_, err := q.db.Exec(ctx, dropClashingPlayback, arg.FromID, arg.IntoID)
+	return err
+}
+
+const dueOutlines = `-- name: DueOutlines :many
+SELECT t.id, t.tmdb_id
+FROM titles t
+WHERE t.kind = 'show' AND t.tmdb_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM watch_events w WHERE w.title_id = t.id)
+  AND (t.outline_refreshed_at IS NULL
+    OR t.outline_refreshed_at < now() - CASE
+      WHEN EXISTS (
+        SELECT 1 FROM episodes e
+        WHERE e.show_id = t.id AND e.removed_at IS NULL
+          AND (e.first_aired IS NULL OR e.first_aired > current_date - 90)
+      ) THEN interval '7 days'
+      ELSE interval '90 days'
+    END)
+ORDER BY t.outline_refreshed_at NULLS FIRST
+LIMIT $1
+`
+
+type DueOutlinesRow struct {
+	ID     int64
+	TmdbID *int32
+}
+
+func (q *Queries) DueOutlines(ctx context.Context, limit int32) ([]DueOutlinesRow, error) {
+	rows, err := q.db.Query(ctx, dueOutlines, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DueOutlinesRow
+	for rows.Next() {
+		var i DueOutlinesRow
+		if err := rows.Scan(&i.ID, &i.TmdbID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const episodeByID = `-- name: EpisodeByID :one
-SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at FROM episodes WHERE id = $1
+SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes WHERE id = $1
 `
 
 func (q *Queries) EpisodeByID(ctx context.Context, id int64) (Episode, error) {
@@ -180,12 +295,14 @@ func (q *Queries) EpisodeByID(ctx context.Context, id int64) (Episode, error) {
 		&i.EpisodeNumber,
 		&i.TmdbEpisodeID,
 		&i.CreatedAt,
+		&i.FirstAired,
+		&i.RemovedAt,
 	)
 	return i, err
 }
 
 const episodeByNumber = `-- name: EpisodeByNumber :one
-SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at FROM episodes WHERE show_id = $1 AND season_number = $2 AND episode_number = $3
+SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes WHERE show_id = $1 AND season_number = $2 AND episode_number = $3 AND removed_at IS NULL
 `
 
 type EpisodeByNumberParams struct {
@@ -204,12 +321,14 @@ func (q *Queries) EpisodeByNumber(ctx context.Context, arg EpisodeByNumberParams
 		&i.EpisodeNumber,
 		&i.TmdbEpisodeID,
 		&i.CreatedAt,
+		&i.FirstAired,
+		&i.RemovedAt,
 	)
 	return i, err
 }
 
 const episodeByTMDB = `-- name: EpisodeByTMDB :one
-SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at FROM episodes WHERE tmdb_episode_id = $1
+SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes WHERE tmdb_episode_id = $1
 `
 
 func (q *Queries) EpisodeByTMDB(ctx context.Context, tmdbEpisodeID *int32) (Episode, error) {
@@ -222,8 +341,89 @@ func (q *Queries) EpisodeByTMDB(ctx context.Context, tmdbEpisodeID *int32) (Epis
 		&i.EpisodeNumber,
 		&i.TmdbEpisodeID,
 		&i.CreatedAt,
+		&i.FirstAired,
+		&i.RemovedAt,
 	)
 	return i, err
+}
+
+const mergeEpisodeEvents = `-- name: MergeEpisodeEvents :exec
+UPDATE watch_events SET episode_id = $1 WHERE episode_id = $2
+`
+
+type MergeEpisodeEventsParams struct {
+	IntoID *int64
+	FromID *int64
+}
+
+func (q *Queries) MergeEpisodeEvents(ctx context.Context, arg MergeEpisodeEventsParams) error {
+	_, err := q.db.Exec(ctx, mergeEpisodeEvents, arg.IntoID, arg.FromID)
+	return err
+}
+
+const mergeEpisodeListItems = `-- name: MergeEpisodeListItems :exec
+UPDATE list_items SET episode_id = $1 WHERE episode_id = $2
+`
+
+type MergeEpisodeListItemsParams struct {
+	IntoID *int64
+	FromID *int64
+}
+
+func (q *Queries) MergeEpisodeListItems(ctx context.Context, arg MergeEpisodeListItemsParams) error {
+	_, err := q.db.Exec(ctx, mergeEpisodeListItems, arg.IntoID, arg.FromID)
+	return err
+}
+
+const mergeEpisodePlayback = `-- name: MergeEpisodePlayback :exec
+UPDATE playback SET episode_id = $1 WHERE episode_id = $2
+`
+
+type MergeEpisodePlaybackParams struct {
+	IntoID *int64
+	FromID *int64
+}
+
+func (q *Queries) MergeEpisodePlayback(ctx context.Context, arg MergeEpisodePlaybackParams) error {
+	_, err := q.db.Exec(ctx, mergeEpisodePlayback, arg.IntoID, arg.FromID)
+	return err
+}
+
+const mergeEpisodeWatching = `-- name: MergeEpisodeWatching :exec
+UPDATE watching SET episode_id = $1 WHERE episode_id = $2
+`
+
+type MergeEpisodeWatchingParams struct {
+	IntoID *int64
+	FromID *int64
+}
+
+func (q *Queries) MergeEpisodeWatching(ctx context.Context, arg MergeEpisodeWatchingParams) error {
+	_, err := q.db.Exec(ctx, mergeEpisodeWatching, arg.IntoID, arg.FromID)
+	return err
+}
+
+const outlineDone = `-- name: OutlineDone :exec
+UPDATE titles SET outline_refreshed_at = now(), tmdb_missing_at = $2 WHERE id = $1
+`
+
+type OutlineDoneParams struct {
+	ID        int64
+	MissingAt *time.Time
+}
+
+func (q *Queries) OutlineDone(ctx context.Context, arg OutlineDoneParams) error {
+	_, err := q.db.Exec(ctx, outlineDone, arg.ID, arg.MissingAt)
+	return err
+}
+
+const removeEpisode = `-- name: RemoveEpisode :exec
+UPDATE episodes SET removed_at = now() WHERE id = $1
+`
+
+func (q *Queries) RemoveEpisode(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, removeEpisode, id)
+	return err
 }
 
 const setTitleTMDB = `-- name: SetTitleTMDB :exec
@@ -241,16 +441,11 @@ func (q *Queries) SetTitleTMDB(ctx context.Context, arg SetTitleTMDBParams) erro
 }
 
 const showEpisodes = `-- name: ShowEpisodes :many
-SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at FROM episodes WHERE show_id = $1 AND ($2::integer IS NULL OR season_number = $2)
+SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes WHERE show_id = $1 FOR UPDATE
 `
 
-type ShowEpisodesParams struct {
-	ShowID int64
-	Season *int32
-}
-
-func (q *Queries) ShowEpisodes(ctx context.Context, arg ShowEpisodesParams) ([]Episode, error) {
-	rows, err := q.db.Query(ctx, showEpisodes, arg.ShowID, arg.Season)
+func (q *Queries) ShowEpisodes(ctx context.Context, showID int64) ([]Episode, error) {
+	rows, err := q.db.Query(ctx, showEpisodes, showID)
 	if err != nil {
 		return nil, err
 	}
@@ -265,6 +460,8 @@ func (q *Queries) ShowEpisodes(ctx context.Context, arg ShowEpisodesParams) ([]E
 			&i.EpisodeNumber,
 			&i.TmdbEpisodeID,
 			&i.CreatedAt,
+			&i.FirstAired,
+			&i.RemovedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -277,7 +474,7 @@ func (q *Queries) ShowEpisodes(ctx context.Context, arg ShowEpisodesParams) ([]E
 }
 
 const titleByExternalID = `-- name: TitleByExternalID :one
-SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id, t.created_at, t.updated_at
+SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id, t.created_at, t.updated_at, t.outline_refreshed_at, t.tmdb_missing_at
 FROM titles t
 JOIN external_ids e ON e.title_id = t.id
 WHERE e.provider = $1 AND e.value = $2 AND t.kind = $3
@@ -301,12 +498,14 @@ func (q *Queries) TitleByExternalID(ctx context.Context, arg TitleByExternalIDPa
 		&i.TmdbID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OutlineRefreshedAt,
+		&i.TmdbMissingAt,
 	)
 	return i, err
 }
 
 const titleByID = `-- name: TitleByID :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at FROM titles WHERE id = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at FROM titles WHERE id = $1 AND kind = $2
 `
 
 type TitleByIDParams struct {
@@ -326,12 +525,14 @@ func (q *Queries) TitleByID(ctx context.Context, arg TitleByIDParams) (Title, er
 		&i.TmdbID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OutlineRefreshedAt,
+		&i.TmdbMissingAt,
 	)
 	return i, err
 }
 
 const titleBySlug = `-- name: TitleBySlug :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at FROM titles WHERE slug = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at FROM titles WHERE slug = $1 AND kind = $2
 `
 
 type TitleBySlugParams struct {
@@ -351,12 +552,14 @@ func (q *Queries) TitleBySlug(ctx context.Context, arg TitleBySlugParams) (Title
 		&i.TmdbID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OutlineRefreshedAt,
+		&i.TmdbMissingAt,
 	)
 	return i, err
 }
 
 const titleByTMDB = `-- name: TitleByTMDB :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at FROM titles WHERE tmdb_id = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at FROM titles WHERE tmdb_id = $1 AND kind = $2
 `
 
 type TitleByTMDBParams struct {
@@ -376,6 +579,33 @@ func (q *Queries) TitleByTMDB(ctx context.Context, arg TitleByTMDBParams) (Title
 		&i.TmdbID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OutlineRefreshedAt,
+		&i.TmdbMissingAt,
 	)
 	return i, err
+}
+
+const updateEpisode = `-- name: UpdateEpisode :exec
+UPDATE episodes
+SET season_number = $2, episode_number = $3, tmdb_episode_id = $4, first_aired = $5, removed_at = NULL
+WHERE id = $1
+`
+
+type UpdateEpisodeParams struct {
+	ID            int64
+	SeasonNumber  int32
+	EpisodeNumber int32
+	TmdbEpisodeID *int32
+	FirstAired    *time.Time
+}
+
+func (q *Queries) UpdateEpisode(ctx context.Context, arg UpdateEpisodeParams) error {
+	_, err := q.db.Exec(ctx, updateEpisode,
+		arg.ID,
+		arg.SeasonNumber,
+		arg.EpisodeNumber,
+		arg.TmdbEpisodeID,
+		arg.FirstAired,
+	)
+	return err
 }

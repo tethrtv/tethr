@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tethrtv/tethr/internal/core"
 	"github.com/tethrtv/tethr/internal/dbtest"
@@ -482,5 +483,46 @@ func TestDevelopers(t *testing.T) {
 	}
 	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNotFound {
 		t.Errorf("revoke twice = %d", rec.Code)
+	}
+}
+
+func TestUpNextEndpoints(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+
+	rec := do(t, h, "POST", "/v1/scrobble", `{"event":"stop","progress":100,"item":{"type":"episode","show":{"tmdb":1396},"season":1,"number":1}}`, cookie)
+	var watched ScrobbleResult
+	_ = json.Unmarshal(rec.Body.Bytes(), &watched)
+	show := *watched.Item.Title.Ids.Tethr
+	day := func(n int) *time.Time { d := time.Now().AddDate(0, 0, -n); return &d }
+	if err := core.SaveOutline(context.Background(), s.DB, show, []core.OutlineEpisode{
+		{TMDBID: 1, Season: 1, Number: 1, FirstAired: day(20)},
+		{TMDBID: 2, Season: 1, Number: 2, FirstAired: day(13)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var next []UpNextEntry
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/up-next", "", cookie).Body.Bytes(), &next)
+	if len(next) != 1 || next[0].Next.Number != 2 || next[0].Next.FirstAired == nil || next[0].Aired != 2 || next[0].Watched != 1 || *next[0].Show.Ids.Tmdb != 1396 {
+		t.Fatalf("up next = %+v", next)
+	}
+	path := "/v1/up-next/hidden/" + strconv.FormatInt(show, 10)
+	if rec := do(t, h, "PUT", path, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("hide = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "GET", "/v1/up-next", "", cookie); rec.Body.String() != "[]\n" {
+		t.Errorf("hidden = %s", rec.Body)
+	}
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("unhide = %d", rec.Code)
+	}
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("unhide twice = %d", rec.Code)
+	}
+	if rec := do(t, h, "PUT", "/v1/up-next/hidden/5", "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("hide unknown = %d", rec.Code)
 	}
 }

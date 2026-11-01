@@ -9,7 +9,7 @@ info:
 
     Errors come back as `{"code": "...", "message": "..."}`. `code` is stable for programs to check, and `message` is written for people.
 
-    Apps sign in on someone's behalf with OAuth: TVs show a code that people enter at `/activate` on the website, and phones and computers send them to `/oauth/authorize` in a browser. Each connection logs to one profile the person chooses. Send the access token as `Authorization: Bearer ...` to the tracking endpoints: scrobble, history, playback, the watchlist and activity.
+    Apps sign in on someone's behalf with OAuth: TVs show a code that people enter at `/activate` on the website, and phones and computers send them to `/oauth/authorize` in a browser. Each connection logs to one profile the person chooses. Send the access token as `Authorization: Bearer ...` to the tracking endpoints: scrobble, Up next, history, playback, the watchlist and activity.
 
     Players built for the Trakt API can use the paths they already know instead, at the same address.
   license:
@@ -761,6 +761,56 @@ paths:
                 $ref: '#/components/schemas/Activity'
         '401':
           $ref: '#/components/responses/Problem'
+  /v1/up-next:
+    get:
+      operationId: getUpNext
+      summary: The next episode of every show you're partway through
+      description: The first aired, unwatched episode after the latest one watched, or the earliest gap if there's nothing later. Specials and episodes that haven't aired are skipped, and so are hidden shows. Most recently watched shows come first. Shows appear once Tethr has their episode list, usually within a minute of the first watch.
+      security:
+        - session: []
+        - bearer: []
+      responses:
+        '200':
+          description: One entry per show
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UpNextEntry'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/up-next/hidden/{id}:
+    put:
+      operationId: hideFromUpNext
+      summary: Hide a show from Up next
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Hidden
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: showInUpNext
+      summary: Put a hidden show back in Up next
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Back in Up next
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/apps:
     get:
       operationId: listApps
@@ -1361,6 +1411,9 @@ components:
           type: integer
         number:
           type: integer
+        first_aired:
+          type: string
+          format: date
     Item:
       type: object
       required: [type, title]
@@ -1584,3 +1637,33 @@ components:
       properties:
         client_secret:
           type: string
+    UpNextEntry:
+      type: object
+      required: [show, next, last_watched_at, aired, watched]
+      properties:
+        show:
+          $ref: '#/components/schemas/Title'
+        next:
+          $ref: '#/components/schemas/Episode'
+        last_watched_at:
+          type: string
+          format: date-time
+        aired:
+          type: integer
+          description: Episodes aired so far, not counting specials.
+        watched:
+          type: integer
+          description: How many of those have been watched.
+        resume:
+          $ref: '#/components/schemas/Resume'
+    Resume:
+      type: object
+      description: Where the next episode was paused, if it was started.
+      required: [id, progress]
+      properties:
+        id:
+          type: integer
+          format: int64
+        progress:
+          type: number
+          format: double

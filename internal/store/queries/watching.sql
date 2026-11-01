@@ -144,3 +144,61 @@ DELETE FROM list_items li
 USING lists l
 WHERE li.id = $1 AND l.id = li.list_id AND l.profile_id = $2
 RETURNING li.list_id, li.season_number, li.episode_id, (SELECT kind FROM titles WHERE id = li.title_id)::text AS kind;
+
+-- name: UpNext :many
+WITH latest AS (
+    SELECT DISTINCT ON (w.title_id) w.title_id, w.watched_at, e.season_number, e.episode_number
+    FROM watch_events w
+    JOIN episodes e ON e.id = w.episode_id
+    WHERE w.profile_id = $1
+    ORDER BY w.title_id, w.watched_at DESC, w.id DESC
+),
+aired AS (
+    SELECT e.*
+    FROM episodes e
+    JOIN latest l ON l.title_id = e.show_id
+    WHERE e.removed_at IS NULL AND e.season_number > 0 AND e.first_aired <= current_date
+      AND NOT EXISTS (
+          SELECT 1 FROM hidden_items h
+          WHERE h.profile_id = $1 AND h.section = 'progress_watched'
+            AND h.title_id = e.show_id AND h.season_number = e.season_number
+      )
+),
+progress AS (
+    SELECT a.show_id, count(*) AS aired,
+        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM watch_events w WHERE w.profile_id = $1 AND w.episode_id = a.id)) AS watched
+    FROM aired a
+    GROUP BY a.show_id
+)
+SELECT l.title_id, l.watched_at AS last_watched_at, n.id AS episode_id, p.aired, p.watched,
+    pb.id AS playback_id, pb.progress AS playback_progress
+FROM latest l
+JOIN progress p ON p.show_id = l.title_id
+JOIN LATERAL (
+    SELECT a.id
+    FROM aired a
+    WHERE a.show_id = l.title_id
+      AND NOT EXISTS (SELECT 1 FROM watch_events w WHERE w.profile_id = $1 AND w.episode_id = a.id)
+    ORDER BY (a.season_number, a.episode_number) > (l.season_number, l.episode_number) DESC,
+        a.season_number, a.episode_number
+    LIMIT 1
+) n ON true
+LEFT JOIN playback pb ON pb.profile_id = $1 AND pb.episode_id = n.id
+WHERE NOT EXISTS (
+    SELECT 1 FROM hidden_items h
+    WHERE h.profile_id = $1 AND h.title_id = l.title_id AND h.season_number IS NULL
+      AND h.section IN ('progress_watched', 'dropped')
+)
+ORDER BY l.watched_at DESC;
+
+-- name: HideItem :exec
+INSERT INTO hidden_items (profile_id, section, title_id, season_number)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT DO NOTHING;
+
+-- name: UnhideItem :execrows
+DELETE FROM hidden_items
+WHERE profile_id = $1 AND section = $2 AND title_id = $3 AND season_number IS NOT DISTINCT FROM sqlc.narg(season_number);
+
+-- name: HiddenItems :many
+SELECT * FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC;

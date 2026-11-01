@@ -44,9 +44,6 @@ type Scrobble struct {
 
 func ScrobbleStart(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) (ScrobbleResult, error) {
 	return scrobble(ctx, db, c, s, func(q *store.Queries, r resolved) (ScrobbleResult, error) {
-		if _, err := q.DeletePlaybackForItem(ctx, store.DeletePlaybackForItemParams{ProfileID: c.ProfileID, TitleID: r.title.ID, EpisodeID: r.episodeID()}); err != nil {
-			return ScrobbleResult{}, err
-		}
 		window := movieWatchWindow
 		if r.episode != nil {
 			window = showWatchWindow

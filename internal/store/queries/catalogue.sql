@@ -40,12 +40,12 @@ SELECT * FROM episodes WHERE id = $1;
 SELECT * FROM episodes WHERE tmdb_episode_id = $1;
 
 -- name: EpisodeByNumber :one
-SELECT * FROM episodes WHERE show_id = $1 AND season_number = $2 AND episode_number = $3;
+SELECT * FROM episodes WHERE show_id = $1 AND season_number = $2 AND episode_number = $3 AND removed_at IS NULL;
 
 -- name: CreateEpisode :one
 INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (show_id, season_number, episode_number)
+ON CONFLICT (show_id, season_number, episode_number) WHERE removed_at IS NULL
 DO UPDATE SET tmdb_episode_id = coalesce(episodes.tmdb_episode_id, excluded.tmdb_episode_id)
 RETURNING *;
 
@@ -53,4 +53,61 @@ RETURNING *;
 SELECT * FROM episodes WHERE id = ANY(@ids::bigint[]);
 
 -- name: ShowEpisodes :many
-SELECT * FROM episodes WHERE show_id = $1 AND (sqlc.narg(season)::integer IS NULL OR season_number = sqlc.narg(season));
+SELECT * FROM episodes WHERE show_id = $1 FOR UPDATE;
+
+-- name: RemoveEpisode :exec
+UPDATE episodes SET removed_at = now() WHERE id = $1;
+
+-- name: UpdateEpisode :exec
+UPDATE episodes
+SET season_number = $2, episode_number = $3, tmdb_episode_id = $4, first_aired = $5, removed_at = NULL
+WHERE id = $1;
+
+-- name: AddOutlineEpisode :exec
+INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id, first_aired)
+VALUES ($1, $2, $3, $4, $5);
+
+-- name: MergeEpisodeEvents :exec
+UPDATE watch_events SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
+
+-- name: DropClashingPlayback :exec
+DELETE FROM playback p
+WHERE p.episode_id = sqlc.arg(from_id)
+  AND EXISTS (SELECT 1 FROM playback q WHERE q.profile_id = p.profile_id AND q.episode_id = sqlc.arg(into_id));
+
+-- name: MergeEpisodePlayback :exec
+UPDATE playback SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
+
+-- name: DropClashingListItems :exec
+DELETE FROM list_items l
+WHERE l.episode_id = sqlc.arg(from_id)
+  AND EXISTS (SELECT 1 FROM list_items m WHERE m.list_id = l.list_id AND m.episode_id = sqlc.arg(into_id));
+
+-- name: MergeEpisodeListItems :exec
+UPDATE list_items SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
+
+-- name: MergeEpisodeWatching :exec
+UPDATE watching SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
+
+-- name: DeleteEpisode :exec
+DELETE FROM episodes WHERE id = $1;
+
+-- name: OutlineDone :exec
+UPDATE titles SET outline_refreshed_at = now(), tmdb_missing_at = sqlc.narg(missing_at) WHERE id = $1;
+
+-- name: DueOutlines :many
+SELECT t.id, t.tmdb_id
+FROM titles t
+WHERE t.kind = 'show' AND t.tmdb_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM watch_events w WHERE w.title_id = t.id)
+  AND (t.outline_refreshed_at IS NULL
+    OR t.outline_refreshed_at < now() - CASE
+      WHEN EXISTS (
+        SELECT 1 FROM episodes e
+        WHERE e.show_id = t.id AND e.removed_at IS NULL
+          AND (e.first_aired IS NULL OR e.first_aired > current_date - 90)
+      ) THEN interval '7 days'
+      ELSE interval '90 days'
+    END)
+ORDER BY t.outline_refreshed_at NULLS FIRST
+LIMIT $1;

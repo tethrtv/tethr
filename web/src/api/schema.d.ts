@@ -542,6 +542,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/up-next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The next episode of every show you're partway through
+         * @description The first aired, unwatched episode after the latest one watched, or the earliest gap if there's nothing later. Specials and episodes that haven't aired are skipped, and so are hidden shows. Most recently watched shows come first. Shows appear once Tethr has their episode list, usually within a minute of the first watch.
+         */
+        get: operations["getUpNext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/up-next/hidden/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Hide a show from Up next */
+        put: operations["hideFromUpNext"];
+        post?: never;
+        /** Put a hidden show back in Up next */
+        delete: operations["showInUpNext"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/apps": {
         parameters: {
             query?: never;
@@ -883,6 +921,8 @@ export interface components {
             ids: components["schemas"]["Ids"];
             season: number;
             number: number;
+            /** Format: date */
+            first_aired?: string;
         };
         Item: {
             /** @enum {string} */
@@ -1014,6 +1054,24 @@ export interface components {
         };
         AppSecret: {
             client_secret: string;
+        };
+        UpNextEntry: {
+            show: components["schemas"]["Title"];
+            next: components["schemas"]["Episode"];
+            /** Format: date-time */
+            last_watched_at: string;
+            /** @description Episodes aired so far, not counting specials. */
+            aired: number;
+            /** @description How many of those have been watched. */
+            watched: number;
+            resume?: components["schemas"]["Resume"];
+        };
+        /** @description Where the next episode was paused, if it was started. */
+        Resume: {
+            /** Format: int64 */
+            id: number;
+            /** Format: double */
+            progress: number;
         };
     };
     responses: {
@@ -1924,6 +1982,71 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    getUpNext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per show */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpNextEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    hideFromUpNext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hidden */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    showInUpNext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Back in Up next */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listApps: {
