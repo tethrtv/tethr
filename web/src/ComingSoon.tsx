@@ -1,7 +1,7 @@
 import styles from './ComingSoon.module.css'
 
 const listing = [
-  { slot: 'Logs itself', body: 'Zuno, Kodi, Neptune and Jellyfin tell it what you play, while you play it.' },
+  { slot: 'Logs itself', body: 'Zuno and other players tell it what you play, while you play it.' },
   { slot: 'In order', body: 'Aired, DVD or absolute order, chosen per show. A wrong match is yours to fix.' },
   { slot: 'Skips', body: 'Intro and credits markers matched to the exact cut of your file.' },
   { slot: 'Household', body: 'One account with a profile each, a kids’ profile and a guest.' },
