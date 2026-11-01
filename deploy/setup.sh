@@ -1,12 +1,12 @@
 #!/bin/sh
-# Run once as root on a fresh Ubuntu 24.04 box: sudo sh setup.sh "ssh-ed25519 AAAA... github-deploy"
+# Run once as root on a fresh Ubuntu 26.04 box: sudo sh setup.sh "ssh-ed25519 AAAA... github-deploy"
 set -eu
 
 key=${1:?usage: setup.sh "<public key for GitHub Actions>"}
 
 apt-get update
 apt-get -y upgrade
-apt-get -y install docker.io docker-compose-v2 ufw unattended-upgrades curl
+apt-get -y install docker.io docker-compose-v2 unattended-upgrades curl
 
 id deploy >/dev/null 2>&1 || useradd --create-home --shell /bin/sh --groups docker deploy
 
@@ -47,9 +47,6 @@ $compose up -d cloudflared "$service"
 docker image prune -f >/dev/null
 SCRIPT
 chmod 755 /usr/local/bin/tethr-deploy
-
-ufw allow OpenSSH
-ufw --force enable
 
 admin=${SUDO_USER:-root}
 home=$(getent passwd "$admin" | cut -d: -f6)
