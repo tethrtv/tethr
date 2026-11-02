@@ -1,18 +1,50 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
 import { cleanCode } from './components/CodeInput'
+import { Shell } from './components/Shell'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
 import { CheckEmail } from './pages/CheckEmail'
 import { Developers } from './pages/Developers'
+import { History } from './pages/History'
 import { Home } from './pages/Home'
+import { Import } from './pages/Import'
 import { Join } from './pages/Join'
 import { SignIn } from './pages/SignIn'
+import { UpNext } from './pages/UpNext'
 import { Verify } from './pages/Verify'
+import { Watchlist } from './pages/Watchlist'
 
 const root = createRootRoute({ component: Outlet })
 
 const routes = [
-  createRoute({ getParentRoute: () => root, path: '/', component: Home }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/',
+    component: () => (
+      <Shell>
+        <UpNext />
+      </Shell>
+    ),
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/history',
+    component: () => (
+      <Shell>
+        <History />
+      </Shell>
+    ),
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/watchlist',
+    component: () => (
+      <Shell>
+        <Watchlist />
+      </Shell>
+    ),
+  }),
+  createRoute({ getParentRoute: () => root, path: '/account', component: Home }),
   createRoute({ getParentRoute: () => root, path: '/sign-in', component: SignIn }),
   createRoute({
     getParentRoute: () => root,
@@ -23,6 +55,7 @@ const routes = [
   }),
   createRoute({ getParentRoute: () => root, path: '/check-email', component: CheckEmail }),
   createRoute({ getParentRoute: () => root, path: '/developers', component: Developers }),
+  createRoute({ getParentRoute: () => root, path: '/import', component: Import }),
   createRoute({
     getParentRoute: () => root,
     path: '/verify',

@@ -57,7 +57,11 @@ export function Home() {
         <header className={styles.head}>
           <h1 className={styles.title}>{account.name}</h1>
           <p className={styles.lead}>
-            Signed in as <strong>{account.email}</strong>. Up next and history arrive here soon.
+            Signed in as <strong>{account.email}</strong>. Moving from another tracker?{' '}
+            <Link to="/import" className={styles.inline}>
+              Import your history
+            </Link>
+            .
           </p>
         </header>
         <Household me={me.data} />

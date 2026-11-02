@@ -32,7 +32,7 @@ export function Developers() {
     <Plain
       wide
       end={
-        <Link to="/" className={home.inline}>
+        <Link to="/account" className={home.inline}>
           Your account
         </Link>
       }
