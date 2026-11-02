@@ -5,9 +5,8 @@ import { api, type Me } from '../api/client'
 import { returnTo } from '../returnTo'
 import styles from './Connect.module.css'
 
-export function useSignedIn() {
-  const navigate = useNavigate()
-  const me = useQuery({
+export function useMe() {
+  return useQuery({
     queryKey: ['me'],
     queryFn: async () => {
       const { data, response } = await api.GET('/v1/me')
@@ -16,6 +15,11 @@ export function useSignedIn() {
       return data
     },
   })
+}
+
+export function useSignedIn() {
+  const navigate = useNavigate()
+  const me = useMe()
   useEffect(() => {
     if (me.data !== null) return
     returnTo.set(location.pathname + location.search)

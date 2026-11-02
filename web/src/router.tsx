@@ -1,9 +1,11 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
+import { ComingSoon } from './ComingSoon'
 import { cleanCode } from './components/CodeInput'
 import { Shell } from './components/Shell'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
 import { CheckEmail } from './pages/CheckEmail'
+import { useMe } from './pages/connect'
 import { Developers } from './pages/Developers'
 import { History } from './pages/History'
 import { Home } from './pages/Home'
@@ -16,15 +18,21 @@ import { Watchlist } from './pages/Watchlist'
 
 const root = createRootRoute({ component: Outlet })
 
+const upNext = () => (
+  <Shell>
+    <UpNext />
+  </Shell>
+)
+
+function Front() {
+  return useMe().data ? upNext() : <ComingSoon />
+}
+
 const routes = [
   createRoute({
     getParentRoute: () => root,
     path: '/',
-    component: () => (
-      <Shell>
-        <UpNext />
-      </Shell>
-    ),
+    component: import.meta.env.VITE_COMING_SOON === 'true' ? Front : upNext,
   }),
   createRoute({
     getParentRoute: () => root,
