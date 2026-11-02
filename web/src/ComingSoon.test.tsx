@@ -7,6 +7,7 @@ test('says what Tethr is and how to get in touch', () => {
   expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
     'A watch history that follows you between players.',
   )
+  expect(screen.getByRole('link', { name: 'I have an invite' }).getAttribute('href')).toBe('/join?invite=')
   expect(screen.getByRole('link', { name: 'GitHub' }).getAttribute('href')).toBe('https://github.com/tethrtv')
   expect(screen.getByRole('link', { name: 'hello@tethr.tv' }).getAttribute('href')).toBe('mailto:hello@tethr.tv')
 })

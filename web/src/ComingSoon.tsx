@@ -16,8 +16,8 @@ export function ComingSoon() {
           <Mark />
           tethr
         </span>
-        <a className={styles.link} href="https://github.com/tethrtv">
-          GitHub
+        <a className={styles.invite} href="/join?invite=">
+          I have an invite
         </a>
       </header>
 
@@ -48,7 +48,8 @@ export function ComingSoon() {
 
       <footer className={styles.foot}>
         <span>
-          Questions? <a href="mailto:hello@tethr.tv">hello@tethr.tv</a>
+          Questions? <a href="mailto:hello@tethr.tv">hello@tethr.tv</a> ·{' '}
+          <a href="https://github.com/tethrtv">GitHub</a>
         </span>
         <span className={styles.faint}>Made by the people behind Zuno, kept separate so any player can use it.</span>
       </footer>

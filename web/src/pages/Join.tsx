@@ -104,7 +104,7 @@ export function Join() {
             error={fieldError(['invalid_email', 'too_many_emails'])}
             hint="For sign-in links and anything about your account. Nothing else."
           />
-          {(invited || fieldError(['invite_required', 'invalid_invite'])) && (
+          {(invited !== undefined || fieldError(['invite_required', 'invalid_invite'])) && (
             <Field
               label="Invite code"
               value={invite}

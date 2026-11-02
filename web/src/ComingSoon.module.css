@@ -22,16 +22,30 @@
   letter-spacing: -0.02em;
 }
 
-.link {
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
-  text-decoration-color: var(--rule-2);
+.invite {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid #141412;
+  border-radius: 4px;
+  background: #d4fa3c;
+  color: #141412;
+  font-weight: 650;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color 120ms ease,
+    transform 80ms ease-out;
 }
 
-.link:hover {
-  text-decoration-color: currentColor;
+.invite:hover {
+  background: #c6ef25;
+}
+
+.invite:active {
+  transform: translateY(1px);
 }
 
 .main {
