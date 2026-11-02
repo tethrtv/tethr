@@ -52,7 +52,7 @@ export function Activate() {
   return (
     <Plain
       end={
-        <Link to="/" className={auth.link}>
+        <Link to="/account" className={auth.link}>
           Your account
         </Link>
       }
@@ -101,7 +101,7 @@ export function Activate() {
                 your history.
               </p>
               <div className={auth.actions}>
-                <Link to="/" className={auth.link}>
+                <Link to="/account" className={auth.link}>
                   Back to your account
                 </Link>
                 <Button variant="plain" onClick={restart}>
