@@ -12,6 +12,7 @@ import (
 type UpNextEntry struct {
 	Show          Item
 	Next          store.Episode
+	Last          *store.Episode
 	LastWatchedAt time.Time
 	Aired         int64
 	Watched       int64
@@ -28,6 +29,9 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 	for _, r := range rows {
 		titleIDs = append(titleIDs, r.TitleID)
 		episodeIDs = append(episodeIDs, r.EpisodeID)
+		if r.LastEpisodeID != nil {
+			episodeIDs = append(episodeIDs, *r.LastEpisodeID)
+		}
 	}
 	c, err := loadCatalogue(ctx, q, titleIDs, episodeIDs)
 	if err != nil {
@@ -41,6 +45,10 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 			LastWatchedAt: r.LastWatchedAt,
 			Aired:         r.Aired,
 			Watched:       r.Watched,
+		}
+		if r.LastEpisodeID != nil {
+			last := c.episodes[*r.LastEpisodeID]
+			e.Last = &last
 		}
 		if r.PlaybackID != nil {
 			e.Resume = &Entry{ID: *r.PlaybackID, Progress: *r.PlaybackProgress}

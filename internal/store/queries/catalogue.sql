@@ -86,6 +86,14 @@ WHERE l.episode_id = sqlc.arg(from_id)
 -- name: MergeEpisodeListItems :exec
 UPDATE list_items SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
 
+-- name: DropClashingRatings :exec
+DELETE FROM ratings r
+WHERE r.episode_id = sqlc.arg(from_id)
+  AND EXISTS (SELECT 1 FROM ratings s WHERE s.profile_id = r.profile_id AND s.episode_id = sqlc.arg(into_id));
+
+-- name: MergeEpisodeRatings :exec
+UPDATE ratings SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
+
 -- name: MergeEpisodeWatching :exec
 UPDATE watching SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
 

@@ -9,7 +9,7 @@ info:
 
     Errors come back as `{"code": "...", "message": "..."}`. `code` is stable for programs to check, and `message` is written for people.
 
-    Apps sign in on someone's behalf with OAuth: TVs show a code that people enter at `/activate` on the website, and phones and computers send them to `/oauth/authorize` in a browser. Each connection logs to one profile the person chooses. Send the access token as `Authorization: Bearer ...` to the tracking endpoints: scrobble, Up next, history, playback, the watchlist and activity.
+    Apps sign in on someone's behalf with OAuth: TVs show a code that people enter at `/activate` on the website, and phones and computers send them to `/oauth/authorize` in a browser. Each connection logs to one profile the person chooses. Send the access token as `Authorization: Bearer ...` to the tracking endpoints: scrobble, Up next, history, playback, the watchlist, ratings, imports and activity.
 
     Players built for the Trakt API can use the paths they already know instead, at the same address.
   license:
@@ -567,6 +567,7 @@ paths:
         - session: []
         - bearer: []
       parameters:
+        - $ref: '#/components/parameters/ProfileId'
         - name: type
           in: query
           schema:
@@ -600,6 +601,8 @@ paths:
                 $ref: '#/components/schemas/HistoryPage'
         '401':
           $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
     post:
       operationId: addHistory
       summary: Log watches that happened elsewhere
@@ -607,6 +610,8 @@ paths:
       security:
         - session: []
         - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
       requestBody:
         required: true
         content:
@@ -624,6 +629,8 @@ paths:
           $ref: '#/components/responses/Problem'
         '400':
           $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/history/{id}:
     delete:
       operationId: removeWatch
@@ -632,6 +639,7 @@ paths:
         - session: []
         - bearer: []
       parameters:
+        - $ref: '#/components/parameters/ProfileId'
         - $ref: '#/components/parameters/Id'
       responses:
         '204':
@@ -648,6 +656,7 @@ paths:
         - session: []
         - bearer: []
       parameters:
+        - $ref: '#/components/parameters/ProfileId'
         - name: type
           in: query
           schema:
@@ -664,6 +673,8 @@ paths:
                   $ref: '#/components/schemas/ResumePoint'
         '401':
           $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/playback/{id}:
     delete:
       operationId: removePlayback
@@ -672,6 +683,7 @@ paths:
         - session: []
         - bearer: []
       parameters:
+        - $ref: '#/components/parameters/ProfileId'
         - $ref: '#/components/parameters/Id'
       responses:
         '204':
@@ -688,6 +700,7 @@ paths:
         - session: []
         - bearer: []
       parameters:
+        - $ref: '#/components/parameters/ProfileId'
         - name: type
           in: query
           schema:
@@ -704,6 +717,8 @@ paths:
                   $ref: '#/components/schemas/Listing'
         '401':
           $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
     post:
       operationId: addToWatchlist
       summary: Add to the watchlist
@@ -711,6 +726,8 @@ paths:
       security:
         - session: []
         - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
       requestBody:
         required: true
         content:
@@ -728,6 +745,8 @@ paths:
           $ref: '#/components/responses/Problem'
         '400':
           $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/watchlist/{id}:
     delete:
       operationId: removeFromWatchlist
@@ -736,6 +755,7 @@ paths:
         - session: []
         - bearer: []
       parameters:
+        - $ref: '#/components/parameters/ProfileId'
         - $ref: '#/components/parameters/Id'
       responses:
         '204':
@@ -752,6 +772,8 @@ paths:
       security:
         - session: []
         - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
       responses:
         '200':
           description: Latest change times
@@ -761,6 +783,8 @@ paths:
                 $ref: '#/components/schemas/Activity'
         '401':
           $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/up-next:
     get:
       operationId: getUpNext
@@ -769,6 +793,8 @@ paths:
       security:
         - session: []
         - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
       responses:
         '200':
           description: One entry per show
@@ -779,6 +805,8 @@ paths:
                 items:
                   $ref: '#/components/schemas/UpNextEntry'
         '401':
+          $ref: '#/components/responses/Problem'
+        '404':
           $ref: '#/components/responses/Problem'
   /v1/up-next/hidden/{id}:
     put:
@@ -807,6 +835,216 @@ paths:
       responses:
         '204':
           description: Back in Up next
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/ratings:
+    get:
+      operationId: listRatings
+      summary: Ratings, newest first
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, show, season, episode]
+        - name: rating
+          in: query
+          description: Only these ratings.
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 10
+          explode: false
+      responses:
+        '200':
+          description: Ratings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Rating'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: rate
+      summary: Rate films, shows, seasons or episodes from 1 to 10
+      description: Rating something again replaces the old rating.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewRatings'
+      responses:
+        '200':
+          description: What was rated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResult'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/ratings/{id}:
+    delete:
+      operationId: removeRating
+      summary: Remove one rating
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/imports:
+    get:
+      operationId: listImports
+      summary: The last 20 imports
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Imports, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Import'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createImport
+      summary: Read a Trakt export before importing it
+      description: |
+        Send the zip from Trakt's data export as the body. Tethr reads history, the watchlist, resume points, ratings and hidden items, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
+
+        Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Plays already in history at the same time are skipped, so importing the same file twice is safe.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: filename
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/zip:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: The import, ready to apply
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Import'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '413':
+          $ref: '#/components/responses/Problem'
+  /v1/imports/{id}:
+    get:
+      operationId: getImport
+      summary: One import and its counts
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: The import
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Import'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/imports/{id}/apply:
+    post:
+      operationId: applyImport
+      summary: Write an import into the profile
+      description: Imports run in the background, one at a time. Poll the import until its status is `applied` or `failed`.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Import'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/imports/{id}/undo:
+    post:
+      operationId: undoImport
+      summary: Take out everything an import added
+      description: Works for 30 days after an import is applied. Plays, ratings and watchlist entries that were already there before the import stay.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Undone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Import'
         '401':
           $ref: '#/components/responses/Problem'
         '404':
@@ -1066,6 +1304,13 @@ components:
       name: id
       in: path
       required: true
+      schema:
+        type: integer
+        format: int64
+    ProfileId:
+      name: profile_id
+      in: query
+      description: With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
       schema:
         type: integer
         format: int64
@@ -1667,3 +1912,97 @@ components:
         progress:
           type: number
           format: double
+    Rating:
+      type: object
+      required: [id, rating, rated_at, item]
+      properties:
+        id:
+          type: integer
+          format: int64
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 10
+        rated_at:
+          type: string
+          format: date-time
+        item:
+          $ref: '#/components/schemas/Item'
+    NewRatings:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [item, rating]
+            properties:
+              item:
+                $ref: '#/components/schemas/ItemRef'
+              rating:
+                type: integer
+                minimum: 1
+                maximum: 10
+              rated_at:
+                type: string
+                format: date-time
+                description: Left out, it's now.
+    Import:
+      type: object
+      required: [id, source, filename, status, summary, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        source:
+          type: string
+          enum: [trakt]
+        filename:
+          type: string
+        status:
+          type: string
+          enum: [parsed, queued, applied, failed, undone]
+        summary:
+          $ref: '#/components/schemas/ImportSummary'
+        created_at:
+          type: string
+          format: date-time
+        applied_at:
+          type: string
+          format: date-time
+        undone_at:
+          type: string
+          format: date-time
+    ImportSummary:
+      type: object
+      required: [history, watchlist, playback, ratings, hidden, unmatched]
+      properties:
+        history:
+          $ref: '#/components/schemas/ImportCount'
+        watchlist:
+          $ref: '#/components/schemas/ImportCount'
+        playback:
+          $ref: '#/components/schemas/ImportCount'
+        ratings:
+          $ref: '#/components/schemas/ImportCount'
+        hidden:
+          $ref: '#/components/schemas/ImportCount'
+        unmatched:
+          type: array
+          description: Up to 100 of the items that couldn't be matched, as the file names them.
+          items:
+            type: string
+    ImportCount:
+      type: object
+      required: [total, added, skipped, unmatched]
+      description: Added and skipped are filled in once the import is applied. Skipped items were already there.
+      properties:
+        total:
+          type: integer
+        added:
+          type: integer
+        skipped:
+          type: integer
+        unmatched:
+          type: integer

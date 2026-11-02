@@ -94,12 +94,26 @@ type HiddenItem struct {
 	TitleID      int64
 	SeasonNumber *int32
 	HiddenAt     time.Time
+	ImportID     *int64
 }
 
 type Household struct {
 	ID             int64
 	OwnerAccountID int64
 	CreatedAt      time.Time
+}
+
+type Import struct {
+	ID        int64
+	ProfileID int64
+	Source    string
+	Filename  string
+	Payload   []byte
+	Status    string
+	Summary   []byte
+	CreatedAt time.Time
+	AppliedAt *time.Time
+	UndoneAt  *time.Time
 }
 
 type Invite struct {
@@ -132,6 +146,7 @@ type ListItem struct {
 	Rank         int32
 	Notes        *string
 	ListedAt     time.Time
+	ImportID     *int64
 }
 
 type OauthCode struct {
@@ -190,6 +205,7 @@ type Playback struct {
 	PausedAt        time.Time
 	GrantID         *int64
 	DurationSeconds *float64
+	ImportID        *int64
 }
 
 type Profile struct {
@@ -206,6 +222,17 @@ type Profile struct {
 	Position    int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type Rating struct {
+	ID           int64
+	ProfileID    int64
+	TitleID      int64
+	SeasonNumber *int32
+	EpisodeID    *int64
+	Rating       int16
+	RatedAt      time.Time
+	ImportID     *int64
 }
 
 type Session struct {
@@ -243,6 +270,7 @@ type WatchEvent struct {
 	GrantID         *int64
 	DurationSeconds *float64
 	CreatedAt       time.Time
+	ImportID        *int64
 }
 
 type Watching struct {

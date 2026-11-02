@@ -11,12 +11,55 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for ImportSource.
+const (
+	Trakt ImportSource = "trakt"
+)
+
+// Valid indicates whether the value is a known member of the ImportSource enum.
+func (e ImportSource) Valid() bool {
+	switch e {
+	case Trakt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImportStatus.
+const (
+	Applied ImportStatus = "applied"
+	Failed  ImportStatus = "failed"
+	Parsed  ImportStatus = "parsed"
+	Queued  ImportStatus = "queued"
+	Undone  ImportStatus = "undone"
+)
+
+// Valid indicates whether the value is a known member of the ImportStatus enum.
+func (e ImportStatus) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Failed:
+		return true
+	case Parsed:
+		return true
+	case Queued:
+		return true
+	case Undone:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for ItemType.
 const (
@@ -210,6 +253,30 @@ func (e ListPlaybackParamsType) Valid() bool {
 	}
 }
 
+// Defines values for ListRatingsParamsType.
+const (
+	ListRatingsParamsTypeEpisode ListRatingsParamsType = "episode"
+	ListRatingsParamsTypeMovie   ListRatingsParamsType = "movie"
+	ListRatingsParamsTypeSeason  ListRatingsParamsType = "season"
+	ListRatingsParamsTypeShow    ListRatingsParamsType = "show"
+)
+
+// Valid indicates whether the value is a known member of the ListRatingsParamsType enum.
+func (e ListRatingsParamsType) Valid() bool {
+	switch e {
+	case ListRatingsParamsTypeEpisode:
+		return true
+	case ListRatingsParamsTypeMovie:
+		return true
+	case ListRatingsParamsTypeSeason:
+		return true
+	case ListRatingsParamsTypeShow:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListWatchlistParamsType.
 const (
 	ListWatchlistParamsTypeEpisode ListWatchlistParamsType = "episode"
@@ -347,6 +414,53 @@ type Ids struct {
 	Tvdb  *int    `json:"tvdb,omitempty"`
 }
 
+// Import defines model for Import.
+type Import struct {
+	AppliedAt *time.Time    `json:"applied_at,omitempty"`
+	CreatedAt time.Time     `json:"created_at"`
+	Filename  string        `json:"filename"`
+	Id        int64         `json:"id"`
+	Source    ImportSource  `json:"source"`
+	Status    ImportStatus  `json:"status"`
+	Summary   ImportSummary `json:"summary"`
+	UndoneAt  *time.Time    `json:"undone_at,omitempty"`
+}
+
+// ImportSource defines model for Import.Source.
+type ImportSource string
+
+// ImportStatus defines model for Import.Status.
+type ImportStatus string
+
+// ImportCount Added and skipped are filled in once the import is applied. Skipped items were already there.
+type ImportCount struct {
+	Added     int `json:"added"`
+	Skipped   int `json:"skipped"`
+	Total     int `json:"total"`
+	Unmatched int `json:"unmatched"`
+}
+
+// ImportSummary defines model for ImportSummary.
+type ImportSummary struct {
+	// Hidden Added and skipped are filled in once the import is applied. Skipped items were already there.
+	Hidden ImportCount `json:"hidden"`
+
+	// History Added and skipped are filled in once the import is applied. Skipped items were already there.
+	History ImportCount `json:"history"`
+
+	// Playback Added and skipped are filled in once the import is applied. Skipped items were already there.
+	Playback ImportCount `json:"playback"`
+
+	// Ratings Added and skipped are filled in once the import is applied. Skipped items were already there.
+	Ratings ImportCount `json:"ratings"`
+
+	// Unmatched Up to 100 of the items that couldn't be matched, as the file names them.
+	Unmatched []string `json:"unmatched"`
+
+	// Watchlist Added and skipped are filled in once the import is applied. Skipped items were already there.
+	Watchlist ImportCount `json:"watchlist"`
+}
+
 // Item defines model for Item.
 type Item struct {
 	Episode *Episode `json:"episode,omitempty"`
@@ -420,6 +534,18 @@ type NewProfile struct {
 // NewProfileKind defines model for NewProfile.Kind.
 type NewProfileKind string
 
+// NewRatings defines model for NewRatings.
+type NewRatings struct {
+	Items []struct {
+		// Item A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+		Item ItemRef `json:"item"`
+
+		// RatedAt Left out, it's now.
+		RatedAt *time.Time `json:"rated_at,omitempty"`
+		Rating  int        `json:"rating"`
+	} `json:"items"`
+}
+
 // NewWatches defines model for NewWatches.
 type NewWatches struct {
 	Items []struct {
@@ -488,6 +614,14 @@ type ProfileChanges struct {
 // ProfileChoice defines model for ProfileChoice.
 type ProfileChoice struct {
 	ProfileId int64 `json:"profile_id"`
+}
+
+// Rating defines model for Rating.
+type Rating struct {
+	Id      int64     `json:"id"`
+	Item    Item      `json:"item"`
+	RatedAt time.Time `json:"rated_at"`
+	Rating  int       `json:"rating"`
 }
 
 // RegisteredApp defines model for RegisteredApp.
@@ -615,6 +749,15 @@ type DeviceCode = string
 // Id defines model for Id.
 type Id = int64
 
+// ProfileId defines model for ProfileId.
+type ProfileId = int64
+
+// GetActivityParams defines parameters for GetActivity.
+type GetActivityParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // GetAuthorizationParams defines parameters for GetAuthorization.
 type GetAuthorizationParams struct {
 	ClientId    string `form:"client_id" json:"client_id"`
@@ -623,7 +766,9 @@ type GetAuthorizationParams struct {
 
 // ListHistoryParams defines parameters for ListHistory.
 type ListHistoryParams struct {
-	Type *ListHistoryParamsType `form:"type,omitempty" json:"type,omitempty"`
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId             `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Type      *ListHistoryParamsType `form:"type,omitempty" json:"type,omitempty"`
 
 	// TitleId Only watches of this film or show.
 	TitleId *int64 `form:"title_id,omitempty" json:"title_id,omitempty"`
@@ -634,6 +779,49 @@ type ListHistoryParams struct {
 // ListHistoryParamsType defines parameters for ListHistory.
 type ListHistoryParamsType string
 
+// AddHistoryParams defines parameters for AddHistory.
+type AddHistoryParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// RemoveWatchParams defines parameters for RemoveWatch.
+type RemoveWatchParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ListImportsParams defines parameters for ListImports.
+type ListImportsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// CreateImportParams defines parameters for CreateImport.
+type CreateImportParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Filename  *string    `form:"filename,omitempty" json:"filename,omitempty"`
+}
+
+// GetImportParams defines parameters for GetImport.
+type GetImportParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ApplyImportParams defines parameters for ApplyImport.
+type ApplyImportParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// UndoImportParams defines parameters for UndoImport.
+type UndoImportParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // DeleteAccountJSONBody defines parameters for DeleteAccount.
 type DeleteAccountJSONBody struct {
 	Username string `json:"username"`
@@ -641,19 +829,72 @@ type DeleteAccountJSONBody struct {
 
 // ListPlaybackParams defines parameters for ListPlayback.
 type ListPlaybackParams struct {
-	Type *ListPlaybackParamsType `form:"type,omitempty" json:"type,omitempty"`
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId              `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Type      *ListPlaybackParamsType `form:"type,omitempty" json:"type,omitempty"`
 }
 
 // ListPlaybackParamsType defines parameters for ListPlayback.
 type ListPlaybackParamsType string
 
+// RemovePlaybackParams defines parameters for RemovePlayback.
+type RemovePlaybackParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ListRatingsParams defines parameters for ListRatings.
+type ListRatingsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId             `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Type      *ListRatingsParamsType `form:"type,omitempty" json:"type,omitempty"`
+
+	// Rating Only these ratings.
+	Rating *[]int `form:"rating,omitempty" json:"rating,omitempty"`
+}
+
+// ListRatingsParamsType defines parameters for ListRatings.
+type ListRatingsParamsType string
+
+// RateParams defines parameters for Rate.
+type RateParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// RemoveRatingParams defines parameters for RemoveRating.
+type RemoveRatingParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// GetUpNextParams defines parameters for GetUpNext.
+type GetUpNextParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // ListWatchlistParams defines parameters for ListWatchlist.
 type ListWatchlistParams struct {
-	Type *ListWatchlistParamsType `form:"type,omitempty" json:"type,omitempty"`
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId               `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Type      *ListWatchlistParamsType `form:"type,omitempty" json:"type,omitempty"`
 }
 
 // ListWatchlistParamsType defines parameters for ListWatchlist.
 type ListWatchlistParamsType string
+
+// AddToWatchlistParams defines parameters for AddToWatchlist.
+type AddToWatchlistParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// RemoveFromWatchlistParams defines parameters for RemoveFromWatchlist.
+type RemoveFromWatchlistParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = SignUp
@@ -697,6 +938,9 @@ type AddProfileJSONRequestBody = NewProfile
 // UpdateProfileJSONRequestBody defines body for UpdateProfile for application/json ContentType.
 type UpdateProfileJSONRequestBody = ProfileChanges
 
+// RateJSONRequestBody defines body for Rate for application/json ContentType.
+type RateJSONRequestBody = NewRatings
+
 // ScrobbleJSONRequestBody defines body for Scrobble for application/json ContentType.
 type ScrobbleJSONRequestBody = ScrobbleRequest
 
@@ -710,7 +954,7 @@ type ServerInterface interface {
 	CreateAccount(w http.ResponseWriter, r *http.Request)
 	// GetActivity When history, playback and the watchlist last changed
 	// (GET /v1/activity)
-	GetActivity(w http.ResponseWriter, r *http.Request)
+	GetActivity(w http.ResponseWriter, r *http.Request, params GetActivityParams)
 	// ListApps Apps you've registered
 	// (GET /v1/apps)
 	ListApps(w http.ResponseWriter, r *http.Request)
@@ -770,10 +1014,25 @@ type ServerInterface interface {
 	ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams)
 	// AddHistory Log watches that happened elsewhere
 	// (POST /v1/history)
-	AddHistory(w http.ResponseWriter, r *http.Request)
+	AddHistory(w http.ResponseWriter, r *http.Request, params AddHistoryParams)
 	// RemoveWatch Remove one watch
 	// (DELETE /v1/history/{id})
-	RemoveWatch(w http.ResponseWriter, r *http.Request, id Id)
+	RemoveWatch(w http.ResponseWriter, r *http.Request, id Id, params RemoveWatchParams)
+	// ListImports The last 20 imports
+	// (GET /v1/imports)
+	ListImports(w http.ResponseWriter, r *http.Request, params ListImportsParams)
+	// CreateImport Read a Trakt export before importing it
+	// (POST /v1/imports)
+	CreateImport(w http.ResponseWriter, r *http.Request, params CreateImportParams)
+	// GetImport One import and its counts
+	// (GET /v1/imports/{id})
+	GetImport(w http.ResponseWriter, r *http.Request, id Id, params GetImportParams)
+	// ApplyImport Write an import into the profile
+	// (POST /v1/imports/{id}/apply)
+	ApplyImport(w http.ResponseWriter, r *http.Request, id Id, params ApplyImportParams)
+	// UndoImport Take out everything an import added
+	// (POST /v1/imports/{id}/undo)
+	UndoImport(w http.ResponseWriter, r *http.Request, id Id, params UndoImportParams)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(w http.ResponseWriter, r *http.Request)
@@ -797,7 +1056,7 @@ type ServerInterface interface {
 	ListPlayback(w http.ResponseWriter, r *http.Request, params ListPlaybackParams)
 	// RemovePlayback Forget a resume point
 	// (DELETE /v1/playback/{id})
-	RemovePlayback(w http.ResponseWriter, r *http.Request, id Id)
+	RemovePlayback(w http.ResponseWriter, r *http.Request, id Id, params RemovePlaybackParams)
 	// GetProfile The profile you're logging to
 	// (GET /v1/profile)
 	GetProfile(w http.ResponseWriter, r *http.Request)
@@ -810,6 +1069,15 @@ type ServerInterface interface {
 	// UpdateProfile Rename a profile, change its username or privacy
 	// (PATCH /v1/profiles/{id})
 	UpdateProfile(w http.ResponseWriter, r *http.Request, id Id)
+	// ListRatings Ratings, newest first
+	// (GET /v1/ratings)
+	ListRatings(w http.ResponseWriter, r *http.Request, params ListRatingsParams)
+	// Rate Rate films, shows, seasons or episodes from 1 to 10
+	// (POST /v1/ratings)
+	Rate(w http.ResponseWriter, r *http.Request, params RateParams)
+	// RemoveRating Remove one rating
+	// (DELETE /v1/ratings/{id})
+	RemoveRating(w http.ResponseWriter, r *http.Request, id Id, params RemoveRatingParams)
 	// Scrobble Report playback starting, pausing or stopping
 	// (POST /v1/scrobble)
 	Scrobble(w http.ResponseWriter, r *http.Request)
@@ -824,7 +1092,7 @@ type ServerInterface interface {
 	EndSession(w http.ResponseWriter, r *http.Request, id Id)
 	// GetUpNext The next episode of every show you're partway through
 	// (GET /v1/up-next)
-	GetUpNext(w http.ResponseWriter, r *http.Request)
+	GetUpNext(w http.ResponseWriter, r *http.Request, params GetUpNextParams)
 	// ShowInUpNext Put a hidden show back in Up next
 	// (DELETE /v1/up-next/hidden/{id})
 	ShowInUpNext(w http.ResponseWriter, r *http.Request, id Id)
@@ -836,10 +1104,10 @@ type ServerInterface interface {
 	ListWatchlist(w http.ResponseWriter, r *http.Request, params ListWatchlistParams)
 	// AddToWatchlist Add to the watchlist
 	// (POST /v1/watchlist)
-	AddToWatchlist(w http.ResponseWriter, r *http.Request)
+	AddToWatchlist(w http.ResponseWriter, r *http.Request, params AddToWatchlistParams)
 	// RemoveFromWatchlist Take one entry off the watchlist
 	// (DELETE /v1/watchlist/{id})
-	RemoveFromWatchlist(w http.ResponseWriter, r *http.Request, id Id)
+	RemoveFromWatchlist(w http.ResponseWriter, r *http.Request, id Id, params RemoveFromWatchlistParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -868,8 +1136,27 @@ func (siw *ServerInterfaceWrapper) CreateAccount(w http.ResponseWriter, r *http.
 // GetActivity operation middleware
 func (siw *ServerInterfaceWrapper) GetActivity(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetActivityParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetActivity(w, r)
+		siw.Handler.GetActivity(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1268,6 +1555,19 @@ func (siw *ServerInterfaceWrapper) ListHistory(w http.ResponseWriter, r *http.Re
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListHistoryParams
 
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "type" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -1334,8 +1634,27 @@ func (siw *ServerInterfaceWrapper) ListHistory(w http.ResponseWriter, r *http.Re
 // AddHistory operation middleware
 func (siw *ServerInterfaceWrapper) AddHistory(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddHistoryParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AddHistory(w, r)
+		siw.Handler.AddHistory(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1360,8 +1679,229 @@ func (siw *ServerInterfaceWrapper) RemoveWatch(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveWatchParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RemoveWatch(w, r, id)
+		siw.Handler.RemoveWatch(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImports operation middleware
+func (siw *ServerInterfaceWrapper) ListImports(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListImportsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImports(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateImport operation middleware
+func (siw *ServerInterfaceWrapper) CreateImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateImportParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filename" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filename", r.URL.Query(), &params.Filename, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filename"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filename", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateImport(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImport operation middleware
+func (siw *ServerInterfaceWrapper) GetImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetImportParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImport(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyImport operation middleware
+func (siw *ServerInterfaceWrapper) ApplyImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyImportParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyImport(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UndoImport operation middleware
+func (siw *ServerInterfaceWrapper) UndoImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UndoImportParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UndoImport(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1476,6 +2016,19 @@ func (siw *ServerInterfaceWrapper) ListPlayback(w http.ResponseWriter, r *http.R
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListPlaybackParams
 
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "type" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -1515,8 +2068,24 @@ func (siw *ServerInterfaceWrapper) RemovePlayback(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemovePlaybackParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RemovePlayback(w, r, id)
+		siw.Handler.RemovePlayback(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1606,6 +2175,140 @@ func (siw *ServerInterfaceWrapper) UpdateProfile(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListRatings operation middleware
+func (siw *ServerInterfaceWrapper) ListRatings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRatingsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "rating" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", false, false, "rating", r.URL.Query(), &params.Rating, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rating"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rating", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRatings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Rate operation middleware
+func (siw *ServerInterfaceWrapper) Rate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RateParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Rate(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveRating operation middleware
+func (siw *ServerInterfaceWrapper) RemoveRating(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveRatingParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveRating(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Scrobble operation middleware
 func (siw *ServerInterfaceWrapper) Scrobble(w http.ResponseWriter, r *http.Request) {
 
@@ -1677,8 +2380,27 @@ func (siw *ServerInterfaceWrapper) EndSession(w http.ResponseWriter, r *http.Req
 // GetUpNext operation middleware
 func (siw *ServerInterfaceWrapper) GetUpNext(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUpNextParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetUpNext(w, r)
+		siw.Handler.GetUpNext(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1749,6 +2471,19 @@ func (siw *ServerInterfaceWrapper) ListWatchlist(w http.ResponseWriter, r *http.
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListWatchlistParams
 
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "type" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -1776,8 +2511,27 @@ func (siw *ServerInterfaceWrapper) ListWatchlist(w http.ResponseWriter, r *http.
 // AddToWatchlist operation middleware
 func (siw *ServerInterfaceWrapper) AddToWatchlist(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddToWatchlistParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AddToWatchlist(w, r)
+		siw.Handler.AddToWatchlist(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1802,8 +2556,24 @@ func (siw *ServerInterfaceWrapper) RemoveFromWatchlist(w http.ResponseWriter, r 
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveFromWatchlistParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RemoveFromWatchlist(w, r, id)
+		siw.Handler.RemoveFromWatchlist(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1973,6 +2743,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.HideFromUpNext)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/ratings", wrapper.ListRatings)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/ratings", wrapper.Rate)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/ratings/{id}", wrapper.RemoveRating)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/imports", wrapper.ListImports)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports", wrapper.CreateImport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/imports/{id}", wrapper.GetImport)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports/{id}/apply", wrapper.ApplyImport)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports/{id}/undo", wrapper.UndoImport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/apps", wrapper.ListApps)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/apps", wrapper.RegisterApp)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/apps/{id}", wrapper.RevokeApp)
@@ -2057,6 +2835,7 @@ func (response CreateAccount429JSONResponse) VisitCreateAccountResponse(w http.R
 }
 
 type GetActivityRequestObject struct {
+	Params GetActivityParams
 }
 
 type GetActivityResponseObject interface {
@@ -2087,6 +2866,20 @@ func (response GetActivity401JSONResponse) VisitGetActivityResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetActivity404JSONResponse Problem
+
+func (response GetActivity404JSONResponse) VisitGetActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2956,8 +3749,23 @@ func (response ListHistory401JSONResponse) VisitListHistoryResponse(w http.Respo
 	return err
 }
 
+type ListHistory404JSONResponse Problem
+
+func (response ListHistory404JSONResponse) VisitListHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AddHistoryRequestObject struct {
-	Body *AddHistoryJSONRequestBody
+	Params AddHistoryParams
+	Body   *AddHistoryJSONRequestBody
 }
 
 type AddHistoryResponseObject interface {
@@ -3006,8 +3814,23 @@ func (response AddHistory401JSONResponse) VisitAddHistoryResponse(w http.Respons
 	return err
 }
 
+type AddHistory404JSONResponse Problem
+
+func (response AddHistory404JSONResponse) VisitAddHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemoveWatchRequestObject struct {
-	Id Id `json:"id"`
+	Id     Id `json:"id"`
+	Params RemoveWatchParams
 }
 
 type RemoveWatchResponseObject interface {
@@ -3039,6 +3862,302 @@ func (response RemoveWatch401JSONResponse) VisitRemoveWatchResponse(w http.Respo
 type RemoveWatch404JSONResponse Problem
 
 func (response RemoveWatch404JSONResponse) VisitRemoveWatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImportsRequestObject struct {
+	Params ListImportsParams
+}
+
+type ListImportsResponseObject interface {
+	VisitListImportsResponse(w http.ResponseWriter) error
+}
+
+type ListImports200JSONResponse []Import
+
+func (response ListImports200JSONResponse) VisitListImportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImports401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListImports401JSONResponse) VisitListImportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImports404JSONResponse Problem
+
+func (response ListImports404JSONResponse) VisitListImportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImportRequestObject struct {
+	Params CreateImportParams
+	Body   io.Reader
+}
+
+type CreateImportResponseObject interface {
+	VisitCreateImportResponse(w http.ResponseWriter) error
+}
+
+type CreateImport201JSONResponse Import
+
+func (response CreateImport201JSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImport400JSONResponse struct{ ProblemJSONResponse }
+
+func (response CreateImport400JSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImport401JSONResponse Problem
+
+func (response CreateImport401JSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImport404JSONResponse Problem
+
+func (response CreateImport404JSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImport409JSONResponse Problem
+
+func (response CreateImport409JSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImport413JSONResponse Problem
+
+func (response CreateImport413JSONResponse) VisitCreateImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetImportRequestObject struct {
+	Id     Id `json:"id"`
+	Params GetImportParams
+}
+
+type GetImportResponseObject interface {
+	VisitGetImportResponse(w http.ResponseWriter) error
+}
+
+type GetImport200JSONResponse Import
+
+func (response GetImport200JSONResponse) VisitGetImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetImport401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetImport401JSONResponse) VisitGetImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetImport404JSONResponse Problem
+
+func (response GetImport404JSONResponse) VisitGetImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyImportRequestObject struct {
+	Id     Id `json:"id"`
+	Params ApplyImportParams
+}
+
+type ApplyImportResponseObject interface {
+	VisitApplyImportResponse(w http.ResponseWriter) error
+}
+
+type ApplyImport202JSONResponse Import
+
+func (response ApplyImport202JSONResponse) VisitApplyImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyImport401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ApplyImport401JSONResponse) VisitApplyImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyImport404JSONResponse Problem
+
+func (response ApplyImport404JSONResponse) VisitApplyImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UndoImportRequestObject struct {
+	Id     Id `json:"id"`
+	Params UndoImportParams
+}
+
+type UndoImportResponseObject interface {
+	VisitUndoImportResponse(w http.ResponseWriter) error
+}
+
+type UndoImport200JSONResponse Import
+
+func (response UndoImport200JSONResponse) VisitUndoImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UndoImport401JSONResponse struct{ ProblemJSONResponse }
+
+func (response UndoImport401JSONResponse) VisitUndoImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UndoImport404JSONResponse Problem
+
+func (response UndoImport404JSONResponse) VisitUndoImportResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3337,8 +4456,23 @@ func (response ListPlayback401JSONResponse) VisitListPlaybackResponse(w http.Res
 	return err
 }
 
+type ListPlayback404JSONResponse Problem
+
+func (response ListPlayback404JSONResponse) VisitListPlaybackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemovePlaybackRequestObject struct {
-	Id Id `json:"id"`
+	Id     Id `json:"id"`
+	Params RemovePlaybackParams
 }
 
 type RemovePlaybackResponseObject interface {
@@ -3617,6 +4751,166 @@ func (response UpdateProfile409JSONResponse) VisitUpdateProfileResponse(w http.R
 	return err
 }
 
+type ListRatingsRequestObject struct {
+	Params ListRatingsParams
+}
+
+type ListRatingsResponseObject interface {
+	VisitListRatingsResponse(w http.ResponseWriter) error
+}
+
+type ListRatings200JSONResponse []Rating
+
+func (response ListRatings200JSONResponse) VisitListRatingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRatings401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListRatings401JSONResponse) VisitListRatingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRatings404JSONResponse Problem
+
+func (response ListRatings404JSONResponse) VisitListRatingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RateRequestObject struct {
+	Params RateParams
+	Body   *RateJSONRequestBody
+}
+
+type RateResponseObject interface {
+	VisitRateResponse(w http.ResponseWriter) error
+}
+
+type Rate200JSONResponse SyncResult
+
+func (response Rate200JSONResponse) VisitRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Rate400JSONResponse struct{ ProblemJSONResponse }
+
+func (response Rate400JSONResponse) VisitRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Rate401JSONResponse Problem
+
+func (response Rate401JSONResponse) VisitRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Rate404JSONResponse Problem
+
+func (response Rate404JSONResponse) VisitRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRatingRequestObject struct {
+	Id     Id `json:"id"`
+	Params RemoveRatingParams
+}
+
+type RemoveRatingResponseObject interface {
+	VisitRemoveRatingResponse(w http.ResponseWriter) error
+}
+
+type RemoveRating204Response struct {
+}
+
+func (response RemoveRating204Response) VisitRemoveRatingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveRating401JSONResponse struct{ ProblemJSONResponse }
+
+func (response RemoveRating401JSONResponse) VisitRemoveRatingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRating404JSONResponse Problem
+
+func (response RemoveRating404JSONResponse) VisitRemoveRatingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ScrobbleRequestObject struct {
 	Body *ScrobbleJSONRequestBody
 }
@@ -3818,6 +5112,7 @@ func (response EndSession404JSONResponse) VisitEndSessionResponse(w http.Respons
 }
 
 type GetUpNextRequestObject struct {
+	Params GetUpNextParams
 }
 
 type GetUpNextResponseObject interface {
@@ -3848,6 +5143,20 @@ func (response GetUpNext401JSONResponse) VisitGetUpNextResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUpNext404JSONResponse Problem
+
+func (response GetUpNext404JSONResponse) VisitGetUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3976,8 +5285,23 @@ func (response ListWatchlist401JSONResponse) VisitListWatchlistResponse(w http.R
 	return err
 }
 
+type ListWatchlist404JSONResponse Problem
+
+func (response ListWatchlist404JSONResponse) VisitListWatchlistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AddToWatchlistRequestObject struct {
-	Body *AddToWatchlistJSONRequestBody
+	Params AddToWatchlistParams
+	Body   *AddToWatchlistJSONRequestBody
 }
 
 type AddToWatchlistResponseObject interface {
@@ -4026,8 +5350,23 @@ func (response AddToWatchlist401JSONResponse) VisitAddToWatchlistResponse(w http
 	return err
 }
 
+type AddToWatchlist404JSONResponse Problem
+
+func (response AddToWatchlist404JSONResponse) VisitAddToWatchlistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemoveFromWatchlistRequestObject struct {
-	Id Id `json:"id"`
+	Id     Id `json:"id"`
+	Params RemoveFromWatchlistParams
 }
 
 type RemoveFromWatchlistResponseObject interface {
@@ -4141,6 +5480,21 @@ type StrictServerInterface interface {
 	// RemoveWatch Remove one watch
 	// (DELETE /v1/history/{id})
 	RemoveWatch(ctx context.Context, request RemoveWatchRequestObject) (RemoveWatchResponseObject, error)
+	// ListImports The last 20 imports
+	// (GET /v1/imports)
+	ListImports(ctx context.Context, request ListImportsRequestObject) (ListImportsResponseObject, error)
+	// CreateImport Read a Trakt export before importing it
+	// (POST /v1/imports)
+	CreateImport(ctx context.Context, request CreateImportRequestObject) (CreateImportResponseObject, error)
+	// GetImport One import and its counts
+	// (GET /v1/imports/{id})
+	GetImport(ctx context.Context, request GetImportRequestObject) (GetImportResponseObject, error)
+	// ApplyImport Write an import into the profile
+	// (POST /v1/imports/{id}/apply)
+	ApplyImport(ctx context.Context, request ApplyImportRequestObject) (ApplyImportResponseObject, error)
+	// UndoImport Take out everything an import added
+	// (POST /v1/imports/{id}/undo)
+	UndoImport(ctx context.Context, request UndoImportRequestObject) (UndoImportResponseObject, error)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
@@ -4177,6 +5531,15 @@ type StrictServerInterface interface {
 	// UpdateProfile Rename a profile, change its username or privacy
 	// (PATCH /v1/profiles/{id})
 	UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error)
+	// ListRatings Ratings, newest first
+	// (GET /v1/ratings)
+	ListRatings(ctx context.Context, request ListRatingsRequestObject) (ListRatingsResponseObject, error)
+	// Rate Rate films, shows, seasons or episodes from 1 to 10
+	// (POST /v1/ratings)
+	Rate(ctx context.Context, request RateRequestObject) (RateResponseObject, error)
+	// RemoveRating Remove one rating
+	// (DELETE /v1/ratings/{id})
+	RemoveRating(ctx context.Context, request RemoveRatingRequestObject) (RemoveRatingResponseObject, error)
 	// Scrobble Report playback starting, pausing or stopping
 	// (POST /v1/scrobble)
 	Scrobble(ctx context.Context, request ScrobbleRequestObject) (ScrobbleResponseObject, error)
@@ -4280,8 +5643,10 @@ func (sh *strictHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetActivity operation middleware
-func (sh *strictHandler) GetActivity(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) GetActivity(w http.ResponseWriter, r *http.Request, params GetActivityParams) {
 	var request GetActivityRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetActivity(ctx, request.(GetActivityRequestObject))
@@ -4836,8 +6201,10 @@ func (sh *strictHandler) ListHistory(w http.ResponseWriter, r *http.Request, par
 }
 
 // AddHistory operation middleware
-func (sh *strictHandler) AddHistory(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) AddHistory(w http.ResponseWriter, r *http.Request, params AddHistoryParams) {
 	var request AddHistoryRequestObject
+
+	request.Params = params
 
 	var body AddHistoryJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -4867,10 +6234,11 @@ func (sh *strictHandler) AddHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 // RemoveWatch operation middleware
-func (sh *strictHandler) RemoveWatch(w http.ResponseWriter, r *http.Request, id Id) {
+func (sh *strictHandler) RemoveWatch(w http.ResponseWriter, r *http.Request, id Id, params RemoveWatchParams) {
 	var request RemoveWatchRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.RemoveWatch(ctx, request.(RemoveWatchRequestObject))
@@ -4885,6 +6253,141 @@ func (sh *strictHandler) RemoveWatch(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RemoveWatchResponseObject); ok {
 		if err := validResponse.VisitRemoveWatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListImports operation middleware
+func (sh *strictHandler) ListImports(w http.ResponseWriter, r *http.Request, params ListImportsParams) {
+	var request ListImportsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListImports(ctx, request.(ListImportsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListImports")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListImportsResponseObject); ok {
+		if err := validResponse.VisitListImportsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateImport operation middleware
+func (sh *strictHandler) CreateImport(w http.ResponseWriter, r *http.Request, params CreateImportParams) {
+	var request CreateImportRequestObject
+
+	request.Params = params
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateImport(ctx, request.(CreateImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateImportResponseObject); ok {
+		if err := validResponse.VisitCreateImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetImport operation middleware
+func (sh *strictHandler) GetImport(w http.ResponseWriter, r *http.Request, id Id, params GetImportParams) {
+	var request GetImportRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetImport(ctx, request.(GetImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetImportResponseObject); ok {
+		if err := validResponse.VisitGetImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApplyImport operation middleware
+func (sh *strictHandler) ApplyImport(w http.ResponseWriter, r *http.Request, id Id, params ApplyImportParams) {
+	var request ApplyImportRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApplyImport(ctx, request.(ApplyImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApplyImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApplyImportResponseObject); ok {
+		if err := validResponse.VisitApplyImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UndoImport operation middleware
+func (sh *strictHandler) UndoImport(w http.ResponseWriter, r *http.Request, id Id, params UndoImportParams) {
+	var request UndoImportRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UndoImport(ctx, request.(UndoImportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UndoImport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UndoImportResponseObject); ok {
+		if err := validResponse.VisitUndoImportResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -5079,10 +6582,11 @@ func (sh *strictHandler) ListPlayback(w http.ResponseWriter, r *http.Request, pa
 }
 
 // RemovePlayback operation middleware
-func (sh *strictHandler) RemovePlayback(w http.ResponseWriter, r *http.Request, id Id) {
+func (sh *strictHandler) RemovePlayback(w http.ResponseWriter, r *http.Request, id Id, params RemovePlaybackParams) {
 	var request RemovePlaybackRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.RemovePlayback(ctx, request.(RemovePlaybackRequestObject))
@@ -5218,6 +6722,92 @@ func (sh *strictHandler) UpdateProfile(w http.ResponseWriter, r *http.Request, i
 	}
 }
 
+// ListRatings operation middleware
+func (sh *strictHandler) ListRatings(w http.ResponseWriter, r *http.Request, params ListRatingsParams) {
+	var request ListRatingsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRatings(ctx, request.(ListRatingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRatings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRatingsResponseObject); ok {
+		if err := validResponse.VisitListRatingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Rate operation middleware
+func (sh *strictHandler) Rate(w http.ResponseWriter, r *http.Request, params RateParams) {
+	var request RateRequestObject
+
+	request.Params = params
+
+	var body RateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Rate(ctx, request.(RateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Rate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RateResponseObject); ok {
+		if err := validResponse.VisitRateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveRating operation middleware
+func (sh *strictHandler) RemoveRating(w http.ResponseWriter, r *http.Request, id Id, params RemoveRatingParams) {
+	var request RemoveRatingRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveRating(ctx, request.(RemoveRatingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveRating")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveRatingResponseObject); ok {
+		if err := validResponse.VisitRemoveRatingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Scrobble operation middleware
 func (sh *strictHandler) Scrobble(w http.ResponseWriter, r *http.Request) {
 	var request ScrobbleRequestObject
@@ -5324,8 +6914,10 @@ func (sh *strictHandler) EndSession(w http.ResponseWriter, r *http.Request, id I
 }
 
 // GetUpNext operation middleware
-func (sh *strictHandler) GetUpNext(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) GetUpNext(w http.ResponseWriter, r *http.Request, params GetUpNextParams) {
 	var request GetUpNextRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetUpNext(ctx, request.(GetUpNextRequestObject))
@@ -5426,8 +7018,10 @@ func (sh *strictHandler) ListWatchlist(w http.ResponseWriter, r *http.Request, p
 }
 
 // AddToWatchlist operation middleware
-func (sh *strictHandler) AddToWatchlist(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) AddToWatchlist(w http.ResponseWriter, r *http.Request, params AddToWatchlistParams) {
 	var request AddToWatchlistRequestObject
+
+	request.Params = params
 
 	var body AddToWatchlistJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -5457,10 +7051,11 @@ func (sh *strictHandler) AddToWatchlist(w http.ResponseWriter, r *http.Request) 
 }
 
 // RemoveFromWatchlist operation middleware
-func (sh *strictHandler) RemoveFromWatchlist(w http.ResponseWriter, r *http.Request, id Id) {
+func (sh *strictHandler) RemoveFromWatchlist(w http.ResponseWriter, r *http.Request, id Id, params RemoveFromWatchlistParams) {
 	var request RemoveFromWatchlistRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.RemoveFromWatchlist(ctx, request.(RemoveFromWatchlistRequestObject))

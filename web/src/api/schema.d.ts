@@ -580,6 +580,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ratings, newest first */
+        get: operations["listRatings"];
+        put?: never;
+        /**
+         * Rate films, shows, seasons or episodes from 1 to 10
+         * @description Rating something again replaces the old rating.
+         */
+        post: operations["rate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ratings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one rating */
+        delete: operations["removeRating"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The last 20 imports */
+        get: operations["listImports"];
+        put?: never;
+        /**
+         * Read a Trakt export before importing it
+         * @description Send the zip from Trakt's data export as the body. Tethr reads history, the watchlist, resume points, ratings and hidden items, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
+         *
+         *     Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Plays already in history at the same time are skipped, so importing the same file twice is safe.
+         */
+        post: operations["createImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One import and its counts */
+        get: operations["getImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write an import into the profile
+         * @description Imports run in the background, one at a time. Poll the import until its status is `applied` or `failed`.
+         */
+        post: operations["applyImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take out everything an import added
+         * @description Works for 30 days after an import is applied. Plays, ratings and watchlist entries that were already there before the import stay.
+         */
+        post: operations["undoImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/apps": {
         parameters: {
             query?: never;
@@ -1073,6 +1191,57 @@ export interface components {
             /** Format: double */
             progress: number;
         };
+        Rating: {
+            /** Format: int64 */
+            id: number;
+            rating: number;
+            /** Format: date-time */
+            rated_at: string;
+            item: components["schemas"]["Item"];
+        };
+        NewRatings: {
+            items: {
+                item: components["schemas"]["ItemRef"];
+                rating: number;
+                /**
+                 * Format: date-time
+                 * @description Left out, it's now.
+                 */
+                rated_at?: string;
+            }[];
+        };
+        Import: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            source: "trakt";
+            filename: string;
+            /** @enum {string} */
+            status: "parsed" | "queued" | "applied" | "failed" | "undone";
+            summary: components["schemas"]["ImportSummary"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            applied_at?: string;
+            /** Format: date-time */
+            undone_at?: string;
+        };
+        ImportSummary: {
+            history: components["schemas"]["ImportCount"];
+            watchlist: components["schemas"]["ImportCount"];
+            playback: components["schemas"]["ImportCount"];
+            ratings: components["schemas"]["ImportCount"];
+            hidden: components["schemas"]["ImportCount"];
+            /** @description Up to 100 of the items that couldn't be matched, as the file names them. */
+            unmatched: string[];
+        };
+        /** @description Added and skipped are filled in once the import is applied. Skipped items were already there. */
+        ImportCount: {
+            total: number;
+            added: number;
+            skipped: number;
+            unmatched: number;
+        };
     };
     responses: {
         /** @description OAuth's error shape */
@@ -1100,6 +1269,8 @@ export interface components {
     parameters: {
         DeviceCode: string;
         Id: number;
+        /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+        ProfileId: number;
     };
     requestBodies: never;
     headers: never;
@@ -1775,6 +1946,8 @@ export interface operations {
     listHistory: {
         parameters: {
             query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
                 type?: "movie" | "episode";
                 /** @description Only watches of this film or show. */
                 title_id?: number;
@@ -1797,11 +1970,15 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     addHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1823,11 +2000,15 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     removeWatch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
             header?: never;
             path: {
                 id: components["parameters"]["Id"];
@@ -1850,6 +2031,8 @@ export interface operations {
     listPlayback: {
         parameters: {
             query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
                 type?: "movie" | "episode";
             };
             header?: never;
@@ -1868,11 +2051,15 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     removePlayback: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
             header?: never;
             path: {
                 id: components["parameters"]["Id"];
@@ -1895,6 +2082,8 @@ export interface operations {
     listWatchlist: {
         parameters: {
             query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
                 type?: "movie" | "show" | "season" | "episode";
             };
             header?: never;
@@ -1913,11 +2102,15 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     addToWatchlist: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1939,11 +2132,15 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     removeFromWatchlist: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
             header?: never;
             path: {
                 id: components["parameters"]["Id"];
@@ -1965,7 +2162,10 @@ export interface operations {
     };
     getActivity: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1982,11 +2182,15 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getUpNext: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2003,6 +2207,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     hideFromUpNext: {
@@ -2044,6 +2249,228 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listRatings: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+                type?: "movie" | "show" | "season" | "episode";
+                /** @description Only these ratings. */
+                rating?: number[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ratings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rating"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    rate: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewRatings"];
+            };
+        };
+        responses: {
+            /** @description What was rated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    removeRating: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listImports: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Imports, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createImport: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+                filename?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description The import, ready to apply */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+        };
+    };
+    getImport: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The import */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    applyImport: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    undoImport: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Undone */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

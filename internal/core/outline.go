@@ -98,6 +98,12 @@ func mergeEpisode(ctx context.Context, q *store.Queries, from, into int64) error
 	if err := q.MergeEpisodeListItems(ctx, store.MergeEpisodeListItemsParams{FromID: &from, IntoID: &into}); err != nil {
 		return err
 	}
+	if err := q.DropClashingRatings(ctx, store.DropClashingRatingsParams{FromID: &from, IntoID: &into}); err != nil {
+		return err
+	}
+	if err := q.MergeEpisodeRatings(ctx, store.MergeEpisodeRatingsParams{FromID: &from, IntoID: &into}); err != nil {
+		return err
+	}
 	if err := q.MergeEpisodeWatching(ctx, store.MergeEpisodeWatchingParams{FromID: &from, IntoID: &into}); err != nil {
 		return err
 	}

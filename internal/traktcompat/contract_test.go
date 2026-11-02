@@ -8,8 +8,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -136,6 +138,8 @@ func specPath(method, path string) string {
 			route += "/0"
 		case parts[0] == "sync" && parts[1] == "watchlist" && len(parts) < 5:
 			route = "/sync/watchlist/all/rank/asc"
+		case parts[0] == "sync" && parts[1] == "ratings" && len(parts) < 4:
+			route = "/sync/ratings/all/all"
 		}
 	}
 	return route + "?" + query
@@ -330,5 +334,90 @@ func TestRejections(t *testing.T) {
 	rec := c.do("GET", "/oauth/authorize?response_type=code&client_id=x&redirect_uri=zuno%3A%2F%2Ftrakt%2Fcallback", nil)
 	if rec.Code != http.StatusFound || !strings.HasPrefix(rec.Header().Get("Location"), "https://tethr.tv/authorize?response_type=code") {
 		t.Errorf("authorize = %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestProgressEndpoints(t *testing.T) {
+	db := dbtest.New(t)
+	c, _ := signIn(t, db)
+	ctx := context.Background()
+
+	breakingBad := map[string]any{"ids": map[string]any{"tmdb": 1396}}
+	c.valid("POST", "/sync/history", map[string]any{
+		"movies": []any{map[string]any{"watched_at": "2024-02-01T20:00:00.000Z", "ids": map[string]any{"tmdb": 603}}},
+		"shows": []any{map[string]any{
+			"ids":     map[string]any{"tmdb": 1396},
+			"seasons": []any{map[string]any{"number": 1, "episodes": []any{map[string]any{"number": 1, "watched_at": "2024-03-01T20:00:00.000Z"}, map[string]any{"number": 2, "watched_at": "2024-03-02T20:00:00.000Z"}}}},
+		}},
+	}, http.StatusCreated)
+
+	shows := c.list("GET", "/sync/watched/shows", nil)
+	if len(shows) != 1 || shows[0]["plays"] != 2.0 || len(shows[0]["seasons"].([]any)) != 1 {
+		t.Errorf("watched shows = %v", shows)
+	}
+	if movies := c.list("GET", "/sync/watched/movies", nil); len(movies) != 1 || movies[0]["movie"] == nil {
+		t.Errorf("watched movies = %v", movies)
+	}
+	if bare := c.list("GET", "/sync/watched/shows?extended=noseasons", nil); bare[0]["seasons"] != nil {
+		t.Errorf("noseasons = %v", bare)
+	}
+
+	show := shows[0]["show"].(map[string]any)["ids"].(map[string]any)["trakt"].(float64)
+	one, two, three := time.Now().AddDate(0, 0, -30), time.Now().AddDate(0, 0, -23), time.Now().AddDate(0, 0, -16)
+	if err := core.SaveOutline(ctx, db, int64(show), []core.OutlineEpisode{
+		{TMDBID: 62085, Season: 1, Number: 1, FirstAired: &one},
+		{TMDBID: 62086, Season: 1, Number: 2, FirstAired: &two},
+		{TMDBID: 62087, Season: 1, Number: 3, FirstAired: &three},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	id := strconv.FormatInt(int64(show), 10)
+	progress := c.valid("GET", "/shows/"+id+"/progress/watched", nil, http.StatusOK)
+	next := progress["next_episode"].(map[string]any)
+	if progress["aired"] != 3.0 || progress["completed"] != 2.0 || next["number"] != 3.0 || progress["last_episode"].(map[string]any)["number"] != 2.0 {
+		t.Errorf("progress = %v", progress)
+	}
+	if rec := c.do("GET", "/shows/999/progress/watched", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown show = %d", rec.Code)
+	}
+	upNext := c.list("GET", "/sync/progress/up_next", nil)
+	if len(upNext) != 1 || upNext[0]["progress"].(map[string]any)["next_episode"].(map[string]any)["number"] != 3.0 {
+		t.Errorf("up next = %v", upNext)
+	}
+
+	hidden := c.valid("POST", "/users/hidden/progress_watched", map[string]any{"shows": []any{breakingBad}}, http.StatusOK)
+	if hidden["added"].(map[string]any)["shows"] != 1.0 {
+		t.Errorf("hide = %v", hidden)
+	}
+	if listed := c.list("GET", "/users/hidden/progress_watched?type=show", nil); len(listed) != 1 || listed[0]["type"] != "show" {
+		t.Errorf("hidden = %v", listed)
+	}
+	if upNext := c.list("GET", "/sync/progress/up_next", nil); len(upNext) != 0 {
+		t.Errorf("hidden show still up next: %v", upNext)
+	}
+	c.list("GET", "/users/hidden/dropped", nil)
+	shown := c.valid("POST", "/users/hidden/progress_watched/remove", map[string]any{"shows": []any{breakingBad}}, http.StatusOK)
+	if shown["deleted"].(map[string]any)["shows"] != 1.0 {
+		t.Errorf("unhide = %v", shown)
+	}
+
+	rated := c.valid("POST", "/sync/ratings", map[string]any{
+		"movies": []any{map[string]any{"rating": 9, "rated_at": "2024-02-02T10:00:00.000Z", "ids": map[string]any{"tmdb": 603}}},
+		"shows":  []any{map[string]any{"ids": map[string]any{"tmdb": 1396}, "seasons": []any{map[string]any{"number": 1, "rating": 8}}}},
+	}, http.StatusCreated)
+	if a := rated["added"].(map[string]any); a["movies"] != 1.0 || a["seasons"] != 1.0 {
+		t.Errorf("rated = %v", rated)
+	}
+	if all := c.list("GET", "/sync/ratings", nil); len(all) != 2 {
+		t.Errorf("ratings = %v", all)
+	}
+	nines := c.list("GET", "/sync/ratings/movies/9,10", nil)
+	if len(nines) != 1 || nines[0]["rating"] != 9.0 || nines[0]["rated_at"] != "2024-02-02T10:00:00.000Z" {
+		t.Errorf("movie ratings = %v", nines)
+	}
+	unrated := c.valid("POST", "/sync/ratings/remove", map[string]any{"movies": []any{map[string]any{"ids": map[string]any{"tmdb": 603}}}}, http.StatusOK)
+	if unrated["deleted"].(map[string]any)["movies"] != 1.0 {
+		t.Errorf("unrated = %v", unrated)
 	}
 }
