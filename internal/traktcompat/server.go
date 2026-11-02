@@ -34,7 +34,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	handle("POST /oauth/revoke", s.revoke)
 	handle("GET /oauth/authorize", s.authorize)
 
-	for _, prefix := range []string{"/scrobble/", "/sync/", "/users/", "/search/", "/lists/"} {
+	for _, prefix := range []string{"/scrobble/", "/sync/", "/users/", "/search/", "/lists/", "/shows/"} {
 		handle("OPTIONS "+prefix, preflight)
 	}
 	user("POST /scrobble/start", s.scrobble(core.ScrobbleStart))
@@ -57,6 +57,20 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	user("POST /sync/watchlist", s.addToWatchlist)
 	user("POST /sync/watchlist/remove", s.removeFromWatchlist)
 
+	user("GET /sync/ratings", s.ratings)
+	user("GET /sync/ratings/{type}", s.ratings)
+	user("GET /sync/ratings/{type}/{rating}", s.ratings)
+	user("POST /sync/ratings", s.rate)
+	user("POST /sync/ratings/remove", s.unrate)
+	user("GET /sync/watched/{type}", s.watched)
+	user("GET /sync/progress/up_next", s.upNext)
+	user("GET /shows/{id}/progress/watched", s.showProgress)
+
+	for _, section := range core.HiddenSections {
+		user("GET /users/hidden/"+section, s.hidden(section))
+		user("POST /users/hidden/"+section, s.hide(section, false))
+		user("POST /users/hidden/"+section+"/remove", s.hide(section, true))
+	}
 	user("GET /users/settings", s.settings)
 	app("GET /users/{id}/lists", empty)
 	app("GET /users/{id}/lists/collaborations", empty)

@@ -147,7 +147,7 @@ RETURNING li.list_id, li.season_number, li.episode_id, (SELECT kind FROM titles 
 
 -- name: UpNext :many
 WITH latest AS (
-    SELECT DISTINCT ON (w.title_id) w.title_id, w.watched_at, e.season_number, e.episode_number
+    SELECT DISTINCT ON (w.title_id) w.title_id, w.episode_id, w.watched_at, e.season_number, e.episode_number
     FROM watch_events w
     JOIN episodes e ON e.id = w.episode_id
     WHERE w.profile_id = $1
@@ -170,7 +170,7 @@ progress AS (
     FROM aired a
     GROUP BY a.show_id
 )
-SELECT l.title_id, l.watched_at AS last_watched_at, n.id AS episode_id, p.aired, p.watched,
+SELECT l.title_id, l.watched_at AS last_watched_at, l.episode_id AS last_episode_id, n.id AS episode_id, p.aired, p.watched,
     pb.id AS playback_id, pb.progress AS playback_progress
 FROM latest l
 JOIN progress p ON p.show_id = l.title_id

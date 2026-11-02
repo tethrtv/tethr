@@ -85,7 +85,10 @@ func (s *Server) Scrobble(ctx context.Context, req ScrobbleRequestObject) (Scrob
 var noSuchItem = problem("not_found", "Send a film or show with at least one ID, or an episode by its show’s IDs, season and number.")
 
 func (s *Server) ListHistory(ctx context.Context, req ListHistoryRequestObject) (ListHistoryResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return ListHistory404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return ListHistory401JSONResponse{notConnected}, err
 	}
@@ -112,7 +115,10 @@ func (s *Server) ListHistory(ctx context.Context, req ListHistoryRequestObject) 
 }
 
 func (s *Server) AddHistory(ctx context.Context, req AddHistoryRequestObject) (AddHistoryResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return AddHistory404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return AddHistory401JSONResponse(notConnected), err
 	}
@@ -133,7 +139,10 @@ func (s *Server) AddHistory(ctx context.Context, req AddHistoryRequestObject) (A
 }
 
 func (s *Server) RemoveWatch(ctx context.Context, req RemoveWatchRequestObject) (RemoveWatchResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return RemoveWatch404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return RemoveWatch401JSONResponse{notConnected}, err
 	}
@@ -148,7 +157,10 @@ func (s *Server) RemoveWatch(ctx context.Context, req RemoveWatchRequestObject) 
 }
 
 func (s *Server) ListPlayback(ctx context.Context, req ListPlaybackRequestObject) (ListPlaybackResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return ListPlayback404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return ListPlayback401JSONResponse{notConnected}, err
 	}
@@ -168,7 +180,10 @@ func (s *Server) ListPlayback(ctx context.Context, req ListPlaybackRequestObject
 }
 
 func (s *Server) RemovePlayback(ctx context.Context, req RemovePlaybackRequestObject) (RemovePlaybackResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return RemovePlayback404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return RemovePlayback401JSONResponse{notConnected}, err
 	}
@@ -183,7 +198,10 @@ func (s *Server) RemovePlayback(ctx context.Context, req RemovePlaybackRequestOb
 }
 
 func (s *Server) ListWatchlist(ctx context.Context, req ListWatchlistRequestObject) (ListWatchlistResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return ListWatchlist404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return ListWatchlist401JSONResponse{notConnected}, err
 	}
@@ -203,7 +221,10 @@ func (s *Server) ListWatchlist(ctx context.Context, req ListWatchlistRequestObje
 }
 
 func (s *Server) AddToWatchlist(ctx context.Context, req AddToWatchlistRequestObject) (AddToWatchlistResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return AddToWatchlist404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return AddToWatchlist401JSONResponse(notConnected), err
 	}
@@ -219,7 +240,10 @@ func (s *Server) AddToWatchlist(ctx context.Context, req AddToWatchlistRequestOb
 }
 
 func (s *Server) RemoveFromWatchlist(ctx context.Context, req RemoveFromWatchlistRequestObject) (RemoveFromWatchlistResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return RemoveFromWatchlist404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return RemoveFromWatchlist401JSONResponse{notConnected}, err
 	}
@@ -233,8 +257,11 @@ func (s *Server) RemoveFromWatchlist(ctx context.Context, req RemoveFromWatchlis
 	return RemoveFromWatchlist204Response{}, nil
 }
 
-func (s *Server) GetActivity(ctx context.Context, _ GetActivityRequestObject) (GetActivityResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+func (s *Server) GetActivity(ctx context.Context, req GetActivityRequestObject) (GetActivityResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return GetActivity404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return GetActivity401JSONResponse{notConnected}, err
 	}
@@ -367,8 +394,11 @@ func toItem(i core.Item) Item {
 	return out
 }
 
-func (s *Server) GetUpNext(ctx context.Context, _ GetUpNextRequestObject) (GetUpNextResponseObject, error) {
-	c, ok, err := s.caller(ctx)
+func (s *Server) GetUpNext(ctx context.Context, req GetUpNextRequestObject) (GetUpNextResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return GetUpNext404JSONResponse(noSuchProfile), nil
+	}
 	if !ok {
 		return GetUpNext401JSONResponse{notConnected}, err
 	}

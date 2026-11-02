@@ -44,7 +44,7 @@ INSERT INTO list_items (list_id, title_id, season_number, episode_id, rank, note
 SELECT $1, $2, $3, $4, coalesce(max(rank), 0) + 1, $5, coalesce($6::timestamptz, now())
 FROM list_items WHERE list_id = $1
 ON CONFLICT (list_id, title_id, season_number, episode_id) DO NOTHING
-RETURNING id, list_id, title_id, season_number, episode_id, rank, notes, listed_at
+RETURNING id, list_id, title_id, season_number, episode_id, rank, notes, listed_at, import_id
 `
 
 type AddListItemParams struct {
@@ -75,6 +75,7 @@ func (q *Queries) AddListItem(ctx context.Context, arg AddListItemParams) (ListI
 		&i.Rank,
 		&i.Notes,
 		&i.ListedAt,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -137,7 +138,7 @@ func (q *Queries) CountListItems(ctx context.Context, listID int64) (int64, erro
 const createWatchEvent = `-- name: CreateWatchEvent :one
 INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at
+RETURNING id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id
 `
 
 type CreateWatchEventParams struct {
@@ -171,6 +172,7 @@ func (q *Queries) CreateWatchEvent(ctx context.Context, arg CreateWatchEventPara
 		&i.GrantID,
 		&i.DurationSeconds,
 		&i.CreatedAt,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -323,7 +325,7 @@ func (q *Queries) DeleteWatchEventsForItem(ctx context.Context, arg DeleteWatchE
 }
 
 const hiddenItems = `-- name: HiddenItems :many
-SELECT profile_id, section, title_id, season_number, hidden_at FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC
+SELECT profile_id, section, title_id, season_number, hidden_at, import_id FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC
 `
 
 type HiddenItemsParams struct {
@@ -346,6 +348,7 @@ func (q *Queries) HiddenItems(ctx context.Context, arg HiddenItemsParams) ([]Hid
 			&i.TitleID,
 			&i.SeasonNumber,
 			&i.HiddenAt,
+			&i.ImportID,
 		); err != nil {
 			return nil, err
 		}
@@ -381,7 +384,7 @@ func (q *Queries) HideItem(ctx context.Context, arg HideItemParams) error {
 }
 
 const history = `-- name: History :many
-SELECT w.id, w.profile_id, w.title_id, w.episode_id, w.watched_at, w.action, w.grant_id, w.duration_seconds, w.created_at
+SELECT w.id, w.profile_id, w.title_id, w.episode_id, w.watched_at, w.action, w.grant_id, w.duration_seconds, w.created_at, w.import_id
 FROM watch_events w
 JOIN titles t ON t.id = w.title_id
 WHERE w.profile_id = $1
@@ -433,6 +436,7 @@ func (q *Queries) History(ctx context.Context, arg HistoryParams) ([]WatchEvent,
 			&i.GrantID,
 			&i.DurationSeconds,
 			&i.CreatedAt,
+			&i.ImportID,
 		); err != nil {
 			return nil, err
 		}
@@ -445,7 +449,7 @@ func (q *Queries) History(ctx context.Context, arg HistoryParams) ([]WatchEvent,
 }
 
 const listItems = `-- name: ListItems :many
-SELECT li.id, li.list_id, li.title_id, li.season_number, li.episode_id, li.rank, li.notes, li.listed_at, t.kind AS title_kind
+SELECT li.id, li.list_id, li.title_id, li.season_number, li.episode_id, li.rank, li.notes, li.listed_at, li.import_id, t.kind AS title_kind
 FROM list_items li
 JOIN titles t ON t.id = li.title_id
 WHERE li.list_id = $1
@@ -471,6 +475,7 @@ type ListItemsRow struct {
 	Rank         int32
 	Notes        *string
 	ListedAt     time.Time
+	ImportID     *int64
 	TitleKind    string
 }
 
@@ -492,6 +497,7 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 			&i.Rank,
 			&i.Notes,
 			&i.ListedAt,
+			&i.ImportID,
 			&i.TitleKind,
 		); err != nil {
 			return nil, err
@@ -505,7 +511,7 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 }
 
 const listPlayback = `-- name: ListPlayback :many
-SELECT id, profile_id, title_id, episode_id, progress, paused_at, grant_id, duration_seconds FROM playback
+SELECT id, profile_id, title_id, episode_id, progress, paused_at, grant_id, duration_seconds, import_id FROM playback
 WHERE profile_id = $1
   AND ($4::text IS NULL
     OR ($4 = 'movie' AND episode_id IS NULL)
@@ -550,6 +556,7 @@ func (q *Queries) ListPlayback(ctx context.Context, arg ListPlaybackParams) ([]P
 			&i.PausedAt,
 			&i.GrantID,
 			&i.DurationSeconds,
+			&i.ImportID,
 		); err != nil {
 			return nil, err
 		}
@@ -602,7 +609,7 @@ func (q *Queries) ProfileByID(ctx context.Context, id int64) (Profile, error) {
 }
 
 const recentWatchEvent = `-- name: RecentWatchEvent :one
-SELECT id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at FROM watch_events
+SELECT id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id FROM watch_events
 WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM $4
   AND action = 'scrobble' AND watched_at > $3
 ORDER BY watched_at DESC
@@ -634,6 +641,7 @@ func (q *Queries) RecentWatchEvent(ctx context.Context, arg RecentWatchEventPara
 		&i.GrantID,
 		&i.DurationSeconds,
 		&i.CreatedAt,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -671,7 +679,7 @@ VALUES ($1, $2, $3, $4, now(), $5, $6)
 ON CONFLICT (profile_id, title_id, episode_id)
 DO UPDATE SET progress = excluded.progress, paused_at = excluded.paused_at,
     grant_id = excluded.grant_id, duration_seconds = coalesce(excluded.duration_seconds, playback.duration_seconds)
-RETURNING id, profile_id, title_id, episode_id, progress, paused_at, grant_id, duration_seconds
+RETURNING id, profile_id, title_id, episode_id, progress, paused_at, grant_id, duration_seconds, import_id
 `
 
 type SavePlaybackParams struct {
@@ -702,6 +710,7 @@ func (q *Queries) SavePlayback(ctx context.Context, arg SavePlaybackParams) (Pla
 		&i.PausedAt,
 		&i.GrantID,
 		&i.DurationSeconds,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -773,7 +782,7 @@ func (q *Queries) UnhideItem(ctx context.Context, arg UnhideItemParams) (int64, 
 
 const upNext = `-- name: UpNext :many
 WITH latest AS (
-    SELECT DISTINCT ON (w.title_id) w.title_id, w.watched_at, e.season_number, e.episode_number
+    SELECT DISTINCT ON (w.title_id) w.title_id, w.episode_id, w.watched_at, e.season_number, e.episode_number
     FROM watch_events w
     JOIN episodes e ON e.id = w.episode_id
     WHERE w.profile_id = $1
@@ -796,7 +805,7 @@ progress AS (
     FROM aired a
     GROUP BY a.show_id
 )
-SELECT l.title_id, l.watched_at AS last_watched_at, n.id AS episode_id, p.aired, p.watched,
+SELECT l.title_id, l.watched_at AS last_watched_at, l.episode_id AS last_episode_id, n.id AS episode_id, p.aired, p.watched,
     pb.id AS playback_id, pb.progress AS playback_progress
 FROM latest l
 JOIN progress p ON p.show_id = l.title_id
@@ -821,6 +830,7 @@ ORDER BY l.watched_at DESC
 type UpNextRow struct {
 	TitleID          int64
 	LastWatchedAt    time.Time
+	LastEpisodeID    *int64
 	EpisodeID        int64
 	Aired            int64
 	Watched          int64
@@ -840,6 +850,7 @@ func (q *Queries) UpNext(ctx context.Context, profileID int64) ([]UpNextRow, err
 		if err := rows.Scan(
 			&i.TitleID,
 			&i.LastWatchedAt,
+			&i.LastEpisodeID,
 			&i.EpisodeID,
 			&i.Aired,
 			&i.Watched,

@@ -19,6 +19,7 @@ import (
 	"github.com/tethrtv/tethr/internal/core"
 	"github.com/tethrtv/tethr/internal/jobs"
 	"github.com/tethrtv/tethr/internal/mail"
+	"github.com/tethrtv/tethr/internal/meta"
 	"github.com/tethrtv/tethr/internal/tmdb"
 	"github.com/tethrtv/tethr/internal/traktcompat"
 	"github.com/tethrtv/tethr/migrations"
@@ -132,16 +133,20 @@ func serve(log *slog.Logger) error {
 		},
 	}
 
+	go jobs.Imports{DB: db, Log: log}.Run(ctx)
+	var details *meta.Server
 	if token := os.Getenv("TMDB_TOKEN"); token != "" {
-		go jobs.Outlines{DB: db, TMDB: &tmdb.Client{Token: token}, Log: log}.Run(ctx)
+		client := &tmdb.Client{Token: token}
+		go jobs.Outlines{DB: db, TMDB: client, Log: log}.Run(ctx)
+		details = &meta.Server{TMDB: client, Log: log}
 	} else {
-		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in")
+		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in and the website shows no names or posters")
 	}
 
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           routes(v1.Handler(), &traktcompat.Server{DB: db, AppURL: appURL, Log: log}),
+		Handler:           routes(v1.Handler(), &traktcompat.Server{DB: db, AppURL: appURL, Log: log}, details),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -166,10 +171,13 @@ func serve(log *slog.Logger) error {
 	return nil
 }
 
-func routes(v1 http.Handler, trakt *traktcompat.Server) http.Handler {
+func routes(v1 http.Handler, trakt *traktcompat.Server, details *meta.Server) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", v1)
 	trakt.Routes(mux)
+	if details != nil {
+		details.Routes(mux)
+	}
 	api.Docs(mux)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -70,6 +70,64 @@ func (c *Client) Outline(ctx context.Context, showID int32) ([]Episode, error) {
 	return episodes, nil
 }
 
+type Title struct {
+	Name   string
+	Year   int
+	Poster string
+}
+
+type SeasonEpisode struct {
+	Number  int32
+	Name    string
+	AirDate string
+}
+
+func (c *Client) Movie(ctx context.Context, id int32) (Title, error) {
+	var m struct {
+		Title   string `json:"title"`
+		Release string `json:"release_date"`
+		Poster  string `json:"poster_path"`
+	}
+	err := c.get(ctx, fmt.Sprintf("/3/movie/%d", id), &m)
+	return Title{Name: m.Title, Year: year(m.Release), Poster: m.Poster}, err
+}
+
+func (c *Client) Show(ctx context.Context, id int32) (Title, error) {
+	var s struct {
+		Name     string `json:"name"`
+		FirstAir string `json:"first_air_date"`
+		Poster   string `json:"poster_path"`
+	}
+	err := c.get(ctx, fmt.Sprintf("/3/tv/%d", id), &s)
+	return Title{Name: s.Name, Year: year(s.FirstAir), Poster: s.Poster}, err
+}
+
+func (c *Client) Season(ctx context.Context, showID, season int32) ([]SeasonEpisode, error) {
+	var s struct {
+		Episodes []struct {
+			Number  int32  `json:"episode_number"`
+			Name    string `json:"name"`
+			AirDate string `json:"air_date"`
+		} `json:"episodes"`
+	}
+	if err := c.get(ctx, fmt.Sprintf("/3/tv/%d/season/%d", showID, season), &s); err != nil {
+		return nil, err
+	}
+	out := make([]SeasonEpisode, 0, len(s.Episodes))
+	for _, e := range s.Episodes {
+		out = append(out, SeasonEpisode{Number: e.Number, Name: e.Name, AirDate: e.AirDate})
+	}
+	return out, nil
+}
+
+func year(date string) int {
+	t, err := time.Parse(time.DateOnly, date)
+	if err != nil {
+		return 0
+	}
+	return t.Year()
+}
+
 func (c *Client) get(ctx context.Context, path string, v any) error {
 	base := c.BaseURL
 	if base == "" {

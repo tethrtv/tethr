@@ -223,6 +223,7 @@ type Entry struct {
 	Action   string
 	Progress float64
 	Rank     int32
+	Rating   int16
 	Notes    *string
 	Item     Item
 }
@@ -624,4 +625,17 @@ func RemoveListing(ctx context.Context, db *pgxpool.Pool, profileID, id int64) e
 func AccountCaller(ctx context.Context, db *pgxpool.Pool, accountID int64) (Caller, error) {
 	owner, err := store.New(db).OwnerProfile(ctx, accountID)
 	return Caller{ProfileID: owner.ID}, err
+}
+
+func HouseholdCaller(ctx context.Context, db *pgxpool.Pool, accountID, profileID int64) (Caller, error) {
+	profiles, err := store.New(db).HouseholdProfiles(ctx, accountID)
+	if err != nil {
+		return Caller{}, err
+	}
+	for _, p := range profiles {
+		if p.ID == profileID {
+			return Caller{ProfileID: p.ID}, nil
+		}
+	}
+	return Caller{}, ErrNotFound
 }

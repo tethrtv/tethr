@@ -1,6 +1,8 @@
 package api
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -524,5 +526,106 @@ func TestUpNextEndpoints(t *testing.T) {
 	}
 	if rec := do(t, h, "PUT", "/v1/up-next/hidden/5", "", cookie); rec.Code != http.StatusNotFound {
 		t.Errorf("hide unknown = %d", rec.Code)
+	}
+}
+
+func traktZip(t *testing.T) string {
+	t.Helper()
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	w, _ := z.Create("watched-history.json")
+	_, _ = w.Write([]byte(`[
+		{"id":1,"watched_at":"2024-01-01T20:00:00.000Z","action":"watch","type":"movie","movie":{"title":"Inception","year":2010,"ids":{"trakt":16662,"imdb":"tt1375666","tmdb":27205}}},
+		{"id":2,"watched_at":"2024-01-02T20:00:00.000Z","action":"watch","type":"movie","movie":{"title":"Lost tape","year":1990,"ids":{"trakt":5}}}
+	]`))
+	w, _ = z.Create("ratings-movies.json")
+	_, _ = w.Write([]byte(`[{"rated_at":"2024-01-03T10:00:00.000Z","rating":9,"type":"movie","movie":{"title":"Inception","year":2010,"ids":{"tmdb":27205}}}]`))
+	_ = z.Close()
+	return buf.String()
+}
+
+func upload(t *testing.T, h http.Handler, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest("POST", path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/zip")
+	req.Header.Set("Origin", "https://staging.tethr.tv")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestImports(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+
+	var sam Profile
+	_ = json.Unmarshal(do(t, h, "POST", "/v1/profiles", `{"name":"Sam","kind":"person"}`, cookie).Body.Bytes(), &sam)
+	samID := strconv.FormatInt(sam.Id, 10)
+
+	if rec := upload(t, h, "/v1/imports", "not a zip", cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "not_an_export") {
+		t.Errorf("not a zip = %d %s", rec.Code, rec.Body)
+	}
+	if rec := upload(t, h, "/v1/imports?profile_id=99999", traktZip(t), cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("someone else's profile = %d %s", rec.Code, rec.Body)
+	}
+	rec := upload(t, h, "/v1/imports?profile_id="+samID+"&filename=trakt.zip", traktZip(t), cookie)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", rec.Code, rec.Body)
+	}
+	var imp Import
+	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
+	if imp.Status != Parsed || imp.Filename != "trakt.zip" || imp.Summary.History.Total != 2 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Lost tape (1990)" {
+		t.Fatalf("import = %+v", imp)
+	}
+
+	id := strconv.FormatInt(imp.Id, 10)
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("applying from the owner's profile = %d", rec.Code)
+	}
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply?profile_id="+samID, "", cookie); rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"status":"queued"`) {
+		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
+	}
+	if _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id+"?profile_id="+samID, "", cookie).Body.Bytes(), &imp)
+	if imp.Status != Applied || imp.Summary.History.Added != 1 || imp.Summary.Ratings.Added != 1 {
+		t.Errorf("applied = %+v", imp)
+	}
+	if rec := do(t, h, "GET", "/v1/history", "", cookie); !strings.Contains(rec.Body.String(), `"items":[]`) {
+		t.Errorf("the import landed on the owner's profile: %s", rec.Body)
+	}
+	var list []Import
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports?profile_id="+samID, "", cookie).Body.Bytes(), &list)
+	if len(list) != 1 {
+		t.Errorf("imports = %+v", list)
+	}
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/undo?profile_id="+samID, "", cookie); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"undone"`) {
+		t.Errorf("undo = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestRatingEndpoints(t *testing.T) {
+	h, mail := newTestServer(t)
+	cookie := signIn(t, h, mail)
+
+	rec := do(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"rating":8},{"item":{"type":"movie","ids":{"tmdb":603}},"rating":12}]}`, cookie)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"added":1`) {
+		t.Fatalf("rate = %d %s", rec.Code, rec.Body)
+	}
+	var ratings []Rating
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/ratings?type=movie&rating=7,8", "", cookie).Body.Bytes(), &ratings)
+	if len(ratings) != 1 || ratings[0].Rating != 8 {
+		t.Fatalf("ratings = %+v", ratings)
+	}
+	path := "/v1/ratings/" + strconv.FormatInt(ratings[0].Id, 10)
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("remove = %d", rec.Code)
+	}
+	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("remove twice = %d", rec.Code)
 	}
 }

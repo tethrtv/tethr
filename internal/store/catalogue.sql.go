@@ -238,6 +238,22 @@ func (q *Queries) DropClashingPlayback(ctx context.Context, arg DropClashingPlay
 	return err
 }
 
+const dropClashingRatings = `-- name: DropClashingRatings :exec
+DELETE FROM ratings r
+WHERE r.episode_id = $1
+  AND EXISTS (SELECT 1 FROM ratings s WHERE s.profile_id = r.profile_id AND s.episode_id = $2)
+`
+
+type DropClashingRatingsParams struct {
+	FromID *int64
+	IntoID *int64
+}
+
+func (q *Queries) DropClashingRatings(ctx context.Context, arg DropClashingRatingsParams) error {
+	_, err := q.db.Exec(ctx, dropClashingRatings, arg.FromID, arg.IntoID)
+	return err
+}
+
 const dueOutlines = `-- name: DueOutlines :many
 SELECT t.id, t.tmdb_id
 FROM titles t
@@ -386,6 +402,20 @@ type MergeEpisodePlaybackParams struct {
 
 func (q *Queries) MergeEpisodePlayback(ctx context.Context, arg MergeEpisodePlaybackParams) error {
 	_, err := q.db.Exec(ctx, mergeEpisodePlayback, arg.IntoID, arg.FromID)
+	return err
+}
+
+const mergeEpisodeRatings = `-- name: MergeEpisodeRatings :exec
+UPDATE ratings SET episode_id = $1 WHERE episode_id = $2
+`
+
+type MergeEpisodeRatingsParams struct {
+	IntoID *int64
+	FromID *int64
+}
+
+func (q *Queries) MergeEpisodeRatings(ctx context.Context, arg MergeEpisodeRatingsParams) error {
+	_, err := q.db.Exec(ctx, mergeEpisodeRatings, arg.IntoID, arg.FromID)
 	return err
 }
 

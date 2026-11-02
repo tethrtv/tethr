@@ -123,6 +123,8 @@ type episodeIn struct {
 	IDs       idsIn   `json:"ids"`
 	WatchedAt *string `json:"watched_at"`
 	ListedAt  *string `json:"listed_at"`
+	RatedAt   *string `json:"rated_at"`
+	Rating    *int16  `json:"rating"`
 	Notes     string  `json:"notes"`
 }
 
@@ -132,6 +134,8 @@ type seasonIn struct {
 	Episodes  []episodeIn `json:"episodes"`
 	WatchedAt *string     `json:"watched_at"`
 	ListedAt  *string     `json:"listed_at"`
+	RatedAt   *string     `json:"rated_at"`
+	Rating    *int16      `json:"rating"`
 	Notes     string      `json:"notes"`
 }
 
@@ -140,6 +144,8 @@ type mediaIn struct {
 	Seasons   []seasonIn `json:"seasons"`
 	WatchedAt *string    `json:"watched_at"`
 	ListedAt  *string    `json:"listed_at"`
+	RatedAt   *string    `json:"rated_at"`
+	Rating    *int16     `json:"rating"`
 	Notes     string     `json:"notes"`
 }
 
@@ -156,33 +162,35 @@ type entryIn struct {
 	watchedAt *string
 	listedAt  *string
 	notes     string
+	ratedAt   *string
+	rating    *int16
 }
 
 func (in syncIn) entries() []entryIn {
 	var out []entryIn
 	for _, m := range in.Movies {
-		out = append(out, entryIn{core.Ref{Kind: "movie", IDs: m.IDs.core()}, m.WatchedAt, m.ListedAt, m.Notes})
+		out = append(out, entryIn{core.Ref{Kind: "movie", IDs: m.IDs.core()}, m.WatchedAt, m.ListedAt, m.Notes, m.RatedAt, m.Rating})
 	}
 	for _, m := range in.Shows {
 		show := m.IDs.core()
 		if len(m.Seasons) == 0 {
-			out = append(out, entryIn{core.Ref{Kind: "show", IDs: show}, m.WatchedAt, m.ListedAt, m.Notes})
+			out = append(out, entryIn{core.Ref{Kind: "show", IDs: show}, m.WatchedAt, m.ListedAt, m.Notes, m.RatedAt, m.Rating})
 		}
 		for _, s := range m.Seasons {
 			if len(s.Episodes) == 0 {
-				out = append(out, entryIn{core.Ref{Kind: "season", Show: show, Season: s.Number}, first(s.WatchedAt, m.WatchedAt), first(s.ListedAt, m.ListedAt), s.Notes})
+				out = append(out, entryIn{core.Ref{Kind: "season", Show: show, Season: s.Number}, first(s.WatchedAt, m.WatchedAt), first(s.ListedAt, m.ListedAt), s.Notes, first(s.RatedAt, m.RatedAt), s.Rating})
 			}
 			for _, e := range s.Episodes {
 				ref := core.Ref{Kind: "episode", IDs: e.IDs.core(), Show: show, Season: s.Number, Number: e.Number}
-				out = append(out, entryIn{ref, first(e.WatchedAt, s.WatchedAt, m.WatchedAt), first(e.ListedAt, s.ListedAt, m.ListedAt), e.Notes})
+				out = append(out, entryIn{ref, first(e.WatchedAt, s.WatchedAt, m.WatchedAt), first(e.ListedAt, s.ListedAt, m.ListedAt), e.Notes, first(e.RatedAt, s.RatedAt, m.RatedAt), e.Rating})
 			}
 		}
 	}
 	for _, s := range in.Seasons {
-		out = append(out, entryIn{core.Ref{Kind: "season", IDs: s.IDs.core()}, s.WatchedAt, s.ListedAt, s.Notes})
+		out = append(out, entryIn{core.Ref{Kind: "season", IDs: s.IDs.core()}, s.WatchedAt, s.ListedAt, s.Notes, s.RatedAt, s.Rating})
 	}
 	for _, e := range in.Episodes {
-		out = append(out, entryIn{core.Ref{Kind: "episode", IDs: e.IDs.core()}, e.WatchedAt, e.ListedAt, e.Notes})
+		out = append(out, entryIn{core.Ref{Kind: "episode", IDs: e.IDs.core()}, e.WatchedAt, e.ListedAt, e.Notes, e.RatedAt, e.Rating})
 	}
 	return out
 }
