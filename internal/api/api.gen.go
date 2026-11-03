@@ -314,6 +314,7 @@ type Activity struct {
 	History   time.Time `json:"history"`
 	Latest    time.Time `json:"latest"`
 	Playback  time.Time `json:"playback"`
+	Ratings   time.Time `json:"ratings"`
 	Watchlist time.Time `json:"watchlist"`
 }
 

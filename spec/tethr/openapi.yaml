@@ -879,7 +879,7 @@ paths:
     post:
       operationId: rate
       summary: Rate films, shows, seasons or episodes from 1 to 10
-      description: Rating something again replaces the old rating.
+      description: Rating something again replaces the old rating. The same score again counts as existing.
       security:
         - session: []
         - bearer: []
@@ -1811,7 +1811,7 @@ components:
           $ref: '#/components/schemas/Item'
     Activity:
       type: object
-      required: [latest, history, playback, watchlist]
+      required: [latest, history, playback, watchlist, ratings]
       properties:
         latest:
           type: string
@@ -1823,6 +1823,9 @@ components:
           type: string
           format: date-time
         watchlist:
+          type: string
+          format: date-time
+        ratings:
           type: string
           format: date-time
     DeveloperApp:

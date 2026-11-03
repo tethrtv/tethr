@@ -592,7 +592,7 @@ export interface paths {
         put?: never;
         /**
          * Rate films, shows, seasons or episodes from 1 to 10
-         * @description Rating something again replaces the old rating.
+         * @description Rating something again replaces the old rating. The same score again counts as existing.
          */
         post: operations["rate"];
         delete?: never;
@@ -1141,6 +1141,8 @@ export interface components {
             playback: string;
             /** Format: date-time */
             watchlist: string;
+            /** Format: date-time */
+            ratings: string;
         };
         DeveloperApp: {
             /** Format: int64 */

@@ -201,13 +201,16 @@ func (s *Server) Rate(ctx context.Context, req RateRequestObject) (RateResponseO
 	}
 	ratings := make([]core.Rating, 0, len(req.Body.Items))
 	for _, r := range req.Body.Items {
-		ratings = append(ratings, core.Rating{Ref: fromRef(r.Item), Rating: int16(min(max(r.Rating, 0), 11)), At: r.RatedAt})
+		if r.Rating < 1 || r.Rating > 10 {
+			return Rate400JSONResponse{problem("invalid_rating", "Ratings go from 1 to 10.")}, nil
+		}
+		ratings = append(ratings, core.Rating{Ref: fromRef(r.Item), Rating: int16(r.Rating), At: r.RatedAt})
 	}
 	result, err := core.Rate(ctx, s.DB, c.ProfileID, ratings)
 	if err != nil {
 		return nil, err
 	}
-	return Rate200JSONResponse(SyncResult{Added: total(result.Added), Existing: 0, NotFound: toRefs(result.NotFound)}), nil
+	return Rate200JSONResponse(SyncResult{Added: total(result.Added), Existing: total(result.Existing), NotFound: toRefs(result.NotFound)}), nil
 }
 
 func (s *Server) RemoveRating(ctx context.Context, req RemoveRatingRequestObject) (RemoveRatingResponseObject, error) {

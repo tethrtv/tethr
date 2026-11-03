@@ -105,12 +105,12 @@ func (q *Queries) HiddenSeasons(ctx context.Context, arg HiddenSeasonsParams) ([
 	return items, nil
 }
 
-const rateItem = `-- name: RateItem :one
+const rateItem = `-- name: RateItem :execrows
 INSERT INTO ratings (profile_id, title_id, season_number, episode_id, rating, rated_at)
 VALUES ($1, $2, $3, $4, $5, coalesce($6::timestamptz, now()))
 ON CONFLICT (profile_id, title_id, season_number, episode_id)
 DO UPDATE SET rating = excluded.rating, rated_at = excluded.rated_at, import_id = NULL
-RETURNING id, profile_id, title_id, season_number, episode_id, rating, rated_at, import_id
+WHERE ratings.rating <> excluded.rating
 `
 
 type RateItemParams struct {
@@ -122,8 +122,8 @@ type RateItemParams struct {
 	RatedAt      *time.Time
 }
 
-func (q *Queries) RateItem(ctx context.Context, arg RateItemParams) (Rating, error) {
-	row := q.db.QueryRow(ctx, rateItem,
+func (q *Queries) RateItem(ctx context.Context, arg RateItemParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rateItem,
 		arg.ProfileID,
 		arg.TitleID,
 		arg.SeasonNumber,
@@ -131,18 +131,10 @@ func (q *Queries) RateItem(ctx context.Context, arg RateItemParams) (Rating, err
 		arg.Rating,
 		arg.RatedAt,
 	)
-	var i Rating
-	err := row.Scan(
-		&i.ID,
-		&i.ProfileID,
-		&i.TitleID,
-		&i.SeasonNumber,
-		&i.EpisodeID,
-		&i.Rating,
-		&i.RatedAt,
-		&i.ImportID,
-	)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const ratings = `-- name: Ratings :many
