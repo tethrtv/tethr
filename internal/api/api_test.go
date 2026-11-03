@@ -414,10 +414,16 @@ func TestNativeTracking(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"added":1,"existing":1`) || !strings.Contains(rec.Body.String(), `"not_found":[{"ids":{"tmdb":1399},"type":"show"}]`) {
 		t.Errorf("add history = %s", rec.Body)
 	}
+	if err := core.SaveWikidata(ctx, s.DB, *paused.Item.Title.Ids.Tethr, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Original: "Breaking Bad", Year: 2008}); err != nil {
+		t.Fatal(err)
+	}
 	var history HistoryPage
 	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/history?limit=1", "", token).Body.Bytes(), &history)
 	if history.Total != 2 || len(history.Items) != 1 || history.Items[0].Item.Type != ItemTypeEpisode {
 		t.Fatalf("history = %+v", history)
+	}
+	if show := history.Items[0].Item.Title; *show.Name != "Breaking Bad" || *show.OriginalName != "Breaking Bad" || *show.Year != 2008 {
+		t.Errorf("show = %+v", show)
 	}
 	var mine HistoryPage
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/history", "", cookie).Body.Bytes(), &mine)

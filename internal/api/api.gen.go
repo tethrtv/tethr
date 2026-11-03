@@ -706,9 +706,14 @@ type Title struct {
 	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
 	Ids Ids `json:"ids"`
 
-	// Name From Wikidata. Missing until Tethr has one; fetch names and artwork from TMDB yourself.
+	// Name The English title, from Wikidata. Usually there within a minute of Tethr first seeing the title, but missing for anything Wikidata doesn't have. Fetch artwork and anything else from TMDB yourself.
 	Name *string `json:"name,omitempty"`
-	Year *int    `json:"year,omitempty"`
+
+	// OriginalName The title in its original language, from Wikidata.
+	OriginalName *string `json:"original_name,omitempty"`
+
+	// Year The year of first release or broadcast, from Wikidata.
+	Year *int `json:"year,omitempty"`
 }
 
 // UpNextEntry defines model for UpNextEntry.

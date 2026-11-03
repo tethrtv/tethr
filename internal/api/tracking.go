@@ -366,7 +366,7 @@ func toRefs(refs []core.Ref) []ItemRef {
 
 func toItem(i core.Item) Item {
 	t := i.Title
-	title := Title{Ids: Ids{Tethr: &t.ID}, Name: t.Name}
+	title := Title{Ids: Ids{Tethr: &t.ID}, Name: t.Name, OriginalName: t.OriginalName}
 	if t.Year != nil {
 		year := int(*t.Year)
 		title.Year = &year

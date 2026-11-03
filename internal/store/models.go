@@ -258,6 +258,11 @@ type Title struct {
 	UpdatedAt          time.Time
 	OutlineRefreshedAt *time.Time
 	TmdbMissingAt      *time.Time
+	OriginalName       *string
+	RuntimeMinutes     *int16
+	WikidataID         *string
+	WikidataCheckedAt  *time.Time
+	MergedIntoID       *int64
 }
 
 type WatchEvent struct {
