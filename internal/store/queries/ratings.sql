@@ -11,12 +11,12 @@ WHERE r.profile_id = $1
   AND (cardinality(@ratings::smallint[]) = 0 OR r.rating = ANY(@ratings::smallint[]))
 ORDER BY r.rated_at DESC, r.id DESC;
 
--- name: RateItem :one
+-- name: RateItem :execrows
 INSERT INTO ratings (profile_id, title_id, season_number, episode_id, rating, rated_at)
 VALUES ($1, $2, $3, $4, $5, coalesce(sqlc.narg(rated_at)::timestamptz, now()))
 ON CONFLICT (profile_id, title_id, season_number, episode_id)
 DO UPDATE SET rating = excluded.rating, rated_at = excluded.rated_at, import_id = NULL
-RETURNING *;
+WHERE ratings.rating <> excluded.rating;
 
 -- name: UnrateItem :execrows
 DELETE FROM ratings

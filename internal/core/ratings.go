@@ -63,7 +63,7 @@ func Rate(ctx context.Context, db *pgxpool.Pool, profileID int64, ratings []Rati
 			if err != nil {
 				return err
 			}
-			_, err = q.RateItem(ctx, store.RateItemParams{
+			n, err := q.RateItem(ctx, store.RateItemParams{
 				ProfileID:    profileID,
 				TitleID:      r.title.ID,
 				SeasonNumber: r.season,
@@ -73,6 +73,10 @@ func Rate(ctx context.Context, db *pgxpool.Pool, profileID int64, ratings []Rati
 			})
 			if err != nil {
 				return err
+			}
+			if n == 0 {
+				result.Existing.add(rt.Ref.Kind)
+				continue
 			}
 			result.Added.add(rt.Ref.Kind)
 			if err := mark(ctx, q, profileID, area(r, "rated_at")); err != nil {

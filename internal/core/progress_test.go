@@ -83,8 +83,11 @@ func TestRatings(t *testing.T) {
 	if err != nil || result.Added.Movies != 1 || result.Added.Episodes != 1 || len(result.NotFound) != 1 {
 		t.Fatalf("rate = %+v, %v", result, err)
 	}
-	if _, err := Rate(ctx, db, profile, []Rating{{Ref: inception(), Rating: 8}}); err != nil {
-		t.Fatal(err)
+	if result, err := Rate(ctx, db, profile, []Rating{{Ref: inception(), Rating: 7}}); err != nil || result.Existing.Movies != 1 || result.Added.Movies != 0 {
+		t.Errorf("same rating again = %+v, %v", result, err)
+	}
+	if result, err := Rate(ctx, db, profile, []Rating{{Ref: inception(), Rating: 8}}); err != nil || result.Added.Movies != 1 {
+		t.Fatalf("new rating = %+v, %v", result, err)
 	}
 	movies, _ := Ratings(ctx, db, profile, "movie", nil)
 	if len(movies) != 1 || movies[0].Rating != 8 {

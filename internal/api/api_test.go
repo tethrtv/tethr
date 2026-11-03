@@ -613,8 +613,21 @@ func TestRatingEndpoints(t *testing.T) {
 	cookie := signIn(t, h, mail)
 
 	rec := do(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"rating":8},{"item":{"type":"movie","ids":{"tmdb":603}},"rating":12}]}`, cookie)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"invalid_rating"`) {
+		t.Fatalf("rate 12 = %d %s", rec.Code, rec.Body)
+	}
+	rec = do(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"rating":8}]}`, cookie)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"added":1`) {
 		t.Fatalf("rate = %d %s", rec.Code, rec.Body)
+	}
+	rec = do(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"rating":8}]}`, cookie)
+	if !strings.Contains(rec.Body.String(), `"existing":1`) {
+		t.Errorf("rate again = %s", rec.Body)
+	}
+	var activity Activity
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/activity", "", cookie).Body.Bytes(), &activity)
+	if activity.Ratings.IsZero() || !activity.Latest.Equal(activity.Ratings) {
+		t.Errorf("activity = %+v", activity)
 	}
 	var ratings []Rating
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/ratings?type=movie&rating=7,8", "", cookie).Body.Bytes(), &ratings)
