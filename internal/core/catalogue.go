@@ -125,6 +125,9 @@ func findTitle(ctx context.Context, q *store.Queries, kind string, ids IDs) (sto
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}
+		if err == nil && t.MergedIntoID != nil {
+			return q.TitleByID(ctx, store.TitleByIDParams{ID: *t.MergedIntoID, Kind: kind})
+		}
 		return t, err
 	}
 	return store.Title{}, ErrNotFound

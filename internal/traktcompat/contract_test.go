@@ -287,9 +287,19 @@ func TestSyncEndpoints(t *testing.T) {
 	if rec.Header().Get("X-Pagination-Item-Count") != "3" || rec.Header().Get("X-Pagination-Page-Count") != "2" {
 		t.Errorf("pagination = %v", rec.Header())
 	}
+	shows, err := core.LookUp(context.Background(), db, "show", core.IDs{TMDB: 1396}, false)
+	if err != nil || len(shows) != 1 {
+		t.Fatal(shows, err)
+	}
+	if err := core.SaveWikidata(context.Background(), db, shows[0].Title.ID, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Year: 2008}); err != nil {
+		t.Fatal(err)
+	}
 	entries := c.list("GET", "/sync/history/episodes", nil)
 	if len(entries) != 2 || entries[0]["action"] != "watch" || entries[0]["show"].(map[string]any)["ids"].(map[string]any)["tvdb"] != 81189.0 {
 		t.Fatalf("episode history = %v", entries)
+	}
+	if show := entries[0]["show"].(map[string]any); show["title"] != "Breaking Bad" || show["year"] != 2008.0 {
+		t.Errorf("show = %v", show)
 	}
 
 	activity := c.valid("GET", "/sync/last_activities", nil, http.StatusOK)

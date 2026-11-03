@@ -1031,8 +1031,11 @@ export interface components {
         };
         Title: {
             ids: components["schemas"]["Ids"];
-            /** @description From Wikidata. Missing until Tethr has one; fetch names and artwork from TMDB yourself. */
+            /** @description The English title, from Wikidata. Usually there within a minute of Tethr first seeing the title, but missing for anything Wikidata doesn't have. Fetch artwork and anything else from TMDB yourself. */
             name?: string;
+            /** @description The title in its original language, from Wikidata. */
+            original_name?: string;
+            /** @description The year of first release or broadcast, from Wikidata. */
             year?: number;
         };
         Episode: {

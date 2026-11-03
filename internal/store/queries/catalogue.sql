@@ -27,9 +27,9 @@ ON CONFLICT DO NOTHING;
 UPDATE titles SET tmdb_id = $2, updated_at = now() WHERE id = $1 AND tmdb_id IS NULL;
 
 -- name: CatalogueTitles :many
-SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id,
-    coalesce((SELECT value FROM external_ids WHERE title_id = t.id AND provider = 'imdb' LIMIT 1), '')::text AS imdb,
-    coalesce((SELECT value FROM external_ids WHERE title_id = t.id AND provider = 'tvdb' LIMIT 1), '')::text AS tvdb
+SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.tmdb_id, t.wikidata_id,
+    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
+    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
 FROM titles t
 WHERE t.id = ANY(@ids::bigint[]);
 
@@ -119,3 +119,106 @@ WHERE t.kind = 'show' AND t.tmdb_id IS NOT NULL
     END)
 ORDER BY t.outline_refreshed_at NULLS FIRST
 LIMIT $1;
+
+-- name: DueWikidata :many
+SELECT t.id, t.kind, t.tmdb_id,
+    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
+    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
+FROM titles t
+WHERE t.merged_into_id IS NULL
+  AND (t.wikidata_checked_at IS NULL
+   OR t.wikidata_checked_at < now() - CASE WHEN t.wikidata_id IS NULL THEN interval '7 days' ELSE interval '90 days' END)
+ORDER BY t.wikidata_checked_at NULLS FIRST, t.id
+LIMIT $1;
+
+-- name: SaveWikidata :exec
+UPDATE titles
+SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, wikidata_checked_at = now(), updated_at = now()
+WHERE id = $1;
+
+-- name: WikidataMissing :exec
+UPDATE titles SET wikidata_checked_at = now() WHERE id = $1;
+
+-- name: AddMissingExternalID :exec
+INSERT INTO external_ids (title_id, provider, value)
+SELECT sqlc.arg(title_id)::bigint, sqlc.arg(provider)::text, sqlc.arg(value)::text
+WHERE NOT EXISTS (SELECT 1 FROM external_ids WHERE title_id = sqlc.arg(title_id) AND provider = sqlc.arg(provider))
+ON CONFLICT DO NOTHING;
+
+-- name: TitleSharingWikidata :one
+SELECT * FROM titles
+WHERE kind = $1 AND wikidata_id = $2 AND id <> $3 AND merged_into_id IS NULL
+ORDER BY id
+LIMIT 1;
+
+-- name: MarkMergedActivity :exec
+INSERT INTO activity_marks (profile_id, area, at)
+SELECT p.profile_id, a.area, now()
+FROM (
+    SELECT w.profile_id FROM watch_events w WHERE w.title_id = sqlc.arg(from_id)::bigint
+    UNION SELECT b.profile_id FROM playback b WHERE b.title_id = sqlc.arg(from_id)::bigint
+    UNION SELECT r.profile_id FROM ratings r WHERE r.title_id = sqlc.arg(from_id)::bigint
+    UNION SELECT h.profile_id FROM hidden_items h WHERE h.title_id = sqlc.arg(from_id)::bigint
+    UNION SELECT l.profile_id FROM list_items i JOIN lists l ON l.id = i.list_id WHERE i.title_id = sqlc.arg(from_id)::bigint
+) p
+CROSS JOIN unnest(sqlc.arg(areas)::text[]) AS a (area)
+ON CONFLICT (profile_id, area) DO UPDATE SET at = excluded.at;
+
+-- name: MergeTitleEvents :exec
+UPDATE watch_events SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: DropClashingTitlePlayback :exec
+DELETE FROM playback p
+WHERE p.title_id = sqlc.arg(from_id)
+  AND EXISTS (
+    SELECT 1 FROM playback q
+    WHERE q.profile_id = p.profile_id AND q.title_id = sqlc.arg(into_id) AND q.episode_id IS NOT DISTINCT FROM p.episode_id);
+
+-- name: MergeTitlePlayback :exec
+UPDATE playback SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: MergeTitleWatching :exec
+UPDATE watching SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: DropClashingTitleListItems :exec
+DELETE FROM list_items l
+WHERE l.title_id = sqlc.arg(from_id)
+  AND EXISTS (
+    SELECT 1 FROM list_items m
+    WHERE m.list_id = l.list_id AND m.title_id = sqlc.arg(into_id)
+      AND m.season_number IS NOT DISTINCT FROM l.season_number AND m.episode_id IS NOT DISTINCT FROM l.episode_id);
+
+-- name: MergeTitleListItems :exec
+UPDATE list_items SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: DropClashingTitleRatings :exec
+DELETE FROM ratings r
+WHERE r.title_id = sqlc.arg(from_id)
+  AND EXISTS (
+    SELECT 1 FROM ratings s
+    WHERE s.profile_id = r.profile_id AND s.title_id = sqlc.arg(into_id)
+      AND s.season_number IS NOT DISTINCT FROM r.season_number AND s.episode_id IS NOT DISTINCT FROM r.episode_id);
+
+-- name: MergeTitleRatings :exec
+UPDATE ratings SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: DropClashingTitleHidden :exec
+DELETE FROM hidden_items h
+WHERE h.title_id = sqlc.arg(from_id)
+  AND EXISTS (
+    SELECT 1 FROM hidden_items g
+    WHERE g.profile_id = h.profile_id AND g.section = h.section AND g.title_id = sqlc.arg(into_id)
+      AND g.season_number IS NOT DISTINCT FROM h.season_number);
+
+-- name: MergeTitleHidden :exec
+UPDATE hidden_items SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: MergeTitleExternalIDs :exec
+UPDATE external_ids SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: MoveEpisode :exec
+UPDATE episodes SET show_id = sqlc.arg(into_id) WHERE id = sqlc.arg(id);
+
+-- name: MarkTitleMerged :exec
+UPDATE titles SET merged_into_id = sqlc.arg(into_id), updated_at = now()
+WHERE id = sqlc.arg(from_id) OR merged_into_id = sqlc.arg(from_id);

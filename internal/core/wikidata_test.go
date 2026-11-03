@@ -1,0 +1,102 @@
+package core
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/tethrtv/tethr/internal/dbtest"
+)
+
+func TestMergeSharedWikidata(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+	byTVDB, byTMDB := IDs{TVDB: 121361}, IDs{TMDB: 1399}
+	ep := func(show IDs, season, number int32) Ref {
+		return Ref{Kind: "episode", Show: show, Season: &season, Number: &number}
+	}
+	at := time.Date(2024, 5, 1, 20, 0, 0, 0, time.UTC)
+
+	if _, err := AddHistory(ctx, db, caller, []Watch{
+		{Ref: ep(byTVDB, 1, 1), At: at},
+		{Ref: ep(byTVDB, 1, 2), At: at.Add(time.Hour)},
+		{Ref: ep(byTMDB, 1, 1), At: at.Add(24 * time.Hour)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ScrobblePause(ctx, db, caller, Scrobble{Ref: ep(byTVDB, 1, 3), Progress: 40}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Rate(ctx, db, caller.ProfileID, []Rating{{Ref: Ref{Kind: "show", IDs: byTVDB}, Rating: 6}, {Ref: Ref{Kind: "show", IDs: byTMDB}, Rating: 9}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddToWatchlist(ctx, db, caller.ProfileID, []Listing{{Ref: Ref{Kind: "season", Show: byTVDB, Season: ptr(int32(2))}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	lookUp := func(ids IDs) int64 {
+		t.Helper()
+		items, err := LookUp(ctx, db, "show", ids, false)
+		if err != nil || len(items) != 1 {
+			t.Fatalf("look up %+v = %+v, %v", ids, items, err)
+		}
+		return items[0].Title.ID
+	}
+	loser, winner := lookUp(byTVDB), lookUp(byTMDB)
+	if loser == winner {
+		t.Fatal("expected two rows before the merge")
+	}
+	before, err := LastActivities(ctx, db, caller.ProfileID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := WikidataTitle{QID: "Q23572", Name: "Game of Thrones", Year: 2011, Runtime: 50, TMDB: 1399}
+	if err := SaveWikidata(ctx, db, winner, "show", got); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveWikidata(ctx, db, loser, "show", got); err != nil {
+		t.Fatal(err)
+	}
+
+	if lookUp(byTVDB) != winner || lookUp(IDs{Trakt: loser}) != winner {
+		t.Error("the merged row's IDs should lead to the one it was merged into")
+	}
+	history, total, err := History(ctx, db, caller.ProfileID, HistoryFilter{}, Page{Page: 1, Limit: 10})
+	if err != nil || total != 3 {
+		t.Fatalf("history = %d, %v", total, err)
+	}
+	episodes := map[int64]bool{}
+	for _, e := range history {
+		if e.Item.Title.ID != winner {
+			t.Errorf("watch still on the old row: %+v", e.Item)
+		}
+		episodes[e.Item.Episode.ID] = true
+	}
+	if len(episodes) != 2 {
+		t.Errorf("1x01 from both rows should be one episode, 1x02 moved across: %d episodes", len(episodes))
+	}
+	if paused, err := Playback(ctx, db, caller.ProfileID, "", Range{}, Page{Page: 1, Limit: 10}); err != nil || len(paused) != 1 || paused[0].Item.Title.ID != winner {
+		t.Errorf("playback = %+v, %v", paused, err)
+	}
+	if rated, err := Ratings(ctx, db, caller.ProfileID, "", nil); err != nil || len(rated) != 1 || rated[0].Rating != 9 {
+		t.Errorf("the surviving row's rating should win: %+v, %v", rated, err)
+	}
+	if listed, err := Watchlist(ctx, db, caller.ProfileID, ""); err != nil || len(listed) != 1 || listed[0].Item.Title.ID != winner {
+		t.Errorf("watchlist = %+v, %v", listed, err)
+	}
+	if items, _ := LookUp(ctx, db, "show", byTMDB, false); items[0].Title.Tvdb != "121361" || *items[0].Title.Name != "Game of Thrones" {
+		t.Errorf("the merged row's TVDB ID should move across: %+v", items[0].Title)
+	}
+	after, err := LastActivities(ctx, db, caller.ProfileID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.Marks["episodes.watched_at"].After(before.Marks["episodes.watched_at"]) {
+		t.Error("apps should be told to sync again after a merge")
+	}
+	if due, _ := DueWikidata(ctx, db, 10); len(due) != 0 {
+		t.Errorf("merged rows shouldn't be looked up again: %+v", due)
+	}
+}
