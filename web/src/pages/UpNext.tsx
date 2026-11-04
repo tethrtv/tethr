@@ -3,6 +3,7 @@ import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
+import { TitleLink } from '../components/TitleLink'
 import { ago, date, ep, plural } from '../format'
 import { useDetails, useEpisode } from '../tmdb'
 import styles from './Lists.module.css'
@@ -107,7 +108,9 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
       </button>
       <Cover id={e.show.ids.tethr ?? 0} name={name} poster={show?.poster} />
       <div className={styles.main}>
-        <span className={styles.rowTitle}>{name}</span>
+        <TitleLink type="show" slug={e.show.slug} className={`${styles.rowTitle} ${styles.titleLink}`}>
+          {name}
+        </TitleLink>
         <p className={styles.line}>
           <span className={styles.code}>{ep(e.next.season, e.next.number)}</span> {episode?.name}
         </p>
@@ -152,7 +155,9 @@ function Paused({ point: p, profileID }: { point: ResumePoint; profileID: number
     <li className={styles.paused}>
       <Cover id={p.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} />
       <div className={styles.main}>
-        <span className={styles.rowTitle}>{name}</span>
+        <TitleLink type={p.item.type} slug={p.item.title.slug} className={`${styles.rowTitle} ${styles.titleLink}`}>
+          {name}
+        </TitleLink>
         <p className={styles.line}>
           {p.item.episode ? (
             <>

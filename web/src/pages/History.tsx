@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
+import { TitleLink } from '../components/TitleLink'
 import { clock, dayLabel, ep, plural } from '../format'
 import { useDetails, useEpisode } from '../tmdb'
 import styles from './Lists.module.css'
@@ -110,7 +111,9 @@ function Entry({ watch: w, profileID }: { watch: Watch; profileID: number }) {
       <span className={`${styles.code} ${styles.time}`}>{clock(w.watched_at)}</span>
       <Cover id={w.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} size="xs" />
       <span className={styles.main}>
-        <span className={styles.entryTitle}>{name}</span>
+        <TitleLink type={w.item.type} slug={w.item.title.slug} className={`${styles.entryTitle} ${styles.titleLink}`}>
+          {name}
+        </TitleLink>
         <span className={styles.quiet}>
           {w.item.episode ? (
             <>

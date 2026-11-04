@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
+import { createRootRoute, createRoute, createRouter, Outlet, useParams } from '@tanstack/react-router'
 import { ComingSoon } from './ComingSoon'
 import { cleanCode } from './components/CodeInput'
 import { Shell } from './components/Shell'
@@ -12,6 +12,7 @@ import { Home } from './pages/Home'
 import { Import } from './pages/Import'
 import { Join } from './pages/Join'
 import { SignIn } from './pages/SignIn'
+import { TitlePage } from './pages/Title'
 import { UpNext } from './pages/UpNext'
 import { Verify } from './pages/Verify'
 import { Watchlist } from './pages/Watchlist'
@@ -23,6 +24,15 @@ const upNext = () => (
     <UpNext />
   </Shell>
 )
+
+function Titled() {
+  const { slug = '' } = useParams({ strict: false })
+  return (
+    <Shell>
+      <TitlePage key={slug} slug={slug} />
+    </Shell>
+  )
+}
 
 function Front() {
   return useMe().data ? upNext() : <ComingSoon />
@@ -51,6 +61,16 @@ const routes = [
         <Watchlist />
       </Shell>
     ),
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/shows/$slug',
+    component: Titled,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/films/$slug',
+    component: Titled,
   }),
   createRoute({ getParentRoute: () => root, path: '/account', component: Home }),
   createRoute({ getParentRoute: () => root, path: '/sign-in', component: SignIn }),

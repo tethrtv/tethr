@@ -3,6 +3,7 @@ import { createContext, type ReactNode, useContext, useState } from 'react'
 import type { Me } from '../api/client'
 import { useSignedIn } from '../pages/connect'
 import { Mark } from './Mark'
+import { Search } from './Search'
 import styles from './Shell.module.css'
 
 const links = [
@@ -64,6 +65,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 </Link>
               ))}
             </nav>
+            <Search key={profile.id} profileID={profile.id} />
             {me.profiles.length > 1 && (
               <label className={styles.switcher}>
                 <span className={styles.faint}>Watching as</span>

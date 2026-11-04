@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
+import { TitleLink } from '../components/TitleLink'
 import { date, ep, plural } from '../format'
 import { useDetails } from '../tmdb'
 import styles from './Lists.module.css'
@@ -67,7 +68,9 @@ function Row({ listing: l, profileID }: { listing: Listing; profileID: number })
       <span className={`${styles.code} ${styles.rank}`}>{l.rank}</span>
       <Cover id={l.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} />
       <div className={styles.main}>
-        <span className={styles.rowTitle}>{name}</span>
+        <TitleLink type={l.item.type} slug={l.item.title.slug} className={`${styles.rowTitle} ${styles.titleLink}`}>
+          {name}
+        </TitleLink>
         <p className={styles.quiet}>
           {what}
           {title?.year ? `, ${title.year}` : ''}

@@ -27,13 +27,16 @@ export function useDetails(kind: 'movie' | 'show', id?: number) {
   }).data
 }
 
-export function useEpisode(show?: number, season?: number, number?: number) {
-  const data = useQuery({
+export function useSeason(show?: number, season?: number) {
+  return useQuery({
     queryKey: ['meta', 'season', show, season],
     enabled: !!show && season !== undefined,
     staleTime: day,
     queryFn: () => meta<{ episodes: { number: number; name: string }[] }>(`/tv/${show}/season/${season}`),
   }).data
-  const e = data?.episodes.find((x) => x.number === number)
+}
+
+export function useEpisode(show?: number, season?: number, number?: number) {
+  const e = useSeason(show, season)?.episodes.find((x) => x.number === number)
   return e ? { name: e.name } : undefined
 }

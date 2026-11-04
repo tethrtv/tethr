@@ -32,3 +32,10 @@ export function dayLabel(iso: string) {
 
 export const plural = (n: number, one: string, many = `${one}s`) =>
   `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`
+
+export function duration(minutes: number) {
+  const h = Math.floor(minutes / 60)
+  const m = Math.round(minutes % 60)
+  if (!h) return `${m} min`
+  return m ? `${h} hr ${m} min` : `${h} hr`
+}
