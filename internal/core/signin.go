@@ -230,7 +230,10 @@ func createSession(ctx context.Context, q *store.Queries, accountID int64, userA
 		UserAgent: &userAgent,
 		ExpiresAt: expires,
 	})
-	return Session{Token: token, ExpiresAt: expires}, err
+	if err != nil {
+		return Session{}, err
+	}
+	return Session{Token: token, ExpiresAt: expires}, audit(ctx, q, accountID, "sign_in", userAgent)
 }
 
 func SessionAccount(ctx context.Context, db *pgxpool.Pool, token string) (int64, error) {

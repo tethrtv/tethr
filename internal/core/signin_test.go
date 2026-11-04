@@ -47,6 +47,10 @@ func TestSignUpThenVerifyWithLink(t *testing.T) {
 	if len(profiles) != 1 || profiles[0].Username != "nathan" || profiles[0].Kind != "owner" {
 		t.Errorf("profiles = %+v", profiles)
 	}
+	var signIns int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE account_id = $1 AND kind = 'sign_in'`, accountID).Scan(&signIns); err != nil || signIns != 1 {
+		t.Errorf("sign-ins logged = %d, %v", signIns, err)
+	}
 }
 
 func TestVerifyWithCode(t *testing.T) {

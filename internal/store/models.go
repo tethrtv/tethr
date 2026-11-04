@@ -36,6 +36,16 @@ type App struct {
 	RevokedAt        *time.Time
 }
 
+type AuditLog struct {
+	ID        int64
+	AccountID int64
+	ProfileID *int64
+	Kind      string
+	Subject   *string
+	Details   []byte
+	CreatedAt time.Time
+}
+
 type AuthChallenge struct {
 	ID          int64
 	TokenHash   []byte
