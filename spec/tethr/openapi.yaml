@@ -352,6 +352,31 @@ paths:
                 $ref: '#/components/schemas/Me'
         '401':
           $ref: '#/components/responses/Problem'
+  /v1/export:
+    get:
+      operationId: exportData
+      summary: Everything in your household, as a zip
+      description: The zip holds `tethr.json`, shaped like the `Export` schema, and `history.csv`. Only a session that signed in within the last 10 minutes can export, twice a day per account, and every export is emailed to the account. Access tokens can't export.
+      security:
+        - session: []
+      responses:
+        '200':
+          description: The zip
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
   /v1/devices/{code}:
     get:
       operationId: getDevice
@@ -2104,6 +2129,79 @@ components:
                 type: string
                 format: date-time
                 description: Left out, it's now.
+    Export:
+      type: object
+      required: [format, version, exported_at, account, passkeys, apps, connections, profiles]
+      properties:
+        format:
+          type: string
+          enum: [tethr]
+        version:
+          type: integer
+        exported_at:
+          type: string
+          format: date-time
+        account:
+          $ref: '#/components/schemas/Account'
+        passkeys:
+          type: array
+          items:
+            $ref: '#/components/schemas/Passkey'
+        apps:
+          type: array
+          description: Apps you registered as a developer.
+          items:
+            $ref: '#/components/schemas/DeveloperApp'
+        connections:
+          type: array
+          description: Apps connected to profiles in the household.
+          items:
+            $ref: '#/components/schemas/Connection'
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileExport'
+    ProfileExport:
+      type: object
+      required: [profile, history, playback, ratings, watchlist, hidden, imports]
+      properties:
+        profile:
+          $ref: '#/components/schemas/Profile'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/Watch'
+        playback:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumePoint'
+        ratings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rating'
+        watchlist:
+          type: array
+          items:
+            $ref: '#/components/schemas/Listing'
+        hidden:
+          type: array
+          items:
+            $ref: '#/components/schemas/HiddenItem'
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Import'
+    HiddenItem:
+      type: object
+      required: [section, hidden_at, item]
+      properties:
+        section:
+          type: string
+        hidden_at:
+          type: string
+          format: date-time
+        item:
+          $ref: '#/components/schemas/Item'
     Import:
       type: object
       required: [id, source, filename, status, summary, created_at]

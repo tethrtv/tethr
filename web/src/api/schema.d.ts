@@ -268,6 +268,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything in your household, as a zip
+         * @description The zip holds `tethr.json`, shaped like the `Export` schema, and `history.csv`. Only a session that signed in within the last 10 minutes can export, twice a day per account, and every export is emailed to the account. Access tokens can't export.
+         */
+        get: operations["exportData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices/{code}": {
         parameters: {
             query?: never;
@@ -1303,6 +1323,35 @@ export interface components {
                 rated_at?: string;
             }[];
         };
+        Export: {
+            /** @enum {string} */
+            format: "tethr";
+            version: number;
+            /** Format: date-time */
+            exported_at: string;
+            account: components["schemas"]["Account"];
+            passkeys: components["schemas"]["Passkey"][];
+            /** @description Apps you registered as a developer. */
+            apps: components["schemas"]["DeveloperApp"][];
+            /** @description Apps connected to profiles in the household. */
+            connections: components["schemas"]["Connection"][];
+            profiles: components["schemas"]["ProfileExport"][];
+        };
+        ProfileExport: {
+            profile: components["schemas"]["Profile"];
+            history: components["schemas"]["Watch"][];
+            playback: components["schemas"]["ResumePoint"][];
+            ratings: components["schemas"]["Rating"][];
+            watchlist: components["schemas"]["Listing"][];
+            hidden: components["schemas"]["HiddenItem"][];
+            imports: components["schemas"]["Import"][];
+        };
+        HiddenItem: {
+            section: string;
+            /** Format: date-time */
+            hidden_at: string;
+            item: components["schemas"]["Item"];
+        };
         Import: {
             /** Format: int64 */
             id: number;
@@ -1791,6 +1840,30 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    exportData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The zip */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
         };
     };
     getDevice: {

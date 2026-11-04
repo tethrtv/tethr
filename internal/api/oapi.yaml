@@ -6,3 +6,4 @@ generate:
   strict-server: true
 output-options:
   exclude-tags: [oauth]
+  skip-prune: true
