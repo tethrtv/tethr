@@ -135,6 +135,7 @@ func serve(log *slog.Logger) error {
 	}
 
 	go jobs.Imports{DB: db, Log: log}.Run(ctx)
+	go jobs.Cleanup{DB: db, Log: log}.Run(ctx)
 	go jobs.Titles{DB: db, Wikidata: &wikidata.Client{UserAgent: "Tethr/" + version + " (https://github.com/tethrtv/tethr)"}, Log: log}.Run(ctx)
 	var details *meta.Server
 	if token := os.Getenv("TMDB_TOKEN"); token != "" {
