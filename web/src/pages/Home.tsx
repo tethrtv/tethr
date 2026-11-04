@@ -8,6 +8,7 @@ import { Field } from '../components/Field'
 import { Plain } from '../components/Plain'
 import { describeDevice } from '../device'
 import { addPasskey, passkeysSupported } from '../passkeys'
+import { returnTo } from '../returnTo'
 import styles from './Home.module.css'
 
 type Profile = components['schemas']['Profile']
@@ -67,6 +68,7 @@ export function Home() {
         <Household me={me.data} />
         <ConnectedApps />
         <SigningIn />
+        <YourData />
         <DeleteAccount me={me.data} />
       </div>
     </Plain>
@@ -411,6 +413,56 @@ function SigningIn() {
           ))}
         </ul>
       </div>
+    </section>
+  )
+}
+
+function YourData() {
+  const navigate = useNavigate()
+  const download = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.GET('/v1/export', { parseAs: 'blob' })
+      if (error || !data) throw error
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(data)
+      link.download = `tethr-${new Date().toISOString().slice(0, 10)}.zip`
+      link.click()
+      URL.revokeObjectURL(link.href)
+    },
+  })
+  const code =
+    download.error && typeof download.error === 'object' && 'code' in download.error ? download.error.code : ''
+
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>Your data</h2>
+      <p className={styles.note}>
+        A zip of everything in the household: every profile’s history, ratings, watchlist and resume points, plus the
+        account and connected apps. It holds a JSON file and a spreadsheet of your history. You can download it twice a
+        day, and we email you each time.
+      </p>
+      {code === 'sign_in_again' ? (
+        <div className={styles.rowActions}>
+          <p className={styles.note}>{problemMessage(download.error)}</p>
+          <Button
+            onClick={() => {
+              returnTo.set('/account')
+              navigate({ to: '/sign-in' })
+            }}
+          >
+            Sign in again
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p>
+            <Button onClick={() => download.mutate()} aria-busy={download.isPending} disabled={download.isPending}>
+              {download.isPending ? 'Putting it together' : 'Download everything'}
+            </Button>
+          </p>
+          {download.isError && <p className={styles.error}>{problemMessage(download.error)}</p>}
+        </>
+      )}
     </section>
   )
 }
