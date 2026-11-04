@@ -13,10 +13,10 @@ export function Cover({
   id: number
   name?: string
   poster?: string
-  size?: 'xs' | 's'
+  size?: 'xs' | 's' | 'l'
 }) {
   const [failed, setFailed] = useState(false)
-  const src = image(poster, size === 'xs' ? 'w92' : 'w185')
+  const src = image(poster, size === 'xs' ? 'w92' : size === 'l' ? 'w342' : 'w185')
   if (src && !failed) {
     return (
       <img

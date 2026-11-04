@@ -580,6 +580,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/titles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A film or show, with what you've watched, rated and listed
+         * @description `id` is a Tethr ID or a slug. A show lists every episode Tethr knows of, aired or not, season by season with specials last.
+         */
+        get: operations["getTitle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the films and shows you've watched, rated or listed
+         * @description Matches English and original names. Names that start with the words come first. Up to 20 results.
+         */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ratings": {
         parameters: {
             query?: never;
@@ -1031,12 +1071,16 @@ export interface components {
         };
         Title: {
             ids: components["schemas"]["Ids"];
+            /** @description The name and year, such as `breaking-bad-2008`, once Wikidata has both, and `t-` with the Tethr ID until then. It doesn't change once set, and the `t-` form always works. */
+            slug?: string;
             /** @description The English title, from Wikidata. Usually there within a minute of Tethr first seeing the title, but missing for anything Wikidata doesn't have. Fetch artwork and anything else from TMDB yourself. */
             name?: string;
             /** @description The title in its original language, from Wikidata. */
             original_name?: string;
             /** @description The year of first release or broadcast, from Wikidata. */
             year?: number;
+            /** @description From Wikidata. For a show, roughly how long an episode runs. */
+            runtime_minutes?: number;
         };
         Episode: {
             ids: components["schemas"]["Ids"];
@@ -1189,12 +1233,56 @@ export interface components {
             watched: number;
             resume?: components["schemas"]["Resume"];
         };
-        /** @description Where the next episode was paused, if it was started. */
+        /** @description Where it was paused, if it was started. */
         Resume: {
             /** Format: int64 */
             id: number;
             /** Format: double */
             progress: number;
+        };
+        TitleDetail: {
+            /** @enum {string} */
+            type: "movie" | "show";
+            title: components["schemas"]["Title"];
+            /** @description Plays of the film, newest first. Always empty for a show. */
+            watches: components["schemas"]["Play"][];
+            resume?: components["schemas"]["Resume"];
+            rating?: components["schemas"]["TitleRating"];
+            listing?: components["schemas"]["TitleListing"];
+            seasons?: components["schemas"]["SeasonDetail"][];
+        };
+        /** @description Your rating of the film or show itself. */
+        TitleRating: {
+            /** Format: int64 */
+            id: number;
+            rating: number;
+            /** Format: date-time */
+            rated_at: string;
+        };
+        /** @description Set when the film or show itself is on your watchlist. */
+        TitleListing: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            listed_at: string;
+        };
+        SeasonDetail: {
+            number: number;
+            episodes: components["schemas"]["EpisodeDetail"][];
+        };
+        EpisodeDetail: {
+            episode: components["schemas"]["Episode"];
+            /** @description Newest first. */
+            watches: components["schemas"]["Play"][];
+            resume?: components["schemas"]["Resume"];
+        };
+        Play: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            watched_at: string;
+            /** @enum {string} */
+            action: "scrobble" | "checkin" | "watch";
         };
         Rating: {
             /** Format: int64 */
@@ -2254,6 +2342,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getTitle: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The title */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TitleDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+                q: string;
+                type?: "movie" | "show";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"][];
+                };
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

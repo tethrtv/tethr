@@ -1,0 +1,244 @@
+.page {
+  gap: 40px;
+}
+
+.back {
+  margin-bottom: -16px;
+  color: var(--ink-2);
+}
+
+.masthead {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+  padding-bottom: 32px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.body {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.facts dt {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.progress {
+  display: grid;
+  gap: 12px;
+}
+
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.tallyGroup {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.tick {
+  width: 3px;
+  height: 16px;
+  background: var(--rule-2);
+}
+
+.tick.done {
+  background: var(--ink);
+}
+
+.tick.later {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--rule-2);
+}
+
+.tallyLabel {
+  margin-left: 6px;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+.actions {
+  display: flex;
+  gap: 18px;
+}
+
+.yours {
+  display: grid;
+  gap: 10px;
+}
+
+.rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+
+.rating fieldset {
+  gap: 2px;
+}
+
+.score {
+  justify-content: center;
+  min-width: 32px;
+  padding: 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.episodes {
+  display: grid;
+  gap: 14px;
+}
+
+.episodes > :first-child {
+  margin-top: 0;
+}
+
+.eps {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 2px solid var(--ink);
+}
+
+.eps th {
+  text-align: left;
+  font-weight: 500;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.eps td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.eps .colTick {
+  width: 44px;
+  padding-left: 0;
+}
+
+.num {
+  width: 44px;
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+}
+
+.colTitle {
+  display: grid;
+  gap: 2px;
+}
+
+.colTitle > :empty {
+  display: none;
+}
+
+.epName {
+  font-weight: 650;
+  font-size: 1.0625rem;
+}
+
+.colAired {
+  width: 130px;
+  white-space: nowrap;
+}
+
+.colLog {
+  width: 240px;
+}
+
+.due td {
+  color: var(--ink-3);
+}
+
+.confirm {
+  color: var(--ink);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.play {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 70px;
+  gap: 16px;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+@media (max-width: 899px) {
+  .page {
+    gap: 32px;
+  }
+  .masthead {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 18px;
+  }
+  .masthead > :first-child {
+    width: 96px;
+    height: 144px;
+  }
+  .eps thead {
+    display: none;
+  }
+  .eps tr {
+    display: grid;
+    grid-template-columns: 36px 30px minmax(0, 1fr);
+    grid-template-areas: "tick num title" "tick num aired" "tick num log";
+    gap: 2px 8px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .eps td {
+    padding: 0;
+    border: 0;
+    width: auto;
+  }
+  .eps td:nth-child(1) {
+    grid-area: tick;
+  }
+  .eps td:nth-child(2) {
+    grid-area: num;
+  }
+  .eps td:nth-child(3) {
+    grid-area: title;
+  }
+  .eps td:nth-child(4) {
+    grid-area: aired;
+    font-size: 0.875rem;
+  }
+  .eps td:nth-child(5) {
+    grid-area: log;
+  }
+  .eps td:empty {
+    display: none;
+  }
+  .play {
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+  }
+}
