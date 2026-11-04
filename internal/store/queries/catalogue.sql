@@ -27,7 +27,7 @@ ON CONFLICT DO NOTHING;
 UPDATE titles SET tmdb_id = $2, updated_at = now() WHERE id = $1 AND tmdb_id IS NULL;
 
 -- name: CatalogueTitles :many
-SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.tmdb_id, t.wikidata_id,
+SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.runtime_minutes, t.tmdb_id, t.wikidata_id,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
 FROM titles t
@@ -136,6 +136,10 @@ UPDATE titles
 SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, wikidata_checked_at = now(), updated_at = now()
 WHERE id = $1;
 
+-- name: NameSlug :execrows
+UPDATE titles t SET slug = sqlc.arg(slug), updated_at = now()
+WHERE t.id = sqlc.arg(id) AND t.slug = 't-' || t.id AND NOT EXISTS (SELECT 1 FROM titles o WHERE o.slug = sqlc.arg(slug));
+
 -- name: WikidataMissing :exec
 UPDATE titles SET wikidata_checked_at = now() WHERE id = $1;
 
@@ -222,3 +226,18 @@ UPDATE episodes SET show_id = sqlc.arg(into_id) WHERE id = sqlc.arg(id);
 -- name: MarkTitleMerged :exec
 UPDATE titles SET merged_into_id = sqlc.arg(into_id), updated_at = now()
 WHERE id = sqlc.arg(from_id) OR merged_into_id = sqlc.arg(from_id);
+
+-- name: SearchLibrary :many
+SELECT t.id
+FROM titles t
+WHERE t.merged_into_id IS NULL
+  AND (t.name ILIKE '%' || sqlc.arg(words)::text || '%' OR t.original_name ILIKE '%' || sqlc.arg(words) || '%')
+  AND (sqlc.narg(kind)::text IS NULL OR t.kind = sqlc.narg(kind))
+  AND t.id IN (
+    SELECT w.title_id FROM watch_events w WHERE w.profile_id = sqlc.arg(profile_id)::bigint
+    UNION SELECT r.title_id FROM ratings r WHERE r.profile_id = sqlc.arg(profile_id)::bigint
+    UNION SELECT p.title_id FROM playback p WHERE p.profile_id = sqlc.arg(profile_id)::bigint
+    UNION SELECT i.title_id FROM list_items i JOIN lists l ON l.id = i.list_id WHERE l.profile_id = sqlc.arg(profile_id)::bigint
+  )
+ORDER BY t.name ILIKE sqlc.arg(words) || '%' DESC, t.name
+LIMIT 20;

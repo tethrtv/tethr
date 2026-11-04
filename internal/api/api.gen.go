@@ -130,6 +130,27 @@ func (e NewProfileKind) Valid() bool {
 	}
 }
 
+// Defines values for PlayAction.
+const (
+	PlayActionCheckin  PlayAction = "checkin"
+	PlayActionScrobble PlayAction = "scrobble"
+	PlayActionWatch    PlayAction = "watch"
+)
+
+// Valid indicates whether the value is a known member of the PlayAction enum.
+func (e PlayAction) Valid() bool {
+	switch e {
+	case PlayActionCheckin:
+		return true
+	case PlayActionScrobble:
+		return true
+	case PlayActionWatch:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProfileKind.
 const (
 	ProfileKindGuest  ProfileKind = "guest"
@@ -190,6 +211,24 @@ func (e ScrobbleResultResult) Valid() bool {
 	case Watched:
 		return true
 	case Watching:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TitleDetailType.
+const (
+	TitleDetailTypeMovie TitleDetailType = "movie"
+	TitleDetailTypeShow  TitleDetailType = "show"
+)
+
+// Valid indicates whether the value is a known member of the TitleDetailType enum.
+func (e TitleDetailType) Valid() bool {
+	switch e {
+	case TitleDetailTypeMovie:
+		return true
+	case TitleDetailTypeShow:
 		return true
 	default:
 		return false
@@ -271,6 +310,24 @@ func (e ListRatingsParamsType) Valid() bool {
 	case ListRatingsParamsTypeSeason:
 		return true
 	case ListRatingsParamsTypeShow:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchParamsType.
+const (
+	SearchParamsTypeMovie SearchParamsType = "movie"
+	SearchParamsTypeShow  SearchParamsType = "show"
+)
+
+// Valid indicates whether the value is a known member of the SearchParamsType enum.
+func (e SearchParamsType) Valid() bool {
+	switch e {
+	case SearchParamsTypeMovie:
+		return true
+	case SearchParamsTypeShow:
 		return true
 	default:
 		return false
@@ -397,6 +454,17 @@ type Episode struct {
 	Ids    Ids `json:"ids"`
 	Number int `json:"number"`
 	Season int `json:"season"`
+}
+
+// EpisodeDetail defines model for EpisodeDetail.
+type EpisodeDetail struct {
+	Episode Episode `json:"episode"`
+
+	// Resume Where it was paused, if it was started.
+	Resume *Resume `json:"resume,omitempty"`
+
+	// Watches Newest first.
+	Watches []Play `json:"watches"`
 }
 
 // HistoryPage defines model for HistoryPage.
@@ -586,6 +654,16 @@ type PasskeyResponse struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// Play defines model for Play.
+type Play struct {
+	Action    PlayAction `json:"action"`
+	Id        int64      `json:"id"`
+	WatchedAt time.Time  `json:"watched_at"`
+}
+
+// PlayAction defines model for Play.Action.
+type PlayAction string
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Example: username_taken
@@ -631,7 +709,7 @@ type RegisteredApp struct {
 	ClientSecret string       `json:"client_secret"`
 }
 
-// Resume Where the next episode was paused, if it was started.
+// Resume Where it was paused, if it was started.
 type Resume struct {
 	Id       int64   `json:"id"`
 	Progress float64 `json:"progress"`
@@ -673,6 +751,12 @@ type ScrobbleResult struct {
 // ScrobbleResultResult defines model for ScrobbleResult.Result.
 type ScrobbleResultResult string
 
+// SeasonDetail defines model for SeasonDetail.
+type SeasonDetail struct {
+	Episodes []EpisodeDetail `json:"episodes"`
+	Number   int             `json:"number"`
+}
+
 // Session defines model for Session.
 type Session struct {
 	CreatedAt  time.Time `json:"created_at"`
@@ -712,8 +796,48 @@ type Title struct {
 	// OriginalName The title in its original language, from Wikidata.
 	OriginalName *string `json:"original_name,omitempty"`
 
+	// RuntimeMinutes From Wikidata. For a show, roughly how long an episode runs.
+	RuntimeMinutes *int `json:"runtime_minutes,omitempty"`
+
+	// Slug The name and year, such as `breaking-bad-2008`, once Wikidata has both, and `t-` with the Tethr ID until then. It doesn't change once set, and the `t-` form always works.
+	Slug *string `json:"slug,omitempty"`
+
 	// Year The year of first release or broadcast, from Wikidata.
 	Year *int `json:"year,omitempty"`
+}
+
+// TitleDetail defines model for TitleDetail.
+type TitleDetail struct {
+	// Listing Set when the film or show itself is on your watchlist.
+	Listing *TitleListing `json:"listing,omitempty"`
+
+	// Rating Your rating of the film or show itself.
+	Rating *TitleRating `json:"rating,omitempty"`
+
+	// Resume Where it was paused, if it was started.
+	Resume  *Resume         `json:"resume,omitempty"`
+	Seasons *[]SeasonDetail `json:"seasons,omitempty"`
+	Title   Title           `json:"title"`
+	Type    TitleDetailType `json:"type"`
+
+	// Watches Plays of the film, newest first. Always empty for a show.
+	Watches []Play `json:"watches"`
+}
+
+// TitleDetailType defines model for TitleDetail.Type.
+type TitleDetailType string
+
+// TitleListing Set when the film or show itself is on your watchlist.
+type TitleListing struct {
+	Id       int64     `json:"id"`
+	ListedAt time.Time `json:"listed_at"`
+}
+
+// TitleRating Your rating of the film or show itself.
+type TitleRating struct {
+	Id      int64     `json:"id"`
+	RatedAt time.Time `json:"rated_at"`
+	Rating  int       `json:"rating"`
 }
 
 // UpNextEntry defines model for UpNextEntry.
@@ -723,7 +847,7 @@ type UpNextEntry struct {
 	LastWatchedAt time.Time `json:"last_watched_at"`
 	Next          Episode   `json:"next"`
 
-	// Resume Where the next episode was paused, if it was started.
+	// Resume Where it was paused, if it was started.
 	Resume *Resume `json:"resume,omitempty"`
 	Show   Title   `json:"show"`
 
@@ -870,6 +994,23 @@ type RateParams struct {
 
 // RemoveRatingParams defines parameters for RemoveRating.
 type RemoveRatingParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// SearchParams defines parameters for Search.
+type SearchParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId        `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Q         string            `form:"q" json:"q"`
+	Type      *SearchParamsType `form:"type,omitempty" json:"type,omitempty"`
+}
+
+// SearchParamsType defines parameters for Search.
+type SearchParamsType string
+
+// GetTitleParams defines parameters for GetTitle.
+type GetTitleParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
@@ -1087,6 +1228,9 @@ type ServerInterface interface {
 	// Scrobble Report playback starting, pausing or stopping
 	// (POST /v1/scrobble)
 	Scrobble(w http.ResponseWriter, r *http.Request)
+	// Search Search the films and shows you've watched, rated or listed
+	// (GET /v1/search)
+	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
 	// ListSessions Where the account is signed in
 	// (GET /v1/sessions)
 	ListSessions(w http.ResponseWriter, r *http.Request)
@@ -1096,6 +1240,9 @@ type ServerInterface interface {
 	// EndSession Sign out one device
 	// (DELETE /v1/sessions/{id})
 	EndSession(w http.ResponseWriter, r *http.Request, id Id)
+	// GetTitle A film or show, with what you've watched, rated and listed
+	// (GET /v1/titles/{id})
+	GetTitle(w http.ResponseWriter, r *http.Request, id string, params GetTitleParams)
 	// GetUpNext The next episode of every show you're partway through
 	// (GET /v1/up-next)
 	GetUpNext(w http.ResponseWriter, r *http.Request, params GetUpNextParams)
@@ -2329,6 +2476,65 @@ func (siw *ServerInterfaceWrapper) Scrobble(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// Search operation middleware
+func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Search(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSessions operation middleware
 func (siw *ServerInterfaceWrapper) ListSessions(w http.ResponseWriter, r *http.Request) {
 
@@ -2374,6 +2580,48 @@ func (siw *ServerInterfaceWrapper) EndSession(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EndSession(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTitle operation middleware
+func (siw *ServerInterfaceWrapper) GetTitle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTitleParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTitle(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2749,6 +2997,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.HideFromUpNext)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/titles/{id}", wrapper.GetTitle)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/search", wrapper.Search)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/ratings", wrapper.ListRatings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/ratings", wrapper.Rate)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/ratings/{id}", wrapper.RemoveRating)
@@ -5009,6 +5259,56 @@ func (response Scrobble422JSONResponse) VisitScrobbleResponse(w http.ResponseWri
 	return err
 }
 
+type SearchRequestObject struct {
+	Params SearchParams
+}
+
+type SearchResponseObject interface {
+	VisitSearchResponse(w http.ResponseWriter) error
+}
+
+type Search200JSONResponse []Item
+
+func (response Search200JSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Search401JSONResponse struct{ ProblemJSONResponse }
+
+func (response Search401JSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Search404JSONResponse Problem
+
+func (response Search404JSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListSessionsRequestObject struct {
 }
 
@@ -5106,6 +5406,57 @@ func (response EndSession401JSONResponse) VisitEndSessionResponse(w http.Respons
 type EndSession404JSONResponse Problem
 
 func (response EndSession404JSONResponse) VisitEndSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTitleRequestObject struct {
+	Id     string `json:"id"`
+	Params GetTitleParams
+}
+
+type GetTitleResponseObject interface {
+	VisitGetTitleResponse(w http.ResponseWriter) error
+}
+
+type GetTitle200JSONResponse TitleDetail
+
+func (response GetTitle200JSONResponse) VisitGetTitleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTitle401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetTitle401JSONResponse) VisitGetTitleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTitle404JSONResponse Problem
+
+func (response GetTitle404JSONResponse) VisitGetTitleResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -5549,6 +5900,9 @@ type StrictServerInterface interface {
 	// Scrobble Report playback starting, pausing or stopping
 	// (POST /v1/scrobble)
 	Scrobble(ctx context.Context, request ScrobbleRequestObject) (ScrobbleResponseObject, error)
+	// Search Search the films and shows you've watched, rated or listed
+	// (GET /v1/search)
+	Search(ctx context.Context, request SearchRequestObject) (SearchResponseObject, error)
 	// ListSessions Where the account is signed in
 	// (GET /v1/sessions)
 	ListSessions(ctx context.Context, request ListSessionsRequestObject) (ListSessionsResponseObject, error)
@@ -5558,6 +5912,9 @@ type StrictServerInterface interface {
 	// EndSession Sign out one device
 	// (DELETE /v1/sessions/{id})
 	EndSession(ctx context.Context, request EndSessionRequestObject) (EndSessionResponseObject, error)
+	// GetTitle A film or show, with what you've watched, rated and listed
+	// (GET /v1/titles/{id})
+	GetTitle(ctx context.Context, request GetTitleRequestObject) (GetTitleResponseObject, error)
 	// GetUpNext The next episode of every show you're partway through
 	// (GET /v1/up-next)
 	GetUpNext(ctx context.Context, request GetUpNextRequestObject) (GetUpNextResponseObject, error)
@@ -6845,6 +7202,32 @@ func (sh *strictHandler) Scrobble(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Search operation middleware
+func (sh *strictHandler) Search(w http.ResponseWriter, r *http.Request, params SearchParams) {
+	var request SearchRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Search(ctx, request.(SearchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Search")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchResponseObject); ok {
+		if err := validResponse.VisitSearchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListSessions operation middleware
 func (sh *strictHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	var request ListSessionsRequestObject
@@ -6912,6 +7295,33 @@ func (sh *strictHandler) EndSession(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EndSessionResponseObject); ok {
 		if err := validResponse.VisitEndSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTitle operation middleware
+func (sh *strictHandler) GetTitle(w http.ResponseWriter, r *http.Request, id string, params GetTitleParams) {
+	var request GetTitleRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTitle(ctx, request.(GetTitleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTitle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTitleResponseObject); ok {
+		if err := validResponse.VisitGetTitleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

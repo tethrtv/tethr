@@ -744,6 +744,167 @@ func (q *Queries) SetWatching(ctx context.Context, arg SetWatchingParams) error 
 	return err
 }
 
+const showOutline = `-- name: ShowOutline :many
+SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes
+WHERE show_id = $1 AND removed_at IS NULL
+ORDER BY season_number = 0, season_number, episode_number
+`
+
+func (q *Queries) ShowOutline(ctx context.Context, showID int64) ([]Episode, error) {
+	rows, err := q.db.Query(ctx, showOutline, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Episode
+	for rows.Next() {
+		var i Episode
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowID,
+			&i.SeasonNumber,
+			&i.EpisodeNumber,
+			&i.TmdbEpisodeID,
+			&i.CreatedAt,
+			&i.FirstAired,
+			&i.RemovedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const titleListing = `-- name: TitleListing :one
+SELECT i.id, i.listed_at
+FROM list_items i
+JOIN lists l ON l.id = i.list_id
+WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
+`
+
+type TitleListingParams struct {
+	ProfileID int64
+	TitleID   int64
+}
+
+type TitleListingRow struct {
+	ID       int64
+	ListedAt time.Time
+}
+
+func (q *Queries) TitleListing(ctx context.Context, arg TitleListingParams) (TitleListingRow, error) {
+	row := q.db.QueryRow(ctx, titleListing, arg.ProfileID, arg.TitleID)
+	var i TitleListingRow
+	err := row.Scan(&i.ID, &i.ListedAt)
+	return i, err
+}
+
+const titlePlayback = `-- name: TitlePlayback :many
+SELECT id, episode_id, progress::float8 AS progress FROM playback
+WHERE profile_id = $1 AND title_id = $2
+`
+
+type TitlePlaybackParams struct {
+	ProfileID int64
+	TitleID   int64
+}
+
+type TitlePlaybackRow struct {
+	ID        int64
+	EpisodeID *int64
+	Progress  float64
+}
+
+func (q *Queries) TitlePlayback(ctx context.Context, arg TitlePlaybackParams) ([]TitlePlaybackRow, error) {
+	rows, err := q.db.Query(ctx, titlePlayback, arg.ProfileID, arg.TitleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TitlePlaybackRow
+	for rows.Next() {
+		var i TitlePlaybackRow
+		if err := rows.Scan(&i.ID, &i.EpisodeID, &i.Progress); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const titleRating = `-- name: TitleRating :one
+SELECT id, rating, rated_at FROM ratings
+WHERE profile_id = $1 AND title_id = $2 AND season_number IS NULL AND episode_id IS NULL
+`
+
+type TitleRatingParams struct {
+	ProfileID int64
+	TitleID   int64
+}
+
+type TitleRatingRow struct {
+	ID      int64
+	Rating  int16
+	RatedAt time.Time
+}
+
+func (q *Queries) TitleRating(ctx context.Context, arg TitleRatingParams) (TitleRatingRow, error) {
+	row := q.db.QueryRow(ctx, titleRating, arg.ProfileID, arg.TitleID)
+	var i TitleRatingRow
+	err := row.Scan(&i.ID, &i.Rating, &i.RatedAt)
+	return i, err
+}
+
+const titleWatches = `-- name: TitleWatches :many
+SELECT id, episode_id, watched_at, action FROM watch_events
+WHERE profile_id = $1 AND title_id = $2
+ORDER BY watched_at DESC, id DESC
+`
+
+type TitleWatchesParams struct {
+	ProfileID int64
+	TitleID   int64
+}
+
+type TitleWatchesRow struct {
+	ID        int64
+	EpisodeID *int64
+	WatchedAt time.Time
+	Action    string
+}
+
+func (q *Queries) TitleWatches(ctx context.Context, arg TitleWatchesParams) ([]TitleWatchesRow, error) {
+	rows, err := q.db.Query(ctx, titleWatches, arg.ProfileID, arg.TitleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TitleWatchesRow
+	for rows.Next() {
+		var i TitleWatchesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EpisodeID,
+			&i.WatchedAt,
+			&i.Action,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const touchList = `-- name: TouchList :one
 UPDATE lists SET updated_at = now() WHERE id = $1 RETURNING updated_at
 `

@@ -425,6 +425,26 @@ func TestNativeTracking(t *testing.T) {
 	if show := history.Items[0].Item.Title; *show.Name != "Breaking Bad" || *show.OriginalName != "Breaking Bad" || *show.Year != 2008 {
 		t.Errorf("show = %+v", show)
 	}
+	var detail TitleDetail
+	rec = bearer(t, h, "GET", "/v1/titles/breaking-bad-2008", "", token)
+	_ = json.Unmarshal(rec.Body.Bytes(), &detail)
+	if rec.Code != http.StatusOK || detail.Type != TitleDetailTypeShow || *detail.Title.Slug != "breaking-bad-2008" || detail.Seasons == nil {
+		t.Fatalf("title = %d %s", rec.Code, rec.Body)
+	}
+	if e := (*detail.Seasons)[0].Episodes[0]; e.Episode.Number != 2 || len(e.Watches) != 1 || e.Watches[0].Action != PlayActionScrobble {
+		t.Errorf("episode = %+v", e)
+	}
+	if rec := bearer(t, h, "GET", "/v1/titles/no-such-show-1999", "", token); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown title = %d", rec.Code)
+	}
+	var found []Item
+	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/search?q=bad", "", token).Body.Bytes(), &found)
+	if len(found) != 1 || *found[0].Title.Slug != "breaking-bad-2008" {
+		t.Errorf("search = %+v", found)
+	}
+	if rec := do(t, h, "GET", "/v1/search?q=bad", "", cookie); rec.Body.String() != "[]\n" {
+		t.Errorf("Sam's library showed up in Nathan's search: %s", rec.Body)
+	}
 	var mine HistoryPage
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/history", "", cookie).Body.Bytes(), &mine)
 	if mine.Total != 0 {

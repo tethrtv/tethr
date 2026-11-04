@@ -102,7 +102,7 @@ func (q *Queries) CatalogueEpisodes(ctx context.Context, ids []int64) ([]Episode
 }
 
 const catalogueTitles = `-- name: CatalogueTitles :many
-SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.tmdb_id, t.wikidata_id,
+SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.runtime_minutes, t.tmdb_id, t.wikidata_id,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
 FROM titles t
@@ -110,16 +110,17 @@ WHERE t.id = ANY($1::bigint[])
 `
 
 type CatalogueTitlesRow struct {
-	ID           int64
-	Kind         string
-	Slug         string
-	Name         *string
-	OriginalName *string
-	Year         *int16
-	TmdbID       *int32
-	WikidataID   *string
-	Imdb         string
-	Tvdb         string
+	ID             int64
+	Kind           string
+	Slug           string
+	Name           *string
+	OriginalName   *string
+	Year           *int16
+	RuntimeMinutes *int16
+	TmdbID         *int32
+	WikidataID     *string
+	Imdb           string
+	Tvdb           string
 }
 
 func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]CatalogueTitlesRow, error) {
@@ -138,6 +139,7 @@ func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]Catalogue
 			&i.Name,
 			&i.OriginalName,
 			&i.Year,
+			&i.RuntimeMinutes,
 			&i.TmdbID,
 			&i.WikidataID,
 			&i.Imdb,
@@ -732,6 +734,24 @@ func (q *Queries) MoveEpisode(ctx context.Context, arg MoveEpisodeParams) error 
 	return err
 }
 
+const nameSlug = `-- name: NameSlug :execrows
+UPDATE titles t SET slug = $1, updated_at = now()
+WHERE t.id = $2 AND t.slug = 't-' || t.id AND NOT EXISTS (SELECT 1 FROM titles o WHERE o.slug = $1)
+`
+
+type NameSlugParams struct {
+	Slug string
+	ID   int64
+}
+
+func (q *Queries) NameSlug(ctx context.Context, arg NameSlugParams) (int64, error) {
+	result, err := q.db.Exec(ctx, nameSlug, arg.Slug, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const outlineDone = `-- name: OutlineDone :exec
 UPDATE titles SET outline_refreshed_at = now(), tmdb_missing_at = $2 WHERE id = $1
 `
@@ -780,6 +800,48 @@ func (q *Queries) SaveWikidata(ctx context.Context, arg SaveWikidataParams) erro
 		arg.RuntimeMinutes,
 	)
 	return err
+}
+
+const searchLibrary = `-- name: SearchLibrary :many
+SELECT t.id
+FROM titles t
+WHERE t.merged_into_id IS NULL
+  AND (t.name ILIKE '%' || $1::text || '%' OR t.original_name ILIKE '%' || $1 || '%')
+  AND ($2::text IS NULL OR t.kind = $2)
+  AND t.id IN (
+    SELECT w.title_id FROM watch_events w WHERE w.profile_id = $3::bigint
+    UNION SELECT r.title_id FROM ratings r WHERE r.profile_id = $3::bigint
+    UNION SELECT p.title_id FROM playback p WHERE p.profile_id = $3::bigint
+    UNION SELECT i.title_id FROM list_items i JOIN lists l ON l.id = i.list_id WHERE l.profile_id = $3::bigint
+  )
+ORDER BY t.name ILIKE $1 || '%' DESC, t.name
+LIMIT 20
+`
+
+type SearchLibraryParams struct {
+	Words     string
+	Kind      *string
+	ProfileID int64
+}
+
+func (q *Queries) SearchLibrary(ctx context.Context, arg SearchLibraryParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, searchLibrary, arg.Words, arg.Kind, arg.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setTitleTMDB = `-- name: SetTitleTMDB :exec
