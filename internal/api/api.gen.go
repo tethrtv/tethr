@@ -19,6 +19,21 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ExportFormat.
+const (
+	Tethr ExportFormat = "tethr"
+)
+
+// Valid indicates whether the value is a known member of the ExportFormat enum.
+func (e ExportFormat) Valid() bool {
+	switch e {
+	case Tethr:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ImportSource.
 const (
 	Trakt ImportSource = "trakt"
@@ -441,6 +456,15 @@ type Device struct {
 	Code    string `json:"code"`
 }
 
+// DeviceSignIn defines model for DeviceSignIn.
+type DeviceSignIn struct {
+	DeviceCode      string `json:"device_code"`
+	ExpiresIn       int    `json:"expires_in"`
+	Interval        int    `json:"interval"`
+	UserCode        string `json:"user_code"`
+	VerificationUrl string `json:"verification_url"`
+}
+
 // EmailLinkRequest defines model for EmailLinkRequest.
 type EmailLinkRequest struct {
 	Email string `json:"email"`
@@ -465,6 +489,32 @@ type EpisodeDetail struct {
 
 	// Watches Newest first.
 	Watches []Play `json:"watches"`
+}
+
+// Export defines model for Export.
+type Export struct {
+	Account Account `json:"account"`
+
+	// Apps Apps you registered as a developer.
+	Apps []DeveloperApp `json:"apps"`
+
+	// Connections Apps connected to profiles in the household.
+	Connections []Connection    `json:"connections"`
+	ExportedAt  time.Time       `json:"exported_at"`
+	Format      ExportFormat    `json:"format"`
+	Passkeys    []Passkey       `json:"passkeys"`
+	Profiles    []ProfileExport `json:"profiles"`
+	Version     int             `json:"version"`
+}
+
+// ExportFormat defines model for Export.Format.
+type ExportFormat string
+
+// HiddenItem defines model for HiddenItem.
+type HiddenItem struct {
+	HiddenAt time.Time `json:"hidden_at"`
+	Item     Item      `json:"item"`
+	Section  string    `json:"section"`
 }
 
 // HistoryPage defines model for HistoryPage.
@@ -695,6 +745,17 @@ type ProfileChoice struct {
 	ProfileId int64 `json:"profile_id"`
 }
 
+// ProfileExport defines model for ProfileExport.
+type ProfileExport struct {
+	Hidden    []HiddenItem  `json:"hidden"`
+	History   []Watch       `json:"history"`
+	Imports   []Import      `json:"imports"`
+	Playback  []ResumePoint `json:"playback"`
+	Profile   Profile       `json:"profile"`
+	Ratings   []Rating      `json:"ratings"`
+	Watchlist []Listing     `json:"watchlist"`
+}
+
 // Rating defines model for Rating.
 type Rating struct {
 	Id      int64     `json:"id"`
@@ -840,6 +901,20 @@ type TitleRating struct {
 	Rating  int       `json:"rating"`
 }
 
+// Tokens defines model for Tokens.
+type Tokens struct {
+	AccessToken string `json:"access_token"`
+
+	// CreatedAt Unix seconds.
+	CreatedAt int64 `json:"created_at"`
+
+	// ExpiresIn Seconds until the access token runs out.
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+	Scope        string `json:"scope"`
+	TokenType    string `json:"token_type"`
+}
+
 // UpNextEntry defines model for UpNextEntry.
 type UpNextEntry struct {
 	// Aired Episodes aired so far, not counting specials.
@@ -881,6 +956,12 @@ type Id = int64
 
 // ProfileId defines model for ProfileId.
 type ProfileId = int64
+
+// OAuthError defines model for OAuthError.
+type OAuthError struct {
+	Error            string  `json:"error"`
+	ErrorDescription *string `json:"error_description,omitempty"`
+}
 
 // GetActivityParams defines parameters for GetActivity.
 type GetActivityParams struct {
@@ -1156,6 +1237,9 @@ type ServerInterface interface {
 	// DenyDevice Turn the device away
 	// (POST /v1/devices/{code}/deny)
 	DenyDevice(w http.ResponseWriter, r *http.Request, code DeviceCode)
+	// ExportData Everything in your household, as a zip
+	// (GET /v1/export)
+	ExportData(w http.ResponseWriter, r *http.Request)
 	// ListHistory Watches, newest first
 	// (GET /v1/history)
 	ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams)
@@ -1690,6 +1774,20 @@ func (siw *ServerInterfaceWrapper) DenyDevice(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DenyDevice(w, r, code)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportData operation middleware
+func (siw *ServerInterfaceWrapper) ExportData(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportData(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2975,6 +3073,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sessions/sign-out-others", wrapper.SignOutOthers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/me", wrapper.DeleteAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/export", wrapper.ExportData)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/devices/{code}", wrapper.GetDevice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/devices/{code}/approve", wrapper.ApproveDevice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/devices/{code}/deny", wrapper.DenyDevice)
@@ -3014,6 +3113,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/apps/{id}/secret", wrapper.NewAppSecret)
 
 	return m
+}
+
+type OAuthErrorJSONResponse struct {
+	Error            string  `json:"error"`
+	ErrorDescription *string `json:"error_description,omitempty"`
 }
 
 type ProblemJSONResponse Problem
@@ -3965,6 +4069,83 @@ func (response DenyDevice404JSONResponse) VisitDenyDeviceResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportDataRequestObject struct {
+}
+
+type ExportDataResponseObject interface {
+	VisitExportDataResponse(w http.ResponseWriter) error
+}
+
+type ExportData200ResponseHeaders struct {
+	ContentDisposition *string
+}
+
+type ExportData200ApplicationzipResponse struct {
+	Body          io.Reader
+	Headers       ExportData200ResponseHeaders
+	ContentLength int64
+}
+
+func (response ExportData200ApplicationzipResponse) VisitExportDataResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/zip")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportData401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ExportData401JSONResponse) VisitExportDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportData403JSONResponse Problem
+
+func (response ExportData403JSONResponse) VisitExportDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportData429JSONResponse Problem
+
+func (response ExportData429JSONResponse) VisitExportDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5828,6 +6009,9 @@ type StrictServerInterface interface {
 	// DenyDevice Turn the device away
 	// (POST /v1/devices/{code}/deny)
 	DenyDevice(ctx context.Context, request DenyDeviceRequestObject) (DenyDeviceResponseObject, error)
+	// ExportData Everything in your household, as a zip
+	// (GET /v1/export)
+	ExportData(ctx context.Context, request ExportDataRequestObject) (ExportDataResponseObject, error)
 	// ListHistory Watches, newest first
 	// (GET /v1/history)
 	ListHistory(ctx context.Context, request ListHistoryRequestObject) (ListHistoryResponseObject, error)
@@ -6530,6 +6714,30 @@ func (sh *strictHandler) DenyDevice(w http.ResponseWriter, r *http.Request, code
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DenyDeviceResponseObject); ok {
 		if err := validResponse.VisitDenyDeviceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportData operation middleware
+func (sh *strictHandler) ExportData(w http.ResponseWriter, r *http.Request) {
+	var request ExportDataRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportData(ctx, request.(ExportDataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportData")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportDataResponseObject); ok {
+		if err := validResponse.VisitExportDataResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -36,6 +37,7 @@ type Server struct {
 	AppURL         string
 	AllowedOrigins []string
 	Cookie         CookieConfig
+	exporting      sync.Map
 }
 
 type contextKey int
@@ -44,6 +46,7 @@ const (
 	sessionKey contextKey = iota
 	userAgentKey
 	bearerKey
+	fetchSiteKey
 )
 
 func (s *Server) Handler() http.Handler {
@@ -62,6 +65,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) withRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), userAgentKey, r.UserAgent())
+		ctx = context.WithValue(ctx, fetchSiteKey, r.Header.Get("Sec-Fetch-Site"))
 		if c, err := r.Cookie(s.Cookie.Name); err == nil {
 			ctx = context.WithValue(ctx, sessionKey, c.Value)
 		}
