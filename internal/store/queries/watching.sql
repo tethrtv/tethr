@@ -202,3 +202,27 @@ WHERE profile_id = $1 AND section = $2 AND title_id = $3 AND season_number IS NO
 
 -- name: HiddenItems :many
 SELECT * FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC;
+
+-- name: TitleWatches :many
+SELECT id, episode_id, watched_at, action FROM watch_events
+WHERE profile_id = $1 AND title_id = $2
+ORDER BY watched_at DESC, id DESC;
+
+-- name: TitlePlayback :many
+SELECT id, episode_id, progress::float8 AS progress FROM playback
+WHERE profile_id = $1 AND title_id = $2;
+
+-- name: TitleRating :one
+SELECT id, rating, rated_at FROM ratings
+WHERE profile_id = $1 AND title_id = $2 AND season_number IS NULL AND episode_id IS NULL;
+
+-- name: TitleListing :one
+SELECT i.id, i.listed_at
+FROM list_items i
+JOIN lists l ON l.id = i.list_id
+WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL;
+
+-- name: ShowOutline :many
+SELECT * FROM episodes
+WHERE show_id = $1 AND removed_at IS NULL
+ORDER BY season_number = 0, season_number, episode_number;

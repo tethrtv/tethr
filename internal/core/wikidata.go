@@ -3,10 +3,15 @@ package core
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/store"
+	"golang.org/x/text/unicode/norm"
 )
 
 type WikidataTitle struct {
@@ -45,6 +50,9 @@ func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 		}
 		t, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
 		if err != nil {
+			return err
+		}
+		if err := nameSlug(ctx, q, t, w.Name, w.Year); err != nil {
 			return err
 		}
 		if err := learnIDs(ctx, q, t, IDs{TMDB: int64(w.TMDB)}); err != nil {
@@ -146,6 +154,48 @@ func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into i
 		return err
 	}
 	return q.MarkTitleMerged(ctx, store.MarkTitleMergedParams{FromID: from, IntoID: &into})
+}
+
+func nameSlug(ctx context.Context, q *store.Queries, t store.Title, name string, year int) error {
+	base := slugFor(name, year)
+	if base == "" || t.Slug != "t-"+strconv.FormatInt(t.ID, 10) {
+		return nil
+	}
+	for n := 1; n <= 100; n++ {
+		slug := base
+		if n > 1 {
+			slug = base + "-" + strconv.Itoa(n)
+		}
+		if set, err := q.NameSlug(ctx, store.NameSlugParams{ID: t.ID, Slug: slug}); err != nil || set == 1 {
+			return err
+		}
+	}
+	return nil
+}
+
+func slugFor(name string, year int) string {
+	if year == 0 {
+		return ""
+	}
+	var b strings.Builder
+	gap := false
+	for _, r := range norm.NFKD.String(strings.ToLower(name)) {
+		switch {
+		case unicode.Is(unicode.Mn, r), r == '\'', r == '’':
+		case r < utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r)):
+			if gap && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			gap = false
+			b.WriteRune(r)
+		default:
+			gap = true
+		}
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return b.String() + "-" + strconv.Itoa(year)
 }
 
 func text(s string) *string {

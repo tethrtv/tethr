@@ -366,10 +366,14 @@ func toRefs(refs []core.Ref) []ItemRef {
 
 func toItem(i core.Item) Item {
 	t := i.Title
-	title := Title{Ids: Ids{Tethr: &t.ID}, Name: t.Name, OriginalName: t.OriginalName}
+	title := Title{Ids: Ids{Tethr: &t.ID}, Slug: &t.Slug, Name: t.Name, OriginalName: t.OriginalName}
 	if t.Year != nil {
 		year := int(*t.Year)
 		title.Year = &year
+	}
+	if t.RuntimeMinutes != nil {
+		runtime := int(*t.RuntimeMinutes)
+		title.RuntimeMinutes = &runtime
 	}
 	if t.TmdbID != nil {
 		tmdb := int(*t.TmdbID)

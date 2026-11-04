@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -98,5 +99,76 @@ func TestMergeSharedWikidata(t *testing.T) {
 	}
 	if due, _ := DueWikidata(ctx, db, 10); len(due) != 0 {
 		t.Errorf("merged rows shouldn't be looked up again: %+v", due)
+	}
+}
+
+func TestSlugFor(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		year int
+		want string
+	}{
+		{"Breaking Bad", 2008, "breaking-bad-2008"},
+		{"Amélie", 2001, "amelie-2001"},
+		{"Grey’s Anatomy", 2005, "greys-anatomy-2005"},
+		{"Rob & Romesh Vs", 2019, "rob-romesh-vs-2019"},
+		{"  M*A*S*H  ", 1972, "m-a-s-h-1972"},
+		{"進撃の巨人", 2013, ""},
+		{"Doctor Who", 0, ""},
+	} {
+		if got := slugFor(c.name, c.year); got != c.want {
+			t.Errorf("slugFor(%q, %d) = %q, want %q", c.name, c.year, got, c.want)
+		}
+	}
+}
+
+func TestNameSlugs(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	create := func(tmdb int64) int64 {
+		t.Helper()
+		items, err := LookUp(ctx, db, "movie", IDs{TMDB: tmdb}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return items[0].Title.ID
+	}
+	slug := func(id int64) string {
+		t.Helper()
+		items, err := LookUp(ctx, db, "movie", IDs{Trakt: id}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return items[0].Title.Slug
+	}
+	first, second, unnamed := create(194), create(9194), create(19194)
+
+	if err := SaveWikidata(ctx, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Amélie", Year: 2001}); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveWikidata(ctx, db, second, "movie", WikidataTitle{QID: "Q1", Name: "Amelie", Year: 2001}); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveWikidata(ctx, db, unnamed, "movie", WikidataTitle{QID: "Q2", Name: "Untitled"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := slug(first); got != "amelie-2001" {
+		t.Errorf("slug = %q", got)
+	}
+	if got := slug(second); got != "amelie-2001-2" {
+		t.Errorf("a clash should get a number: %q", got)
+	}
+	if got := slug(unnamed); got != fmt.Sprintf("t-%d", unnamed) {
+		t.Errorf("no year should keep the ID slug: %q", got)
+	}
+
+	if err := SaveWikidata(ctx, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Le Fabuleux Destin d'Amélie Poulain", Year: 2001}); err != nil {
+		t.Fatal(err)
+	}
+	if got := slug(first); got != "amelie-2001" {
+		t.Errorf("a slug shouldn't change once set: %q", got)
+	}
+	if items, err := LookUp(ctx, db, "", IDs{Slug: fmt.Sprintf("t-%d", first)}, false); err != nil || len(items) != 1 || items[0].Title.ID != first {
+		t.Errorf("the ID slug should still resolve: %+v, %v", items, err)
 	}
 }

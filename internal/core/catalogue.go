@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/tethrtv/tethr/internal/store"
@@ -115,7 +116,11 @@ func findTitle(ctx context.Context, q *store.Queries, kind string, ids IDs) (sto
 			return q.TitleByExternalID(ctx, store.TitleByExternalIDParams{Provider: "tvdb", Value: strconv.FormatInt(ids.TVDB, 10), Kind: kind})
 		})
 	}
-	if ids.Slug != "" {
+	if id, err := strconv.ParseInt(strings.TrimPrefix(ids.Slug, "t-"), 10, 64); err == nil && strings.HasPrefix(ids.Slug, "t-") {
+		lookups = append(lookups, func() (store.Title, error) {
+			return q.TitleByID(ctx, store.TitleByIDParams{ID: id, Kind: kind})
+		})
+	} else if ids.Slug != "" {
 		lookups = append(lookups, func() (store.Title, error) {
 			return q.TitleBySlug(ctx, store.TitleBySlugParams{Slug: ids.Slug, Kind: kind})
 		})

@@ -839,6 +839,65 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/titles/{id}:
+    get:
+      operationId: getTitle
+      summary: A film or show, with what you've watched, rated and listed
+      description: '`id` is a Tethr ID or a slug. A show lists every episode Tethr knows of, aired or not, season by season with specials last.'
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The title
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TitleDetail'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/search:
+    get:
+      operationId: search
+      summary: Search the films and shows you've watched, rated or listed
+      description: Matches English and original names. Names that start with the words come first. Up to 20 results.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, show]
+      responses:
+        '200':
+          description: Matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/ratings:
     get:
       operationId: listRatings
@@ -1641,6 +1700,9 @@ components:
       properties:
         ids:
           $ref: '#/components/schemas/Ids'
+        slug:
+          type: string
+          description: The name and year, such as `breaking-bad-2008`, once Wikidata has both, and `t-` with the Tethr ID until then. It doesn't change once set, and the `t-` form always works.
         name:
           type: string
           description: The English title, from Wikidata. Usually there within a minute of Tethr first seeing the title, but missing for anything Wikidata doesn't have. Fetch artwork and anything else from TMDB yourself.
@@ -1650,6 +1712,9 @@ components:
         year:
           type: integer
           description: The year of first release or broadcast, from Wikidata.
+        runtime_minutes:
+          type: integer
+          description: From Wikidata. For a show, roughly how long an episode runs.
     Episode:
       type: object
       required: [ids, season, number]
@@ -1910,7 +1975,7 @@ components:
           $ref: '#/components/schemas/Resume'
     Resume:
       type: object
-      description: Where the next episode was paused, if it was started.
+      description: Where it was paused, if it was started.
       required: [id, progress]
       properties:
         id:
@@ -1919,6 +1984,90 @@ components:
         progress:
           type: number
           format: double
+    TitleDetail:
+      type: object
+      required: [type, title, watches]
+      properties:
+        type:
+          type: string
+          enum: [movie, show]
+        title:
+          $ref: '#/components/schemas/Title'
+        watches:
+          type: array
+          description: Plays of the film, newest first. Always empty for a show.
+          items:
+            $ref: '#/components/schemas/Play'
+        resume:
+          $ref: '#/components/schemas/Resume'
+        rating:
+          $ref: '#/components/schemas/TitleRating'
+        listing:
+          $ref: '#/components/schemas/TitleListing'
+        seasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeasonDetail'
+    TitleRating:
+      type: object
+      description: Your rating of the film or show itself.
+      required: [id, rating, rated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        rating:
+          type: integer
+        rated_at:
+          type: string
+          format: date-time
+    TitleListing:
+      type: object
+      description: Set when the film or show itself is on your watchlist.
+      required: [id, listed_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        listed_at:
+          type: string
+          format: date-time
+    SeasonDetail:
+      type: object
+      required: [number, episodes]
+      properties:
+        number:
+          type: integer
+        episodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EpisodeDetail'
+    EpisodeDetail:
+      type: object
+      required: [episode, watches]
+      properties:
+        episode:
+          $ref: '#/components/schemas/Episode'
+        watches:
+          type: array
+          description: Newest first.
+          items:
+            $ref: '#/components/schemas/Play'
+        resume:
+          $ref: '#/components/schemas/Resume'
+    Play:
+      type: object
+      required: [id, watched_at, action]
+      properties:
+        id:
+          type: integer
+          format: int64
+        watched_at:
+          type: string
+          format: date-time
+        action:
+          type: string
+          enum: [scrobble, checkin, watch]
     Rating:
       type: object
       required: [id, rating, rated_at, item]
