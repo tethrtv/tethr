@@ -609,7 +609,7 @@ export interface paths {
         };
         /**
          * A film or show, with what you've watched, rated and listed
-         * @description `id` is a Tethr ID or a slug. A show lists every episode Tethr knows of, aired or not, season by season with specials last.
+         * @description `id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a TMDB ID, since films and shows share numbers there. A show lists every episode Tethr knows of, aired or not, season by season with specials last.
          */
         get: operations["getTitle"];
         put?: never;
@@ -2425,6 +2425,7 @@ export interface operations {
             query?: {
                 /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
                 profile_id?: components["parameters"]["ProfileId"];
+                type?: "movie" | "show";
             };
             header?: never;
             path: {

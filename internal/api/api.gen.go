@@ -349,6 +349,24 @@ func (e SearchParamsType) Valid() bool {
 	}
 }
 
+// Defines values for GetTitleParamsType.
+const (
+	GetTitleParamsTypeMovie GetTitleParamsType = "movie"
+	GetTitleParamsTypeShow  GetTitleParamsType = "show"
+)
+
+// Valid indicates whether the value is a known member of the GetTitleParamsType enum.
+func (e GetTitleParamsType) Valid() bool {
+	switch e {
+	case GetTitleParamsTypeMovie:
+		return true
+	case GetTitleParamsTypeShow:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListWatchlistParamsType.
 const (
 	ListWatchlistParamsTypeEpisode ListWatchlistParamsType = "episode"
@@ -1093,8 +1111,12 @@ type SearchParamsType string
 // GetTitleParams defines parameters for GetTitle.
 type GetTitleParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
-	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	ProfileId *ProfileId          `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Type      *GetTitleParamsType `form:"type,omitempty" json:"type,omitempty"`
 }
+
+// GetTitleParamsType defines parameters for GetTitle.
+type GetTitleParamsType string
 
 // GetUpNextParams defines parameters for GetUpNext.
 type GetUpNextParams struct {
@@ -2714,6 +2736,19 @@ func (siw *ServerInterfaceWrapper) GetTitle(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
 		}
 		return
 	}

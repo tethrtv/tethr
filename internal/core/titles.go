@@ -31,15 +31,21 @@ type EpisodeState struct {
 	Resume  *Entry
 }
 
-func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id string) (TitleState, error) {
+func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind string) (TitleState, error) {
 	q := store.New(db)
 	ids := IDs{Slug: id}
 	if n, err := strconv.ParseInt(id, 10, 64); err == nil {
 		ids = IDs{Trakt: n}
+	} else if n, err := strconv.ParseInt(strings.TrimPrefix(id, "tmdb-"), 10, 64); err == nil && strings.HasPrefix(id, "tmdb-") {
+		ids = IDs{TMDB: n}
+	}
+	kinds := []string{"movie", "show"}
+	if kind != "" {
+		kinds = []string{kind}
 	}
 	var t store.Title
 	var err error
-	for _, kind := range []string{"movie", "show"} {
+	for _, kind := range kinds {
 		if t, err = findTitle(ctx, q, kind, ids); !errors.Is(err, ErrNotFound) {
 			break
 		}

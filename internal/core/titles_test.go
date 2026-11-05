@@ -48,7 +48,7 @@ func TestTitleState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := Title(ctx, db, profile, "breaking-bad-2008")
+	s, err := Title(ctx, db, profile, "breaking-bad-2008", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestTitleState(t *testing.T) {
 	if len(s.Seasons[1].Episodes) != 1 || s.Seasons[1].Episodes[0].Episode.FirstAired == nil {
 		t.Errorf("episodes that haven't aired should be listed: %+v", s.Seasons[1])
 	}
-	if again, err := Title(ctx, db, profile, strconv.FormatInt(show, 10)); err != nil || again.Item.Title.ID != show {
+	if again, err := Title(ctx, db, profile, strconv.FormatInt(show, 10), ""); err != nil || again.Item.Title.ID != show {
 		t.Errorf("by ID = %+v, %v", again.Item, err)
 	}
 
@@ -80,7 +80,7 @@ func TestTitleState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := Title(ctx, db, profile, film[0].Title.Slug)
+	f, err := Title(ctx, db, profile, film[0].Title.Slug, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,10 +93,19 @@ func TestTitleState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, err := Title(ctx, db, other.ID, "breaking-bad-2008"); err != nil || s.Rating != nil || len(s.Seasons[0].Episodes[0].Watches) != 0 {
+	if s, err := Title(ctx, db, other.ID, "breaking-bad-2008", ""); err != nil || s.Rating != nil || len(s.Seasons[0].Episodes[0].Watches) != 0 {
 		t.Errorf("someone else's state leaked: %+v, %v", s, err)
 	}
-	if _, err := Title(ctx, db, profile, "no-such-show-1999"); !errors.Is(err, ErrNotFound) {
+	if byTMDB, err := Title(ctx, db, profile, "tmdb-1396", "show"); err != nil || byTMDB.Item.Title.ID != show {
+		t.Errorf("by tmdb id = %v", err)
+	}
+	if _, err := Title(ctx, db, profile, "tmdb-1396", "movie"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a show's tmdb id as a film = %v", err)
+	}
+	if _, err := Title(ctx, db, profile, "tmdb-99999", "show"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a tmdb id Tethr hasn't seen = %v", err)
+	}
+	if _, err := Title(ctx, db, profile, "no-such-show-1999", ""); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown slug = %v", err)
 	}
 }
