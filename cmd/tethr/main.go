@@ -18,6 +18,7 @@ import (
 	"github.com/tethrtv/tethr/internal/api"
 	"github.com/tethrtv/tethr/internal/core"
 	"github.com/tethrtv/tethr/internal/jobs"
+	"github.com/tethrtv/tethr/internal/limit"
 	"github.com/tethrtv/tethr/internal/mail"
 	"github.com/tethrtv/tethr/internal/meta"
 	"github.com/tethrtv/tethr/internal/tmdb"
@@ -114,6 +115,7 @@ func serve(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	limits := limit.Standard(os.Getenv("CLIENT_IP_HEADER"))
 	v1 := &api.Server{
 		DB:             db,
 		WebAuthn:       wa,
@@ -121,6 +123,7 @@ func serve(log *slog.Logger) error {
 		Log:            log,
 		AppURL:         appURL,
 		AllowedOrigins: origins,
+		Limits:         limits,
 		Cookie: api.CookieConfig{
 			Name:   envOr("SESSION_COOKIE", "tethr_session"),
 			Domain: os.Getenv("COOKIE_DOMAIN"),

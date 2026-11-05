@@ -44,7 +44,7 @@ func connectedProfile(t *testing.T, db *pgxpool.Pool) (Caller, App, Tokens) {
 func TestDeviceCode(t *testing.T) {
 	db := dbtest.New(t)
 	ctx := context.Background()
-	accountID, _ := signedUpAccount(t, db)
+	accountID, session := signedUpAccount(t, db)
 	sam, err := AddProfile(ctx, db, accountID, NewProfile{Name: "Sam", Kind: "person"})
 	if err != nil {
 		t.Fatal(err)
@@ -104,8 +104,17 @@ func TestDeviceCode(t *testing.T) {
 		t.Errorf("polling a used code: %v", err)
 	}
 	caller, err := TokenCaller(ctx, db, tokens.Access)
-	if err != nil || caller.ProfileID != sam.ID {
+	if err != nil || caller.ProfileID != sam.ID || caller.AccountID != accountID {
 		t.Errorf("caller = %+v, %v", caller, err)
+	}
+	if id, err := CredentialAccount(ctx, db, "", tokens.Access); err != nil || id != accountID {
+		t.Errorf("account behind the token = %d, %v", id, err)
+	}
+	if id, err := CredentialAccount(ctx, db, session.Token, ""); err != nil || id != accountID {
+		t.Errorf("account behind the session = %d, %v", id, err)
+	}
+	if _, err := CredentialAccount(ctx, db, "", "nope"); !errors.Is(err, ErrNoSession) {
+		t.Errorf("unknown token: %v", err)
 	}
 
 	denied, err := StartDeviceCode(ctx, db, app.ClientID)

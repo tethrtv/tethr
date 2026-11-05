@@ -14,6 +14,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/internal/limit"
 	"github.com/tethrtv/tethr/internal/mail"
 	"github.com/tethrtv/tethr/internal/store"
 )
@@ -37,6 +38,7 @@ type Server struct {
 	AppURL         string
 	AllowedOrigins []string
 	Cookie         CookieConfig
+	Limits         *limit.Limits
 	exporting      sync.Map
 }
 
@@ -59,7 +61,7 @@ func (s *Server) Handler() http.Handler {
 			writeProblem(w, http.StatusInternalServerError, "server_error", "Something went wrong on our side.")
 		},
 	})
-	return s.origins(s.withRequest(HandlerFromMux(strict, http.NewServeMux())))
+	return s.origins(s.withRequest(s.limited(HandlerFromMux(strict, http.NewServeMux()))))
 }
 
 func (s *Server) SignedIn(next func(http.ResponseWriter, *http.Request, int64)) http.Handler {
@@ -96,6 +98,27 @@ func (s *Server) withRequest(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) limited(next http.Handler) http.Handler {
+	if s.Limits == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, _ := r.Context().Value(sessionKey).(string)
+		token, _ := r.Context().Value(bearerKey).(string)
+		accountID, err := core.CredentialAccount(r.Context(), s.DB, session, token)
+		if err != nil && !errors.Is(err, core.ErrNoSession) {
+			s.log().Error("request failed", "path", r.URL.Path, "err", err)
+		}
+		now := time.Now()
+		if rule, wait, ok := s.Limits.Check(r, accountID, now); !ok {
+			limit.Refuse(w, rule, wait, now)
+			writeProblem(w, http.StatusTooManyRequests, "rate_limited", "That’s a lot of requests in a short time. Try again in a moment.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) origins(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -103,6 +126,7 @@ func (s *Server) origins(next http.Handler) http.Handler {
 		if allowed {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Expose-Headers", "Retry-After, X-Ratelimit")
 			w.Header().Add("Vary", "Origin")
 		}
 		if r.Method == http.MethodOptions {

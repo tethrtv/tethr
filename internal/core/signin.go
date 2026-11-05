@@ -241,6 +241,29 @@ func SessionAccount(ctx context.Context, db *pgxpool.Pool, token string) (int64,
 	return session.AccountID, err
 }
 
+func CredentialAccount(ctx context.Context, db *pgxpool.Pool, session, bearer string) (int64, error) {
+	q := store.New(db)
+	if bearer != "" {
+		row, err := q.TokenByAccess(ctx, hash(bearer))
+		if err == nil {
+			return row.AccountID, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return 0, err
+		}
+	}
+	if session != "" {
+		s, err := q.SessionByToken(ctx, hash(session))
+		if err == nil {
+			return s.AccountID, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return 0, err
+		}
+	}
+	return 0, ErrNoSession
+}
+
 func currentSession(ctx context.Context, db *pgxpool.Pool, token string) (store.Session, error) {
 	q := store.New(db)
 	session, err := q.SessionByToken(ctx, hash(token))

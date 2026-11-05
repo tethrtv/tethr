@@ -7,6 +7,7 @@ x-logging: &logging
 
 x-mail: &mail
   COOKIE_DOMAIN: .tethr.tv
+  CLIENT_IP_HEADER: CF-Connecting-IP
   SMTP_ADDR: smtp.resend.com:587
   SMTP_USERNAME: resend
   SMTP_PASSWORD: ${RESEND_API_KEY:?}

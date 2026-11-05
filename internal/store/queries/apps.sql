@@ -59,10 +59,12 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: TokenByAccess :one
-SELECT t.grant_id, g.profile_id, g.app_id, g.last_used_at
+SELECT t.grant_id, g.profile_id, g.app_id, g.last_used_at, h.owner_account_id AS account_id
 FROM oauth_tokens t
 JOIN oauth_grants g ON g.id = t.grant_id
 JOIN apps a ON a.id = g.app_id
+JOIN profiles p ON p.id = g.profile_id
+JOIN households h ON h.id = p.household_id
 WHERE t.access_token_hash = $1
   AND t.revoked_at IS NULL AND t.access_expires_at > now()
   AND g.revoked_at IS NULL AND a.revoked_at IS NULL;
