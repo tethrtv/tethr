@@ -71,51 +71,184 @@ func (c *Client) Outline(ctx context.Context, showID int32) ([]Episode, error) {
 }
 
 type Title struct {
-	Name   string
-	Year   int
-	Poster string
+	Name        string
+	Year        int
+	Poster      string
+	Overview    string
+	Tagline     string
+	Genres      []string
+	Runtime     int
+	Certificate Certificate
+	Creators    []string
+	Cast        []string
+	Networks    []string
+	Status      string
+	Next        *NextEpisode
 }
 
-type SeasonEpisode struct {
+type Certificate struct {
+	Country string
+	Rating  string
+}
+
+type NextEpisode struct {
+	Season  int32
 	Number  int32
 	Name    string
 	AirDate string
 }
 
+type Season struct {
+	Overview string
+	Episodes []SeasonEpisode
+}
+
+type SeasonEpisode struct {
+	Number   int32
+	Name     string
+	AirDate  string
+	Overview string
+	Runtime  int
+}
+
+type named []struct {
+	Name string `json:"name"`
+}
+
+func (n named) names() []string {
+	var out []string
+	for _, x := range n {
+		out = append(out, x.Name)
+	}
+	return out
+}
+
+var certificateCountries = []string{"GB", "US"}
+
 func (c *Client) Movie(ctx context.Context, id int32) (Title, error) {
 	var m struct {
-		Title   string `json:"title"`
-		Release string `json:"release_date"`
-		Poster  string `json:"poster_path"`
+		Title    string `json:"title"`
+		Release  string `json:"release_date"`
+		Poster   string `json:"poster_path"`
+		Overview string `json:"overview"`
+		Tagline  string `json:"tagline"`
+		Genres   named  `json:"genres"`
+		Runtime  int    `json:"runtime"`
+		Credits  struct {
+			Cast named `json:"cast"`
+			Crew []struct {
+				Name string `json:"name"`
+				Job  string `json:"job"`
+			} `json:"crew"`
+		} `json:"credits"`
+		ReleaseDates struct {
+			Results []struct {
+				Country string `json:"iso_3166_1"`
+				Dates   []struct {
+					Certification string `json:"certification"`
+				} `json:"release_dates"`
+			} `json:"results"`
+		} `json:"release_dates"`
 	}
-	err := c.get(ctx, fmt.Sprintf("/3/movie/%d", id), &m)
-	return Title{Name: m.Title, Year: year(m.Release), Poster: m.Poster}, err
+	if err := c.get(ctx, fmt.Sprintf("/3/movie/%d?language=en-GB&append_to_response=credits,release_dates", id), &m); err != nil {
+		return Title{}, err
+	}
+	t := Title{Name: m.Title, Year: year(m.Release), Poster: m.Poster, Overview: m.Overview, Tagline: m.Tagline, Genres: m.Genres.names(), Runtime: m.Runtime, Cast: m.Credits.Cast[:min(5, len(m.Credits.Cast))].names()}
+	for _, p := range m.Credits.Crew {
+		if p.Job == "Director" {
+			t.Creators = append(t.Creators, p.Name)
+		}
+	}
+	ratings := map[string]string{}
+	for _, r := range m.ReleaseDates.Results {
+		for _, d := range r.Dates {
+			if d.Certification != "" && ratings[r.Country] == "" {
+				ratings[r.Country] = d.Certification
+			}
+		}
+	}
+	t.Certificate = certificate(ratings)
+	return t, nil
 }
 
 func (c *Client) Show(ctx context.Context, id int32) (Title, error) {
 	var s struct {
-		Name     string `json:"name"`
-		FirstAir string `json:"first_air_date"`
-		Poster   string `json:"poster_path"`
-	}
-	err := c.get(ctx, fmt.Sprintf("/3/tv/%d", id), &s)
-	return Title{Name: s.Name, Year: year(s.FirstAir), Poster: s.Poster}, err
-}
-
-func (c *Client) Season(ctx context.Context, showID, season int32) ([]SeasonEpisode, error) {
-	var s struct {
-		Episodes []struct {
+		Name        string `json:"name"`
+		FirstAir    string `json:"first_air_date"`
+		Poster      string `json:"poster_path"`
+		Overview    string `json:"overview"`
+		Tagline     string `json:"tagline"`
+		Genres      named  `json:"genres"`
+		RunTimes    []int  `json:"episode_run_time"`
+		CreatedBy   named  `json:"created_by"`
+		Networks    named  `json:"networks"`
+		Status      string `json:"status"`
+		LastEpisode *struct {
+			Runtime int `json:"runtime"`
+		} `json:"last_episode_to_air"`
+		NextEpisode *struct {
+			Season  int32  `json:"season_number"`
 			Number  int32  `json:"episode_number"`
 			Name    string `json:"name"`
 			AirDate string `json:"air_date"`
+		} `json:"next_episode_to_air"`
+		Credits struct {
+			Cast named `json:"cast"`
+		} `json:"aggregate_credits"`
+		Ratings struct {
+			Results []struct {
+				Country string `json:"iso_3166_1"`
+				Rating  string `json:"rating"`
+			} `json:"results"`
+		} `json:"content_ratings"`
+	}
+	if err := c.get(ctx, fmt.Sprintf("/3/tv/%d?language=en-GB&append_to_response=aggregate_credits,content_ratings", id), &s); err != nil {
+		return Title{}, err
+	}
+	t := Title{Name: s.Name, Year: year(s.FirstAir), Poster: s.Poster, Overview: s.Overview, Tagline: s.Tagline, Genres: s.Genres.names(), Creators: s.CreatedBy.names(), Cast: s.Credits.Cast[:min(5, len(s.Credits.Cast))].names(), Networks: s.Networks.names(), Status: s.Status}
+	switch {
+	case len(s.RunTimes) > 0:
+		t.Runtime = s.RunTimes[0]
+	case s.LastEpisode != nil:
+		t.Runtime = s.LastEpisode.Runtime
+	}
+	if n := s.NextEpisode; n != nil {
+		t.Next = &NextEpisode{Season: n.Season, Number: n.Number, Name: n.Name, AirDate: n.AirDate}
+	}
+	ratings := map[string]string{}
+	for _, r := range s.Ratings.Results {
+		ratings[r.Country] = r.Rating
+	}
+	t.Certificate = certificate(ratings)
+	return t, nil
+}
+
+func certificate(ratings map[string]string) Certificate {
+	for _, country := range certificateCountries {
+		if r := ratings[country]; r != "" {
+			return Certificate{Country: country, Rating: r}
+		}
+	}
+	return Certificate{}
+}
+
+func (c *Client) Season(ctx context.Context, showID, season int32) (Season, error) {
+	var s struct {
+		Overview string `json:"overview"`
+		Episodes []struct {
+			Number   int32  `json:"episode_number"`
+			Name     string `json:"name"`
+			AirDate  string `json:"air_date"`
+			Overview string `json:"overview"`
+			Runtime  int    `json:"runtime"`
 		} `json:"episodes"`
 	}
-	if err := c.get(ctx, fmt.Sprintf("/3/tv/%d/season/%d", showID, season), &s); err != nil {
-		return nil, err
+	if err := c.get(ctx, fmt.Sprintf("/3/tv/%d/season/%d?language=en-GB", showID, season), &s); err != nil {
+		return Season{}, err
 	}
-	out := make([]SeasonEpisode, 0, len(s.Episodes))
+	out := Season{Overview: s.Overview, Episodes: make([]SeasonEpisode, 0, len(s.Episodes))}
 	for _, e := range s.Episodes {
-		out = append(out, SeasonEpisode{Number: e.Number, Name: e.Name, AirDate: e.AirDate})
+		out.Episodes = append(out.Episodes, SeasonEpisode{Number: e.Number, Name: e.Name, AirDate: e.AirDate, Overview: e.Overview, Runtime: e.Runtime})
 	}
 	return out, nil
 }
