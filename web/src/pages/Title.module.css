@@ -22,6 +22,61 @@
   min-width: 0;
 }
 
+.about {
+  display: grid;
+  gap: 10px;
+  max-width: 40em;
+}
+
+.tagline {
+  font-style: italic;
+  color: var(--ink-2);
+}
+
+.overview {
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.credits {
+  font-size: 0.9375rem;
+  color: var(--ink-2);
+}
+
+.synopsis {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  max-width: 44em;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.synopsis.open {
+  -webkit-line-clamp: unset;
+}
+
+.reveal {
+  justify-self: start;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+.seasonBlurb {
+  -webkit-line-clamp: 2;
+  font-size: 1rem;
+}
+
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -149,7 +204,7 @@
 
 .colTitle {
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .colTitle > :empty {
@@ -202,6 +257,17 @@
   .masthead > :first-child {
     width: 96px;
     height: 144px;
+  }
+  .body {
+    display: contents;
+  }
+  .body > * {
+    grid-column: 1 / -1;
+  }
+  .body > h1 {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
   }
   .eps thead {
     display: none;

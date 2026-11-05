@@ -7,7 +7,7 @@ import { Button } from '../components/Button'
 import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
 import { ago, date, duration, ep, plural } from '../format'
-import { useDetails, useSeason } from '../tmdb'
+import { type Details, type Season, useDetails, useSeason } from '../tmdb'
 import lists from './Lists.module.css'
 import styles from './Title.module.css'
 
@@ -21,6 +21,29 @@ const aired = (e: EpisodeDetail) =>
   e.watches.length > 0 || (!!e.episode.first_aired && e.episode.first_aired <= today())
 const how = (p: Play) =>
   p.action === 'scrobble' ? 'Played in an app' : p.action === 'checkin' ? 'Checked in' : 'Added by hand'
+const names = (list?: string[]) => (list?.length ? new Intl.ListFormat('en-GB').format(list) : undefined)
+const day = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+const statuses: Record<string, string> = {
+  'Returning Series': 'Returning',
+  Ended: 'Ended',
+  Canceled: 'Cancelled',
+  'In Production': 'In production',
+  Planned: 'Planned',
+  Pilot: 'Pilot',
+}
+
+function rated(meta?: Details | null) {
+  const c = meta?.certificate
+  return c && (c.country === 'GB' ? c.rating : `${c.rating} (${c.country})`)
+}
+
+function status(meta?: Details | null) {
+  const word = meta?.status && statuses[meta.status]
+  const next = meta?.nextEpisode
+  if (!word || !next?.airDate) return word
+  return `${word}, ${ep(next.season, next.number)} on ${day(next.airDate)}`
+}
 
 export function TitlePage({ slug }: { slug: string }) {
   const { profile } = useWatching()
@@ -125,6 +148,24 @@ function Facts({ facts }: { facts: [string, string | undefined][] }) {
   )
 }
 
+function About({ meta, made }: { meta?: Details | null; made: string }) {
+  const by = names(meta?.creators)
+  const cast = names(meta?.cast)
+  if (!meta || (!meta.overview && !by && !cast)) return null
+  return (
+    <div className={styles.about}>
+      {meta.tagline && <p className={styles.tagline}>{meta.tagline}</p>}
+      {meta.overview && <p className={styles.overview}>{meta.overview}</p>}
+      {(by || cast) && (
+        <p className={styles.credits}>
+          {by && `${made} ${by}. `}
+          {cast && `With ${cast}.`}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const meta = useDetails('show', d.title.ids.tmdb)
   const name = meta?.name ?? d.title.name ?? 'Untitled show'
@@ -140,6 +181,10 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const season = seasons.find((s) => s.number === chosen) ?? firstGap ?? numbered[numbered.length - 1] ?? seasons[0]
   const log = useLog(profileID)
   const rest = season?.episodes.filter((e) => aired(e) && !e.watches.length) ?? []
+  const runtime = d.title.runtime_minutes ?? meta?.runtime
+  const behind = numbered.some(
+    (s) => season && s.number < season.number && s.episodes.some((e) => aired(e) && !e.watches.length),
+  )
 
   return (
     <div className={`${lists.page} ${styles.page}`}>
@@ -148,12 +193,17 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
         <Cover id={d.title.ids.tethr ?? 0} name={name} poster={meta?.poster} size="l" />
         <div className={styles.body}>
           <h1 className={lists.title}>{name}</h1>
+          <About meta={meta} made="Created by" />
           <Facts
             facts={[
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
               ['First aired', d.title.year?.toString()],
               ['Episodes', episodes.length ? `${episodes.length} in ${plural(numbered.length, 'season')}` : undefined],
-              ['Runtime', d.title.runtime_minutes ? `About ${duration(d.title.runtime_minutes)} each` : undefined],
+              ['Runtime', runtime ? `About ${duration(runtime)} each` : undefined],
+              ['Network', names(meta?.networks)],
+              ['Genre', meta?.genres?.join(', ')],
+              ['Rated', rated(meta)],
+              ['Status', status(meta)],
             ]}
           />
           <div className={styles.progress}>
@@ -165,7 +215,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               ) : (
                 <>
                   You’ve seen <strong>{seen}</strong> of {out.length}. {left} to go
-                  {d.title.runtime_minutes ? `, about ${duration(left * d.title.runtime_minutes)}` : ''}.
+                  {runtime ? `, about ${duration(left * runtime)}` : ''}.
                 </>
               )}
               {paused &&
@@ -213,7 +263,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               ))}
             </fieldset>
           </div>
-          <Episodes show={d} episodes={season.episodes} season={season.number} profileID={profileID} />
+          <Episodes show={d} episodes={season.episodes} season={season.number} behind={behind} profileID={profileID} />
           {rest.length > 1 && (
             <p>
               <Button
@@ -235,14 +285,71 @@ function Episodes({
   show,
   episodes,
   season,
+  behind,
   profileID,
 }: {
   show: Detail
   episodes: EpisodeDetail[]
   season: number
+  behind: boolean
   profileID: number
 }) {
-  const names = useSeason(show.title.ids.tmdb, season)?.episodes
+  const info = useSeason(show.title.ids.tmdb, season)
+  return (
+    <>
+      {info?.overview && (
+        <Synopsis
+          text={info.overview}
+          hidden={behind}
+          reveal={`Read about ${season ? `season ${season}` : 'the specials'}`}
+          className={styles.seasonBlurb}
+        />
+      )}
+      <EpisodeTable episodes={episodes} info={info ?? undefined} profileID={profileID} />
+    </>
+  )
+}
+
+function Synopsis({
+  text,
+  hidden,
+  reveal,
+  className,
+}: {
+  text: string
+  hidden: boolean
+  reveal: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [shown, setShown] = useState(!hidden)
+  if (!shown) {
+    return (
+      <button
+        type="button"
+        className={`${lists.textButton} ${styles.reveal} ${className ?? ''}`}
+        onClick={() => {
+          setShown(true)
+          setOpen(true)
+        }}
+      >
+        {reveal}
+      </button>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={`${styles.synopsis} ${open ? styles.open : ''} ${className ?? ''}`}
+      aria-expanded={open}
+      onClick={() => setOpen(!open)}
+    >
+      {text}
+    </button>
+  )
+}
+
+function EpisodeTable({ episodes, info, profileID }: { episodes: EpisodeDetail[]; info?: Season; profileID: number }) {
   return (
     <table className={styles.eps}>
       <thead>
@@ -265,7 +372,7 @@ function Episodes({
           <Episode
             key={e.episode.ids.tethr}
             e={e}
-            name={names?.find((n) => n.number === e.episode.number)?.name}
+            info={info?.episodes.find((n) => n.number === e.episode.number)}
             profileID={profileID}
           />
         ))}
@@ -274,13 +381,13 @@ function Episodes({
   )
 }
 
-function Episode({ e, name, profileID }: { e: EpisodeDetail; name?: string; profileID: number }) {
+function Episode({ e, info, profileID }: { e: EpisodeDetail; info?: Season['episodes'][number]; profileID: number }) {
   const log = useLog(profileID)
   const unlog = useUnlog(profileID)
   const [confirming, setConfirming] = useState(false)
   const seen = e.watches.length > 0
   const due = !aired(e)
-  const label = name ?? `Episode ${e.episode.number}`
+  const label = info?.name ?? `Episode ${e.episode.number}`
   const busy = log.isPending || unlog.isPending
 
   const toggle = () => {
@@ -314,17 +421,20 @@ function Episode({ e, name, profileID }: { e: EpisodeDetail; name?: string; prof
       <td className={`${lists.code} ${styles.num}`}>{e.episode.number}</td>
       <td className={styles.colTitle}>
         <span className={styles.epName}>{label}</span>
+        {info?.overview && <Synopsis text={info.overview} hidden={!seen} reveal="Read what happens" />}
         <span className={lists.small}>
-          {e.watches.length > 1 && `Seen ${e.watches.length} times. `}
-          {e.resume && !seen && `Paused at ${Math.round(e.resume.progress)}%.`}
+          {[
+            info?.runtime && duration(info.runtime),
+            e.watches.length > 1 && `Seen ${e.watches.length} times`,
+            e.resume && !seen && `Paused at ${Math.round(e.resume.progress)}%`,
+          ]
+            .filter(Boolean)
+            .join('. ')}
           {(log.error || unlog.error) && problemMessage(log.error ?? unlog.error)}
         </span>
       </td>
       <td className={`${lists.code} ${styles.colAired}`}>
-        {e.episode.first_aired &&
-          (due
-            ? `Due ${new Date(e.episode.first_aired).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`
-            : date(e.episode.first_aired))}
+        {e.episode.first_aired && (due ? `Due ${day(e.episode.first_aired)}` : date(e.episode.first_aired))}
       </td>
       <td className={`${lists.small} ${styles.colLog}`}>
         {confirming ? (
@@ -359,6 +469,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const unlog = useUnlog(profileID)
   const plays = d.watches
   const self: ItemRef = { type: 'movie', ids: { tethr: d.title.ids.tethr } }
+  const runtime = d.title.runtime_minutes ?? meta?.runtime
 
   return (
     <div className={`${lists.page} ${styles.page}`}>
@@ -367,17 +478,20 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
         <Cover id={d.title.ids.tethr ?? 0} name={name} poster={meta?.poster} size="l" />
         <div className={styles.body}>
           <h1 className={lists.title}>{name}</h1>
+          <About meta={meta} made="Directed by" />
           <Facts
             facts={[
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
               ['Released', d.title.year?.toString()],
-              ['Runtime', d.title.runtime_minutes ? duration(d.title.runtime_minutes) : undefined],
+              ['Runtime', runtime ? duration(runtime) : undefined],
+              ['Genre', meta?.genres?.join(', ')],
+              ['Rated', rated(meta)],
             ]}
           />
           <div className={styles.progress}>
             <p className={lists.lead}>
               {d.resume
-                ? `Paused ${Math.round(d.resume.progress)}% in${d.title.runtime_minutes ? `, with about ${duration(Math.round(d.title.runtime_minutes * (1 - d.resume.progress / 100)))} left` : ''}. Any connected app can pick it up.`
+                ? `Paused ${Math.round(d.resume.progress)}% in${runtime ? `, with about ${duration(Math.round(runtime * (1 - d.resume.progress / 100)))} left` : ''}. Any connected app can pick it up.`
                 : plays.length
                   ? `Watched ${plays.length === 1 ? 'once' : plural(plays.length, 'time')}, last ${ago(plays[0].watched_at)}.`
                   : 'Not watched yet.'}
