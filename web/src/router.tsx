@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter, Outlet, useParams } from '@tanstack/react-router'
+import { createRootRoute, createRoute, createRouter, Outlet, useLocation, useParams } from '@tanstack/react-router'
 import { ComingSoon } from './ComingSoon'
 import { cleanCode } from './components/CodeInput'
 import { Shell } from './components/Shell'
@@ -27,9 +27,10 @@ const upNext = () => (
 
 function Titled() {
   const { slug = '' } = useParams({ strict: false })
+  const kind = useLocation().pathname.startsWith('/films/') ? 'movie' : 'show'
   return (
     <Shell>
-      <TitlePage key={slug} slug={slug} />
+      <TitlePage key={`${kind}/${slug}`} slug={slug} kind={kind} />
     </Shell>
   )
 }
