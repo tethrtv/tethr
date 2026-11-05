@@ -324,6 +324,42 @@ func (q *Queries) DeleteWatchEventsForItem(ctx context.Context, arg DeleteWatchE
 	return items, nil
 }
 
+const episodePlayback = `-- name: EpisodePlayback :many
+SELECT id, episode_id, progress FROM playback
+WHERE profile_id = $1 AND episode_id = ANY($2::bigint[])
+`
+
+type EpisodePlaybackParams struct {
+	ProfileID  int64
+	EpisodeIds []int64
+}
+
+type EpisodePlaybackRow struct {
+	ID        int64
+	EpisodeID *int64
+	Progress  float64
+}
+
+func (q *Queries) EpisodePlayback(ctx context.Context, arg EpisodePlaybackParams) ([]EpisodePlaybackRow, error) {
+	rows, err := q.db.Query(ctx, episodePlayback, arg.ProfileID, arg.EpisodeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EpisodePlaybackRow
+	for rows.Next() {
+		var i EpisodePlaybackRow
+		if err := rows.Scan(&i.ID, &i.EpisodeID, &i.Progress); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const hiddenItems = `-- name: HiddenItems :many
 SELECT profile_id, section, title_id, season_number, hidden_at, import_id FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC
 `
@@ -939,93 +975,6 @@ func (q *Queries) UnhideItem(ctx context.Context, arg UnhideItemParams) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const upNext = `-- name: UpNext :many
-WITH latest AS (
-    SELECT DISTINCT ON (w.title_id) w.title_id, w.episode_id, w.watched_at, e.season_number, e.episode_number
-    FROM watch_events w
-    JOIN episodes e ON e.id = w.episode_id
-    WHERE w.profile_id = $1
-    ORDER BY w.title_id, w.watched_at DESC, w.id DESC
-),
-aired AS (
-    SELECT e.id, e.show_id, e.season_number, e.episode_number, e.tmdb_episode_id, e.created_at, e.first_aired, e.removed_at
-    FROM episodes e
-    JOIN latest l ON l.title_id = e.show_id
-    WHERE e.removed_at IS NULL AND e.season_number > 0 AND e.first_aired <= current_date
-      AND NOT EXISTS (
-          SELECT 1 FROM hidden_items h
-          WHERE h.profile_id = $1 AND h.section = 'progress_watched'
-            AND h.title_id = e.show_id AND h.season_number = e.season_number
-      )
-),
-progress AS (
-    SELECT a.show_id, count(*) AS aired,
-        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM watch_events w WHERE w.profile_id = $1 AND w.episode_id = a.id)) AS watched
-    FROM aired a
-    GROUP BY a.show_id
-)
-SELECT l.title_id, l.watched_at AS last_watched_at, l.episode_id AS last_episode_id, n.id AS episode_id, p.aired, p.watched,
-    pb.id AS playback_id, pb.progress AS playback_progress
-FROM latest l
-JOIN progress p ON p.show_id = l.title_id
-JOIN LATERAL (
-    SELECT a.id
-    FROM aired a
-    WHERE a.show_id = l.title_id
-      AND NOT EXISTS (SELECT 1 FROM watch_events w WHERE w.profile_id = $1 AND w.episode_id = a.id)
-    ORDER BY (a.season_number, a.episode_number) > (l.season_number, l.episode_number) DESC,
-        a.season_number, a.episode_number
-    LIMIT 1
-) n ON true
-LEFT JOIN playback pb ON pb.profile_id = $1 AND pb.episode_id = n.id
-WHERE NOT EXISTS (
-    SELECT 1 FROM hidden_items h
-    WHERE h.profile_id = $1 AND h.title_id = l.title_id AND h.season_number IS NULL
-      AND h.section IN ('progress_watched', 'dropped')
-)
-ORDER BY l.watched_at DESC
-`
-
-type UpNextRow struct {
-	TitleID          int64
-	LastWatchedAt    time.Time
-	LastEpisodeID    *int64
-	EpisodeID        int64
-	Aired            int64
-	Watched          int64
-	PlaybackID       *int64
-	PlaybackProgress *float64
-}
-
-func (q *Queries) UpNext(ctx context.Context, profileID int64) ([]UpNextRow, error) {
-	rows, err := q.db.Query(ctx, upNext, profileID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UpNextRow
-	for rows.Next() {
-		var i UpNextRow
-		if err := rows.Scan(
-			&i.TitleID,
-			&i.LastWatchedAt,
-			&i.LastEpisodeID,
-			&i.EpisodeID,
-			&i.Aired,
-			&i.Watched,
-			&i.PlaybackID,
-			&i.PlaybackProgress,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const watchEventExists = `-- name: WatchEventExists :one
