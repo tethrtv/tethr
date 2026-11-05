@@ -92,7 +92,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 height="12"
               />
               <span className={styles.faint}>
-                Names and images from TMDB. Tethr uses the TMDB API but isn’t endorsed or certified by TMDB.
+                Details and images from TMDB. Tethr uses the TMDB API but isn’t endorsed or certified by TMDB.
               </span>
             </span>
             <span className={styles.faint}>Free and open source.</span>
