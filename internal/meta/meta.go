@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tethrtv/tethr/internal/limit"
 	"github.com/tethrtv/tethr/internal/tmdb"
 )
 
@@ -22,22 +23,18 @@ const (
 	seasonCache = "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400"
 	searchCache = "private, max-age=300"
 
-	searchesPerMinute = 30
-	searchResults     = 10
+	searchResults = 10
 )
+
+var searchLimit = limit.Rule{Name: "SEARCH_LIMIT", Limit: 30, Period: time.Minute, Burst: 30}
 
 type Server struct {
 	TMDB     *tmdb.Client
 	Log      *slog.Logger
 	SignedIn func(func(http.ResponseWriter, *http.Request, int64)) http.Handler
 
-	mu       sync.Mutex
-	searches map[int64]window
-}
-
-type window struct {
-	start time.Time
-	count int
+	once     sync.Once
+	searches *limit.Limiter
 }
 
 type title struct {
@@ -161,10 +158,12 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64)
 		write(w, "no-store", map[string]any{"results": []result{}})
 		return
 	}
-	if !s.allow(accountID, time.Now()) {
+	s.once.Do(func() { s.searches = limit.New(searchLimit) })
+	now := time.Now()
+	if wait, ok := s.searches.Allow(strconv.FormatInt(accountID, 10), now); !ok {
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Retry-After", "60")
-		http.Error(w, "too many searches, try again in a minute", http.StatusTooManyRequests)
+		limit.Refuse(w, searchLimit, wait, now)
+		http.Error(w, "too many searches, try again in a moment", http.StatusTooManyRequests)
 		return
 	}
 	found, err := s.TMDB.Search(r.Context(), q)
@@ -180,21 +179,6 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64)
 		out = append(out, res)
 	}
 	write(w, searchCache, map[string]any{"results": out})
-}
-
-func (s *Server) allow(accountID int64, now time.Time) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.searches == nil {
-		s.searches = map[int64]window{}
-	}
-	w := s.searches[accountID]
-	if now.Sub(w.start) >= time.Minute {
-		w = window{start: now}
-	}
-	w.count++
-	s.searches[accountID] = w
-	return w.count <= searchesPerMinute
 }
 
 func (s *Server) found(w http.ResponseWriter, r *http.Request, err error) bool {

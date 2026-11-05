@@ -77,7 +77,7 @@ export function useFind(q: string) {
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<Found[]> => {
       const res = await fetch(`${apiURL}/meta/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
-      if (res.status === 429) throw new Error('That’s a lot of searching. Try again in a minute.')
+      if (res.status === 429) throw new Error('That’s a lot of searching. Try again in a moment.')
       if (!res.ok) throw new Error('Search isn’t working right now.')
       return (await res.json()).results
     },
