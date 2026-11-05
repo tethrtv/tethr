@@ -151,12 +151,12 @@ func TestSearch(t *testing.T) {
 		t.Errorf("search cache = %s", cache)
 	}
 
-	for range searchesPerMinute - 1 {
+	for range searchLimit.Burst - 1 {
 		search("bad b", "1")
 	}
 	before := len(*asked)
-	if rec := search("bad b", "1"); rec.Code != http.StatusTooManyRequests || len(*asked) != before {
-		t.Errorf("over the limit = %d", rec.Code)
+	if rec := search("bad b", "1"); rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "2" || len(*asked) != before {
+		t.Errorf("over the limit = %d %v", rec.Code, rec.Header())
 	}
 	if rec := search("bad b", "2"); rec.Code != http.StatusOK {
 		t.Errorf("another account = %d", rec.Code)
