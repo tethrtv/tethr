@@ -62,9 +62,16 @@ func Refuse(w http.ResponseWriter, rule Rule, wait time.Duration, now time.Time)
 		Limit     int       `json:"limit"`
 		Remaining int       `json:"remaining"`
 		Until     time.Time `json:"until"`
-	}{rule.Name, int(rule.Period / time.Second), rule.Limit, 0, now.Add(time.Duration(seconds) * time.Second).UTC()})
+	}{rule.Name, int(rule.Period / time.Second), rule.Limit, 0, ceil(now.Add(wait)).UTC()})
 	w.Header().Set("X-Ratelimit", string(info))
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+}
+
+func ceil(t time.Time) time.Time {
+	if whole := t.Truncate(time.Second); whole.Before(t) {
+		return whole.Add(time.Second)
+	}
+	return t
 }
 
 func Visitor(r *http.Request, header string) string {

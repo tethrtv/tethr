@@ -2,6 +2,7 @@ package limit
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -69,6 +70,12 @@ func TestRefuse(t *testing.T) {
 	}
 	want := `{"name":"AUTHED_API_GET_LIMIT","period":300,"limit":1000,"remaining":0,"until":"2026-11-05T12:00:01Z"}`
 	if got := rec.Header().Get("X-Ratelimit"); got != want {
+		t.Errorf("X-Ratelimit = %s", got)
+	}
+
+	rec = httptest.NewRecorder()
+	Refuse(rec, Rule{Name: "AUTHED_API_POST_LIMIT", Limit: 1, Period: time.Second}, 600*time.Millisecond, now.Add(700*time.Millisecond))
+	if got := rec.Header().Get("X-Ratelimit"); !strings.HasSuffix(got, `"until":"2026-11-05T12:00:02Z"}`) {
 		t.Errorf("X-Ratelimit = %s", got)
 	}
 }
