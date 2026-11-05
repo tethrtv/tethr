@@ -9,30 +9,34 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/internal/limit"
 )
 
 type Server struct {
 	DB     *pgxpool.Pool
 	AppURL string
 	Log    *slog.Logger
+	Limits *limit.Limits
 }
 
 type callerKey struct{}
 
 func (s *Server) Routes(mux *http.ServeMux) {
 	handle := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, s.cors(h)) }
-	app := func(pattern string, h http.HandlerFunc) { handle(pattern, s.withApp(h)) }
-	user := func(pattern string, h http.HandlerFunc) { handle(pattern, s.withApp(s.withCaller(h))) }
+	visitor := func(pattern string, h http.HandlerFunc) { handle(pattern, s.limited(h)) }
+	app := func(pattern string, h http.HandlerFunc) { visitor(pattern, s.withApp(h)) }
+	user := func(pattern string, h http.HandlerFunc) { handle(pattern, s.withApp(s.withCaller(s.limited(h)))) }
 
 	handle("OPTIONS /oauth/", preflight)
-	handle("POST /oauth/device/code", s.deviceCode)
+	visitor("POST /oauth/device/code", s.deviceCode)
 	handle("POST /oauth/device/token", s.deviceToken)
-	handle("POST /oauth/token", s.token)
-	handle("POST /oauth/revoke", s.revoke)
-	handle("GET /oauth/authorize", s.authorize)
+	visitor("POST /oauth/token", s.token)
+	visitor("POST /oauth/revoke", s.revoke)
+	visitor("GET /oauth/authorize", s.authorize)
 
 	for _, prefix := range []string{"/scrobble/", "/sync/", "/users/", "/search/", "/lists/", "/shows/"} {
 		handle("OPTIONS "+prefix, preflight)
@@ -85,7 +89,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Expose-Headers", "X-Pagination-Page, X-Pagination-Limit, X-Pagination-Page-Count, X-Pagination-Item-Count, X-Sort-By, X-Sort-How")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Pagination-Page, X-Pagination-Limit, X-Pagination-Page-Count, X-Pagination-Item-Count, X-Sort-By, X-Sort-How, Retry-After, X-Ratelimit")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -95,6 +99,21 @@ func preflight(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, trakt-api-key, trakt-api-version")
 	w.Header().Set("Access-Control-Max-Age", "600")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) limited(next http.HandlerFunc) http.HandlerFunc {
+	if s.Limits == nil {
+		return next
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
+		if rule, wait, ok := s.Limits.Check(r, caller(r).AccountID, now); !ok {
+			limit.Refuse(w, rule, wait, now)
+			writeError(w, http.StatusTooManyRequests, "rate_limited", "That’s a lot of requests in a short time. Try again in a moment.")
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (s *Server) withApp(next http.HandlerFunc) http.HandlerFunc {
