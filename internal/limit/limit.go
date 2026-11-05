@@ -29,7 +29,6 @@ func New(rule Rule) *Limiter {
 	return &Limiter{rule: rule, buckets: map[string]time.Time{}}
 }
 
-
 // Allow is a GCRA: each key keeps the time its allowance will be full again.
 func (l *Limiter) Allow(key string, now time.Time) (time.Duration, bool) {
 	l.mu.Lock()

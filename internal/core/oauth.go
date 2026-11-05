@@ -59,6 +59,7 @@ type Tokens struct {
 }
 
 type Caller struct {
+	AccountID int64
 	ProfileID int64
 	GrantID   int64
 	AppID     int64
@@ -404,7 +405,7 @@ func TokenCaller(ctx context.Context, db *pgxpool.Pool, access string) (Caller, 
 			return Caller{}, err
 		}
 	}
-	return Caller{ProfileID: row.ProfileID, GrantID: row.GrantID, AppID: row.AppID}, nil
+	return Caller{AccountID: row.AccountID, ProfileID: row.ProfileID, GrantID: row.GrantID, AppID: row.AppID}, nil
 }
 
 func ListGrants(ctx context.Context, db *pgxpool.Pool, accountID int64) ([]store.HouseholdGrantsRow, error) {
