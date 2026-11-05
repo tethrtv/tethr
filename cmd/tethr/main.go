@@ -152,7 +152,7 @@ func serve(log *slog.Logger) error {
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           routes(v1.Handler(), &traktcompat.Server{DB: db, AppURL: appURL, Log: log}, details),
+		Handler:           routes(v1.Handler(), &traktcompat.Server{DB: db, AppURL: appURL, Log: log, Limits: limits}, details),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
