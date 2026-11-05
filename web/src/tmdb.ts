@@ -14,6 +14,7 @@ export type Details = {
   networks?: string[]
   status?: string
   nextEpisode?: { season: number; number: number; name: string; airDate?: string }
+  seasons?: { number: number; episodes: number }[]
 }
 
 type Episode = {
@@ -65,6 +66,22 @@ export function useDetails(kind: 'movie' | 'show', id?: number) {
       }
     },
   }).data
+}
+
+export type Found = { type: 'movie' | 'show'; tmdb: number; name: string; year: number | null; poster: string | null }
+
+export function useFind(q: string) {
+  return useQuery({
+    queryKey: ['meta', 'search', q],
+    enabled: q.length >= 2,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Found[]> => {
+      const res = await fetch(`${apiURL}/meta/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
+      if (res.status === 429) throw new Error('That’s a lot of searching. Try again in a minute.')
+      if (!res.ok) throw new Error('Search isn’t working right now.')
+      return (await res.json()).results
+    },
+  })
 }
 
 export function useSeason(show?: number, season?: number) {
