@@ -44,11 +44,10 @@ WHERE w.profile_id = $1 AND (sqlc.narg(show_id)::bigint IS NULL OR w.title_id = 
 GROUP BY w.title_id, w.episode_id, e.season_number, e.episode_number
 ORDER BY w.title_id, e.season_number, e.episode_number;
 
--- name: AiredEpisodes :many
+-- name: OutlineEpisodes :many
 SELECT * FROM episodes
-WHERE show_id = $1 AND removed_at IS NULL AND first_aired <= current_date
-  AND (sqlc.arg(specials)::boolean OR season_number > 0)
-ORDER BY season_number, episode_number;
+WHERE show_id = ANY(sqlc.arg(show_ids)::bigint[]) AND removed_at IS NULL
+ORDER BY show_id, season_number, episode_number;
 
 -- name: HiddenSeasons :many
 SELECT season_number::integer FROM hidden_items

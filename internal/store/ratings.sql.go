@@ -10,47 +10,6 @@ import (
 	"time"
 )
 
-const airedEpisodes = `-- name: AiredEpisodes :many
-SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes
-WHERE show_id = $1 AND removed_at IS NULL AND first_aired <= current_date
-  AND ($2::boolean OR season_number > 0)
-ORDER BY season_number, episode_number
-`
-
-type AiredEpisodesParams struct {
-	ShowID   int64
-	Specials bool
-}
-
-func (q *Queries) AiredEpisodes(ctx context.Context, arg AiredEpisodesParams) ([]Episode, error) {
-	rows, err := q.db.Query(ctx, airedEpisodes, arg.ShowID, arg.Specials)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Episode
-	for rows.Next() {
-		var i Episode
-		if err := rows.Scan(
-			&i.ID,
-			&i.ShowID,
-			&i.SeasonNumber,
-			&i.EpisodeNumber,
-			&i.TmdbEpisodeID,
-			&i.CreatedAt,
-			&i.FirstAired,
-			&i.RemovedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const deleteRating = `-- name: DeleteRating :one
 DELETE FROM ratings r WHERE r.id = $1 AND r.profile_id = $2
 RETURNING r.season_number, r.episode_id, (SELECT kind FROM titles t WHERE t.id = r.title_id)::text AS kind
@@ -98,6 +57,41 @@ func (q *Queries) HiddenSeasons(ctx context.Context, arg HiddenSeasonsParams) ([
 			return nil, err
 		}
 		items = append(items, season_number)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const outlineEpisodes = `-- name: OutlineEpisodes :many
+SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes
+WHERE show_id = ANY($1::bigint[]) AND removed_at IS NULL
+ORDER BY show_id, season_number, episode_number
+`
+
+func (q *Queries) OutlineEpisodes(ctx context.Context, showIds []int64) ([]Episode, error) {
+	rows, err := q.db.Query(ctx, outlineEpisodes, showIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Episode
+	for rows.Next() {
+		var i Episode
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShowID,
+			&i.SeasonNumber,
+			&i.EpisodeNumber,
+			&i.TmdbEpisodeID,
+			&i.CreatedAt,
+			&i.FirstAired,
+			&i.RemovedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -111,41 +111,45 @@ func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, 
 	if err != nil {
 		return ShowProgress{}, err
 	}
-	p := ShowProgress{Show: item, Seasons: []SeasonProgress{}}
-	aired, err := q.AiredEpisodes(ctx, store.AiredEpisodesParams{ShowID: r.title.ID, Specials: specials})
+	episodes, err := q.OutlineEpisodes(ctx, []int64{r.title.ID})
 	if err != nil {
-		return p, err
+		return ShowProgress{}, err
 	}
-	watched, err := q.WatchedEpisodes(ctx, store.WatchedEpisodesParams{ProfileID: profileID, ShowID: &r.title.ID})
+	rows, err := q.WatchedEpisodes(ctx, store.WatchedEpisodesParams{ProfileID: profileID, ShowID: &r.title.ID})
 	if err != nil {
-		return p, err
+		return ShowProgress{}, err
 	}
-	p.HiddenSeasons, err = q.HiddenSeasons(ctx, store.HiddenSeasonsParams{ProfileID: profileID, TitleID: r.title.ID})
+	watched := map[int64]time.Time{}
+	for _, w := range rows {
+		watched[*w.EpisodeID] = w.LastWatchedAt
+	}
+	hidden, err := q.HiddenSeasons(ctx, store.HiddenSeasonsParams{ProfileID: profileID, TitleID: r.title.ID})
 	if err != nil {
-		return p, err
+		return ShowProgress{}, err
 	}
-	seen := map[int64]time.Time{}
-	var last *store.WatchedEpisodesRow
-	for i, w := range watched {
-		seen[*w.EpisodeID] = w.LastWatchedAt
-		if last == nil || w.LastWatchedAt.After(last.LastWatchedAt) {
-			last = &watched[i]
+	p := showProgress(episodes, watched, hidden, specials, time.Now())
+	p.Show = item
+	p.HiddenSeasons = hidden
+	return p, nil
+}
+
+// Episodes come in the order the profile watches the show in, so next is worked out by position, not by number.
+func showProgress(episodes []store.Episode, watched map[int64]time.Time, hidden []int32, specials bool, now time.Time) ShowProgress {
+	p := ShowProgress{Seasons: []SeasonProgress{}}
+	last := -1
+	for i, e := range episodes {
+		at, ok := watched[e.ID]
+		if ok && (last < 0 || !at.Before(*p.LastWatchedAt)) {
+			last, p.LastWatchedAt = i, &at
 		}
 	}
-	if last != nil {
-		p.LastWatchedAt = &last.LastWatchedAt
-		episodes, err := q.CatalogueEpisodes(ctx, []int64{*last.EpisodeID})
-		if err != nil {
-			return p, err
-		}
-		if len(episodes) == 1 {
-			p.Last = &episodes[0]
-		}
+	if last >= 0 {
+		p.Last = &episodes[last]
 	}
 
 	var afterLast, gap *store.Episode
-	for i, e := range aired {
-		if slices.Contains(p.HiddenSeasons, e.SeasonNumber) {
+	for i, e := range episodes {
+		if e.FirstAired == nil || e.FirstAired.After(now) || slices.Contains(hidden, e.SeasonNumber) || (e.SeasonNumber == 0 && !specials) {
 			continue
 		}
 		if len(p.Seasons) == 0 || p.Seasons[len(p.Seasons)-1].Number != e.SeasonNumber {
@@ -153,30 +157,22 @@ func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, 
 		}
 		s := &p.Seasons[len(p.Seasons)-1]
 		ep := EpisodeProgress{Episode: e}
-		if at, ok := seen[e.ID]; ok {
+		if at, ok := watched[e.ID]; ok {
 			ep.LastWatchedAt = &at
 			s.Completed++
+			p.Completed++
 		} else if e.SeasonNumber > 0 {
 			if gap == nil {
-				gap = &aired[i]
+				gap = &episodes[i]
 			}
-			if afterLast == nil && last != nil && laterThan(e, last.SeasonNumber, last.EpisodeNumber) {
-				afterLast = &aired[i]
+			if afterLast == nil && last >= 0 && i > last {
+				afterLast = &episodes[i]
 			}
 		}
 		s.Aired++
 		s.Episodes = append(s.Episodes, ep)
-	}
-	for _, s := range p.Seasons {
-		if s.Number > 0 || specials {
-			p.Aired += s.Aired
-			p.Completed += s.Completed
-		}
+		p.Aired++
 	}
 	p.Next = cmp.Or(afterLast, gap)
-	return p, nil
-}
-
-func laterThan(e store.Episode, season, number int32) bool {
-	return e.SeasonNumber > season || (e.SeasonNumber == season && e.EpisodeNumber > number)
+	return p
 }
