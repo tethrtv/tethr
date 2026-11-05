@@ -2,10 +2,77 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/tethrtv/tethr/internal/dbtest"
+	"github.com/tethrtv/tethr/internal/store"
 )
+
+func TestShowProgress(t *testing.T) {
+	now := time.Date(2026, 11, 5, 20, 0, 0, 0, time.UTC)
+	day := func(n int) *time.Time {
+		d := time.Date(2026, 11, 5-n, 0, 0, 0, 0, time.UTC)
+		return &d
+	}
+	outline := []store.Episode{
+		{ID: 1, SeasonNumber: 0, EpisodeNumber: 1, FirstAired: day(400)},
+		{ID: 2, SeasonNumber: 1, EpisodeNumber: 1, FirstAired: day(300)},
+		{ID: 3, SeasonNumber: 1, EpisodeNumber: 2, FirstAired: day(293)},
+		{ID: 4, SeasonNumber: 1, EpisodeNumber: 3, FirstAired: day(286)},
+		{ID: 5, SeasonNumber: 2, EpisodeNumber: 1, FirstAired: day(20)},
+		{ID: 6, SeasonNumber: 2, EpisodeNumber: 2, FirstAired: day(0)},
+		{ID: 7, SeasonNumber: 2, EpisodeNumber: 3, FirstAired: day(-7)},
+		{ID: 8, SeasonNumber: 2, EpisodeNumber: 4},
+	}
+	at := func(hour int) time.Time { return now.Add(time.Duration(hour-100) * time.Hour) }
+
+	tests := []struct {
+		name     string
+		episodes []store.Episode
+		watched  map[int64]time.Time
+		hidden   []int32
+		specials bool
+		aired    int
+		done     int
+		next     string
+		last     string
+	}{
+		{name: "nothing watched", watched: nil, aired: 5, next: "1x1"},
+		{name: "next follows the last watch", watched: map[int64]time.Time{2: at(1), 3: at(2)}, aired: 5, done: 2, next: "1x3", last: "1x2"},
+		{name: "a rewatched early episode doesn't move progress back", watched: map[int64]time.Time{2: at(3), 3: at(1), 4: at(2)}, aired: 5, done: 3, next: "2x1", last: "1x1"},
+		{name: "a gap is next once the last aired episode is watched", watched: map[int64]time.Time{2: at(1), 5: at(2), 6: at(3)}, aired: 5, done: 3, next: "1x2", last: "2x2"},
+		{name: "caught up", watched: map[int64]time.Time{2: at(1), 3: at(1), 4: at(1), 5: at(1), 6: at(1)}, aired: 5, done: 5, last: "2x2"},
+		{name: "the same watch time picks the later episode", watched: map[int64]time.Time{2: at(1), 3: at(1)}, aired: 5, done: 2, next: "1x3", last: "1x2"},
+		{name: "unaired episodes don't count", watched: map[int64]time.Time{7: at(1)}, aired: 5, next: "1x1", last: "2x3"},
+		{name: "a special is never next", watched: map[int64]time.Time{1: at(1)}, aired: 5, next: "1x1", last: "0x1"},
+		{name: "specials count when asked for", watched: map[int64]time.Time{1: at(1), 2: at(2)}, specials: true, aired: 6, done: 2, next: "1x2", last: "1x1"},
+		{name: "hidden seasons don't count", watched: map[int64]time.Time{2: at(1), 3: at(2), 4: at(3)}, hidden: []int32{1}, aired: 2, next: "2x1", last: "1x3"},
+		{name: "next follows the order given", episodes: []store.Episode{outline[3], outline[1], outline[2]}, watched: map[int64]time.Time{4: at(1)}, aired: 3, done: 1, next: "1x1", last: "1x3"},
+	}
+	name := func(e *store.Episode) string {
+		if e == nil {
+			return ""
+		}
+		return fmt.Sprintf("%dx%d", e.SeasonNumber, e.EpisodeNumber)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			episodes := tt.episodes
+			if episodes == nil {
+				episodes = outline
+			}
+			p := showProgress(episodes, tt.watched, tt.hidden, tt.specials, now)
+			if p.Aired != tt.aired || p.Completed != tt.done || name(p.Next) != tt.next || name(p.Last) != tt.last {
+				t.Errorf("aired %d, done %d, next %q, last %q; want %d, %d, %q, %q", p.Aired, p.Completed, name(p.Next), name(p.Last), tt.aired, tt.done, tt.next, tt.last)
+			}
+			if p.Last != nil && !p.LastWatchedAt.Equal(tt.watched[p.Last.ID]) {
+				t.Errorf("last watched at %v", p.LastWatchedAt)
+			}
+		})
+	}
+}
 
 func TestProgress(t *testing.T) {
 	db := dbtest.New(t)
