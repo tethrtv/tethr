@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	titleCache  = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800"
+	movieCache  = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800"
+	showCache   = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400"
 	seasonCache = "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400"
 )
 
@@ -23,20 +24,38 @@ type Server struct {
 }
 
 type title struct {
-	Name   string  `json:"name"`
-	Year   *int    `json:"year"`
-	Poster *string `json:"poster"`
+	Name        string       `json:"name"`
+	Year        *int         `json:"year"`
+	Poster      *string      `json:"poster"`
+	Overview    string       `json:"overview,omitempty"`
+	Tagline     string       `json:"tagline,omitempty"`
+	Genres      []string     `json:"genres,omitempty"`
+	Runtime     int          `json:"runtime,omitempty"`
+	Certificate *certificate `json:"certificate,omitempty"`
+	Creators    []string     `json:"creators,omitempty"`
+	Cast        []string     `json:"cast,omitempty"`
+	Networks    []string     `json:"networks,omitempty"`
+	Status      string       `json:"status,omitempty"`
+	Next        *episode     `json:"next_episode,omitempty"`
+}
+
+type certificate struct {
+	Country string `json:"country"`
+	Rating  string `json:"rating"`
 }
 
 type episode struct {
-	Number  int32   `json:"number"`
-	Name    string  `json:"name"`
-	AirDate *string `json:"air_date"`
+	Season   int32   `json:"season,omitempty"`
+	Number   int32   `json:"number"`
+	Name     string  `json:"name"`
+	AirDate  *string `json:"air_date"`
+	Overview string  `json:"overview,omitempty"`
+	Runtime  int     `json:"runtime,omitempty"`
 }
 
 func (s *Server) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /meta/movie/{id}", s.ownSite(s.title(s.TMDB.Movie)))
-	mux.HandleFunc("GET /meta/tv/{id}", s.ownSite(s.title(s.TMDB.Show)))
+	mux.HandleFunc("GET /meta/movie/{id}", s.ownSite(s.title(s.TMDB.Movie, movieCache)))
+	mux.HandleFunc("GET /meta/tv/{id}", s.ownSite(s.title(s.TMDB.Show, showCache)))
 	mux.HandleFunc("GET /meta/tv/{id}/season/{season}", s.ownSite(s.season))
 }
 
@@ -54,7 +73,7 @@ func (s *Server) ownSite(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) title(fetch func(context.Context, int32) (tmdb.Title, error)) http.HandlerFunc {
+func (s *Server) title(fetch func(context.Context, int32) (tmdb.Title, error), cache string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r, "id")
 		if !ok {
@@ -64,14 +83,20 @@ func (s *Server) title(fetch func(context.Context, int32) (tmdb.Title, error)) h
 		if !s.found(w, r, err) {
 			return
 		}
-		out := title{Name: t.Name}
+		out := title{Name: t.Name, Overview: t.Overview, Tagline: t.Tagline, Genres: t.Genres, Runtime: t.Runtime, Creators: t.Creators, Cast: t.Cast, Networks: t.Networks, Status: t.Status}
 		if t.Year > 0 {
 			out.Year = &t.Year
 		}
 		if t.Poster != "" {
 			out.Poster = &t.Poster
 		}
-		write(w, titleCache, out)
+		if c := t.Certificate; c.Rating != "" {
+			out.Certificate = &certificate{Country: c.Country, Rating: c.Rating}
+		}
+		if n := t.Next; n != nil {
+			out.Next = &episode{Season: n.Season, Number: n.Number, Name: n.Name, AirDate: optional(n.AirDate)}
+		}
+		write(w, cache, out)
 	}
 }
 
@@ -84,19 +109,15 @@ func (s *Server) season(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	episodes, err := s.TMDB.Season(r.Context(), id, n)
+	season, err := s.TMDB.Season(r.Context(), id, n)
 	if !s.found(w, r, err) {
 		return
 	}
-	out := make([]episode, 0, len(episodes))
-	for _, e := range episodes {
-		ep := episode{Number: e.Number, Name: e.Name}
-		if e.AirDate != "" {
-			ep.AirDate = &e.AirDate
-		}
-		out = append(out, ep)
+	out := make([]episode, 0, len(season.Episodes))
+	for _, e := range season.Episodes {
+		out = append(out, episode{Number: e.Number, Name: e.Name, AirDate: optional(e.AirDate), Overview: e.Overview, Runtime: e.Runtime})
 	}
-	write(w, seasonCache, map[string]any{"episodes": out})
+	write(w, seasonCache, map[string]any{"overview": season.Overview, "episodes": out})
 }
 
 func (s *Server) found(w http.ResponseWriter, r *http.Request, err error) bool {
@@ -112,6 +133,13 @@ func (s *Server) found(w http.ResponseWriter, r *http.Request, err error) bool {
 		return true
 	}
 	return false
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func pathID(w http.ResponseWriter, r *http.Request, name string) (int32, bool) {
