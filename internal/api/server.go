@@ -62,6 +62,26 @@ func (s *Server) Handler() http.Handler {
 	return s.origins(s.withRequest(HandlerFromMux(strict, http.NewServeMux())))
 }
 
+func (s *Server) SignedIn(next func(http.ResponseWriter, *http.Request, int64)) http.Handler {
+	return s.origins(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie(s.Cookie.Name)
+		if err != nil {
+			writeProblem(w, http.StatusUnauthorized, notSignedIn.Code, notSignedIn.Message)
+			return
+		}
+		accountID, err := core.SessionAccount(r.Context(), s.DB, c.Value)
+		switch {
+		case errors.Is(err, core.ErrNoSession):
+			writeProblem(w, http.StatusUnauthorized, notSignedIn.Code, notSignedIn.Message)
+		case err != nil:
+			s.log().Error("request failed", "path", r.URL.Path, "err", err)
+			writeProblem(w, http.StatusInternalServerError, "server_error", "Something went wrong on our side.")
+		default:
+			next(w, r, accountID)
+		}
+	}))
+}
+
 func (s *Server) withRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), userAgentKey, r.UserAgent())

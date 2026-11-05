@@ -2,9 +2,12 @@ package meta
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,13 +29,22 @@ func server(t *testing.T) (http.Handler, *[]string) {
 			}
 			_, _ = w.Write([]byte(`{"name":"Breaking Bad","first_air_date":"2008-01-20","poster_path":"/bb.jpg","overview":"A teacher","vote_average":8.9,
 				"genres":[{"id":18,"name":"Drama"}],"episode_run_time":[],"last_episode_to_air":{"runtime":47},"networks":[{"name":"AMC"}],"created_by":[{"name":"Vince Gilligan"}],
-				"status":"Returning Series","next_episode_to_air":{"season_number":6,"episode_number":1,"name":"Next","air_date":"2026-12-01"},
+				"status":"Returning Series","seasons":[{"season_number":0,"episode_count":2},{"season_number":1,"episode_count":7}],"next_episode_to_air":{"season_number":6,"episode_number":1,"name":"Next","air_date":"2026-12-01"},
 				"aggregate_credits":{"cast":[{"name":"A"},{"name":"B"},{"name":"C"},{"name":"D"},{"name":"E"},{"name":"F"}]},
 				"content_ratings":{"results":[{"iso_3166_1":"US","rating":"TV-MA"},{"iso_3166_1":"GB","rating":"18"}]}}`))
 		case "/3/movie/27205":
 			_, _ = w.Write([]byte(`{"title":"Inception","release_date":"","poster_path":null,"tagline":"Your mind","runtime":148,
 				"credits":{"cast":[{"name":"Leonardo DiCaprio"}],"crew":[{"name":"Christopher Nolan","job":"Director"},{"name":"Hans Zimmer","job":"Original Music Composer"}]},
 				"release_dates":{"results":[{"iso_3166_1":"US","release_dates":[{"certification":"PG-13"}]},{"iso_3166_1":"FR","release_dates":[{"certification":"U"}]}]}}`))
+		case "/3/search/multi":
+			if r.URL.Query().Get("query") != "bad b" || r.URL.Query().Get("include_adult") != "false" {
+				t.Errorf("search query = %s", r.URL.RawQuery)
+			}
+			var results []string
+			for i := range 12 {
+				results = append(results, fmt.Sprintf(`{"media_type":"tv","id":%d,"name":"Show %d","first_air_date":"2008-01-20","poster_path":"/p.jpg"}`, i+1, i+1))
+			}
+			_, _ = fmt.Fprintf(w, `{"results":[{"media_type":"person","id":9,"name":"Someone"},{"media_type":"movie","id":27205,"title":"Inception","release_date":""},%s]}`, strings.Join(results, ","))
 		case "/3/tv/1396/season/1":
 			_, _ = w.Write([]byte(`{"overview":"Season one","episodes":[{"episode_number":1,"name":"Pilot","air_date":"2008-01-20","overview":"x","runtime":58,"still_path":"/s.jpg"},{"episode_number":2,"name":"Cat's in the Bag...","air_date":""}]}`))
 		default:
@@ -41,7 +53,17 @@ func server(t *testing.T) (http.Handler, *[]string) {
 	}))
 	t.Cleanup(fake.Close)
 	mux := http.NewServeMux()
-	(&Server{TMDB: &tmdb.Client{Token: "secret", BaseURL: fake.URL}, Log: slog.New(slog.DiscardHandler)}).Routes(mux)
+	signedIn := func(next func(http.ResponseWriter, *http.Request, int64)) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(r.Header.Get("Account"), 10, 64)
+			if err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			next(w, r, id)
+		})
+	}
+	(&Server{TMDB: &tmdb.Client{Token: "secret", BaseURL: fake.URL}, Log: slog.New(slog.DiscardHandler), SignedIn: signedIn}).Routes(mux)
 	return mux, &asked
 }
 
@@ -60,7 +82,8 @@ func TestDetails(t *testing.T) {
 
 	rec := get(h, "/meta/tv/1396", "same-site")
 	want := `{"name":"Breaking Bad","year":2008,"poster":"/bb.jpg","overview":"A teacher","genres":["Drama"],"runtime":47,"certificate":{"country":"GB","rating":"18"},` +
-		`"creators":["Vince Gilligan"],"cast":["A","B","C","D","E"],"networks":["AMC"],"status":"Returning Series","next_episode":{"season":6,"number":1,"name":"Next","air_date":"2026-12-01"}}` + "\n"
+		`"creators":["Vince Gilligan"],"cast":["A","B","C","D","E"],"networks":["AMC"],"status":"Returning Series","next_episode":{"season":6,"number":1,"name":"Next","air_date":"2026-12-01"},` +
+		`"seasons":[{"number":0,"episodes":2},{"number":1,"episodes":7}]}` + "\n"
 	if rec.Code != http.StatusOK || rec.Body.String() != want {
 		t.Errorf("show = %d %s", rec.Code, rec.Body)
 	}
@@ -88,6 +111,55 @@ func TestDetails(t *testing.T) {
 	}
 	if !strings.Contains(rec.Header().Get("Cache-Control"), "s-maxage=604800") {
 		t.Errorf("season cache = %s", rec.Header().Get("Cache-Control"))
+	}
+}
+
+func TestSearch(t *testing.T) {
+	h, asked := server(t)
+	search := func(q, account string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/meta/search?q="+url.QueryEscape(q), nil)
+		if account != "" {
+			req.Header.Set("Account", account)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := search("bad b", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("signed out = %d", rec.Code)
+	}
+	if rec := search(" b ", "1"); rec.Code != http.StatusOK || rec.Body.String() != `{"results":[]}`+"\n" || len(*asked) != 0 {
+		t.Errorf("one letter = %d %s, asked %v", rec.Code, rec.Body, *asked)
+	}
+
+	rec := search(" bad b ", "1")
+	var found struct {
+		Results []map[string]any `json:"results"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &found)
+	if rec.Code != http.StatusOK || len(found.Results) != 10 {
+		t.Fatalf("search = %d %s", rec.Code, rec.Body)
+	}
+	if r := found.Results[0]; r["type"] != "movie" || r["tmdb"] != 27205.0 || r["year"] != nil || r["poster"] != nil {
+		t.Errorf("film = %v", r)
+	}
+	if r := found.Results[1]; r["type"] != "show" || r["name"] != "Show 1" || r["year"] != 2008.0 || r["poster"] != "/p.jpg" {
+		t.Errorf("show = %v", r)
+	}
+	if cache := rec.Header().Get("Cache-Control"); !strings.HasPrefix(cache, "private") {
+		t.Errorf("search cache = %s", cache)
+	}
+
+	for range searchesPerMinute - 1 {
+		search("bad b", "1")
+	}
+	before := len(*asked)
+	if rec := search("bad b", "1"); rec.Code != http.StatusTooManyRequests || len(*asked) != before {
+		t.Errorf("over the limit = %d", rec.Code)
+	}
+	if rec := search("bad b", "2"); rec.Code != http.StatusOK {
+		t.Errorf("another account = %d", rec.Code)
 	}
 }
 

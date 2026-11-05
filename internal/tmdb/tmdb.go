@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -84,6 +85,20 @@ type Title struct {
 	Networks    []string
 	Status      string
 	Next        *NextEpisode
+	Seasons     []SeasonCount
+}
+
+type SeasonCount struct {
+	Number   int32
+	Episodes int
+}
+
+type Result struct {
+	Kind   string
+	ID     int32
+	Name   string
+	Year   int
+	Poster string
 }
 
 type Certificate struct {
@@ -173,16 +188,20 @@ func (c *Client) Movie(ctx context.Context, id int32) (Title, error) {
 
 func (c *Client) Show(ctx context.Context, id int32) (Title, error) {
 	var s struct {
-		Name        string `json:"name"`
-		FirstAir    string `json:"first_air_date"`
-		Poster      string `json:"poster_path"`
-		Overview    string `json:"overview"`
-		Tagline     string `json:"tagline"`
-		Genres      named  `json:"genres"`
-		RunTimes    []int  `json:"episode_run_time"`
-		CreatedBy   named  `json:"created_by"`
-		Networks    named  `json:"networks"`
-		Status      string `json:"status"`
+		Name      string `json:"name"`
+		FirstAir  string `json:"first_air_date"`
+		Poster    string `json:"poster_path"`
+		Overview  string `json:"overview"`
+		Tagline   string `json:"tagline"`
+		Genres    named  `json:"genres"`
+		RunTimes  []int  `json:"episode_run_time"`
+		CreatedBy named  `json:"created_by"`
+		Networks  named  `json:"networks"`
+		Status    string `json:"status"`
+		Seasons   []struct {
+			Number   int32 `json:"season_number"`
+			Episodes int   `json:"episode_count"`
+		} `json:"seasons"`
 		LastEpisode *struct {
 			Runtime int `json:"runtime"`
 		} `json:"last_episode_to_air"`
@@ -211,6 +230,9 @@ func (c *Client) Show(ctx context.Context, id int32) (Title, error) {
 		t.Runtime = s.RunTimes[0]
 	case s.LastEpisode != nil:
 		t.Runtime = s.LastEpisode.Runtime
+	}
+	for _, season := range s.Seasons {
+		t.Seasons = append(t.Seasons, SeasonCount{Number: season.Number, Episodes: season.Episodes})
 	}
 	if n := s.NextEpisode; n != nil {
 		t.Next = &NextEpisode{Season: n.Season, Number: n.Number, Name: n.Name, AirDate: n.AirDate}
@@ -249,6 +271,33 @@ func (c *Client) Season(ctx context.Context, showID, season int32) (Season, erro
 	out := Season{Overview: s.Overview, Episodes: make([]SeasonEpisode, 0, len(s.Episodes))}
 	for _, e := range s.Episodes {
 		out.Episodes = append(out.Episodes, SeasonEpisode{Number: e.Number, Name: e.Name, AirDate: e.AirDate, Overview: e.Overview, Runtime: e.Runtime})
+	}
+	return out, nil
+}
+
+func (c *Client) Search(ctx context.Context, query string) ([]Result, error) {
+	var page struct {
+		Results []struct {
+			MediaType string `json:"media_type"`
+			ID        int32  `json:"id"`
+			Title     string `json:"title"`
+			Name      string `json:"name"`
+			Release   string `json:"release_date"`
+			FirstAir  string `json:"first_air_date"`
+			Poster    string `json:"poster_path"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, "/3/search/multi?language=en-GB&include_adult=false&query="+url.QueryEscape(query), &page); err != nil {
+		return nil, err
+	}
+	var out []Result
+	for _, r := range page.Results {
+		switch r.MediaType {
+		case "movie":
+			out = append(out, Result{Kind: "movie", ID: r.ID, Name: r.Title, Year: year(r.Release), Poster: r.Poster})
+		case "tv":
+			out = append(out, Result{Kind: "show", ID: r.ID, Name: r.Name, Year: year(r.FirstAir), Poster: r.Poster})
+		}
 	}
 	return out, nil
 }
