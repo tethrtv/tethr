@@ -434,6 +434,12 @@ func TestNativeTracking(t *testing.T) {
 	if e := (*detail.Seasons)[0].Episodes[0]; e.Episode.Number != 2 || len(e.Watches) != 1 || e.Watches[0].Action != PlayActionScrobble {
 		t.Errorf("episode = %+v", e)
 	}
+	if rec := bearer(t, h, "GET", "/v1/titles/tmdb-1396?type=show", "", token); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"breaking-bad-2008"`) {
+		t.Errorf("by tmdb id = %d %s", rec.Code, rec.Body)
+	}
+	if rec := bearer(t, h, "GET", "/v1/titles/tmdb-1396?type=movie", "", token); rec.Code != http.StatusNotFound {
+		t.Errorf("a show's tmdb id as a film = %d", rec.Code)
+	}
 	if rec := bearer(t, h, "GET", "/v1/titles/no-such-show-1999", "", token); rec.Code != http.StatusNotFound {
 		t.Errorf("unknown title = %d", rec.Code)
 	}

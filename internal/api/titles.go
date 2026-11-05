@@ -15,7 +15,11 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 	if !ok {
 		return GetTitle401JSONResponse{notConnected}, err
 	}
-	t, err := core.Title(ctx, s.DB, c.ProfileID, req.Id)
+	kind := ""
+	if req.Params.Type != nil {
+		kind = string(*req.Params.Type)
+	}
+	t, err := core.Title(ctx, s.DB, c.ProfileID, req.Id, kind)
 	if errors.Is(err, core.ErrNotFound) {
 		return GetTitle404JSONResponse(problem("not_found", "There’s no film or show with that ID or slug.")), nil
 	}

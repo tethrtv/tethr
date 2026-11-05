@@ -868,7 +868,7 @@ paths:
     get:
       operationId: getTitle
       summary: A film or show, with what you've watched, rated and listed
-      description: '`id` is a Tethr ID or a slug. A show lists every episode Tethr knows of, aired or not, season by season with specials last.'
+      description: '`id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a TMDB ID, since films and shows share numbers there. A show lists every episode Tethr knows of, aired or not, season by season with specials last.'
       security:
         - session: []
         - bearer: []
@@ -879,6 +879,11 @@ paths:
           required: true
           schema:
             type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, show]
       responses:
         '200':
           description: The title
