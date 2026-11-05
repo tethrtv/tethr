@@ -9,6 +9,8 @@ info:
 
     Errors come back as `{"code": "...", "message": "..."}`. `code` is stable for programs to check, and `message` is written for people.
 
+    Every endpoint is rate limited. Signed-in calls count against the account, whichever profile, app or browser makes them: 1000 reads every 5 minutes, and writes at 1 a second with bursts of up to 10. Calls without sign-in count against the address they come from: 1000 reads every 5 minutes and 20 writes a minute. Over a limit, the answer is 429 with the code `rate_limited`, a `Retry-After` header in seconds, and an `X-Ratelimit` header holding JSON with the limit's `name`, `period`, `limit`, `remaining` and `until`. The Trakt-compatible paths share the same limits.
+
     Apps sign in on someone's behalf with OAuth: TVs show a code that people enter at `/activate` on the website, and phones and computers send them to `/oauth/authorize` in a browser. Each connection logs to one profile the person chooses. Send the access token as `Authorization: Bearer ...` to the tracking endpoints: scrobble, Up next, history, playback, the watchlist, ratings, imports and activity.
 
     Players built for the Trakt API can use the paths they already know instead, at the same address.
