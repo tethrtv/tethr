@@ -16,7 +16,18 @@ type EpisodeDetail = components['schemas']['EpisodeDetail']
 type Play = components['schemas']['Play']
 type ItemRef = components['schemas']['ItemRef']
 
+type Kind = 'movie' | 'show'
+
 const today = () => new Date().toISOString().slice(0, 10)
+const titleRef = (d: Detail): ItemRef => ({
+  type: d.type,
+  ids: d.title.ids.tethr ? { tethr: d.title.ids.tethr } : { tmdb: d.title.ids.tmdb },
+})
+const episodeRef = (show: Detail, e: EpisodeDetail): ItemRef =>
+  e.episode.ids.tethr
+    ? { type: 'episode', ids: { tethr: e.episode.ids.tethr } }
+    : { type: 'episode', show: { tmdb: show.title.ids.tmdb }, season: e.episode.season, number: e.episode.number }
+const coverID = (d: Detail) => d.title.ids.tethr ?? d.title.ids.tmdb ?? 0
 const aired = (e: EpisodeDetail) =>
   e.watches.length > 0 || (!!e.episode.first_aired && e.episode.first_aired <= today())
 const how = (p: Play) =>
@@ -45,29 +56,32 @@ function status(meta?: Details | null) {
   return `${word}, ${ep(next.season, next.number)} on ${day(next.airDate)}`
 }
 
-export function TitlePage({ slug }: { slug: string }) {
+export function TitlePage({ slug, kind }: { slug: string; kind: Kind }) {
   const { profile } = useWatching()
   const navigate = useNavigate()
+  const tmdb = Number(/^tmdb-(\d+)$/.exec(slug)?.[1]) || undefined
   const title = useQuery({
     queryKey: ['title', profile.id, slug],
     queryFn: async () => {
       const { data, response } = await api.GET('/v1/titles/{id}', {
-        params: { path: { id: slug }, query: { profile_id: profile.id } },
+        params: { path: { id: slug }, query: { profile_id: profile.id, type: tmdb ? kind : undefined } },
       })
       if (response.status === 404) return null
       if (!data) throw new Error('could not load the title')
       return data
     },
   })
-  const d = title.data
+  const unseen = useDetails(kind, title.data === null ? tmdb : undefined)
+  const d: Detail | undefined =
+    title.data ?? (unseen ? { type: kind, title: { ids: { tmdb } }, watches: [] } : undefined)
   const wanted = d?.title.slug
 
   useEffect(() => {
-    if (!d || !wanted || wanted === slug) return
+    if (!d || !wanted || wanted === slug || (tmdb && wanted.startsWith('t-'))) return
     navigate({ to: d.type === 'movie' ? '/films/$slug' : '/shows/$slug', params: { slug: wanted }, replace: true })
-  }, [d, wanted, slug, navigate])
+  }, [d, wanted, slug, tmdb, navigate])
 
-  if (title.data === null) {
+  if (title.data === null && (!tmdb || unseen === null)) {
     return (
       <div className={lists.page}>
         <Back />
@@ -176,29 +190,47 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const seen = out.filter((e) => e.watches.length).length
   const left = out.length - seen
   const paused = episodes.find((e) => e.resume && !e.watches.length)
+  const counts = (meta?.seasons ?? []).filter((s) => s.episodes > 0)
+  const listed = counts.filter((s) => s.number > 0)
+  const total = listed.reduce((sum, s) => sum + s.episodes, 0)
+  const outlined = !meta?.seasons || episodes.length >= total
+  const numbers = [...new Set([...seasons.map((s) => s.number), ...counts.map((s) => s.number)])].sort(
+    (a, b) => Number(a === 0) - Number(b === 0) || a - b,
+  )
   const firstGap = numbered.find((s) => s.episodes.some((e) => aired(e) && !e.watches.length))
   const [chosen, setChosen] = useState<number>()
-  const season = seasons.find((s) => s.number === chosen) ?? firstGap ?? numbered[numbered.length - 1] ?? seasons[0]
-  const log = useLog(profileID)
-  const rest = season?.episodes.filter((e) => aired(e) && !e.watches.length) ?? []
+  const current =
+    chosen ??
+    firstGap?.number ??
+    (outlined ? numbered[numbered.length - 1]?.number : undefined) ??
+    numbers.find((n) => n > 0) ??
+    numbers[0]
   const runtime = d.title.runtime_minutes ?? meta?.runtime
   const behind = numbered.some(
-    (s) => season && s.number < season.number && s.episodes.some((e) => aired(e) && !e.watches.length),
+    (s) => current !== undefined && s.number < current && s.episodes.some((e) => aired(e) && !e.watches.length),
   )
+  useOutline(profileID, !outlined && seen > 0)
 
   return (
     <div className={`${lists.page} ${styles.page}`}>
       <Back />
       <header className={styles.masthead}>
-        <Cover id={d.title.ids.tethr ?? 0} name={name} poster={meta?.poster} size="l" />
+        <Cover id={coverID(d)} name={name} poster={meta?.poster} size="l" />
         <div className={styles.body}>
           <h1 className={lists.title}>{name}</h1>
           <About meta={meta} made="Created by" />
           <Facts
             facts={[
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
-              ['First aired', d.title.year?.toString()],
-              ['Episodes', episodes.length ? `${episodes.length} in ${plural(numbered.length, 'season')}` : undefined],
+              ['First aired', (d.title.year ?? meta?.year)?.toString()],
+              [
+                'Episodes',
+                outlined && episodes.length
+                  ? `${episodes.length} in ${plural(numbered.length, 'season')}`
+                  : total
+                    ? `${total} in ${plural(listed.length, 'season')}`
+                    : undefined,
+              ],
               ['Runtime', runtime ? `About ${duration(runtime)} each` : undefined],
               ['Network', names(meta?.networks)],
               ['Genre', meta?.genres?.join(', ')],
@@ -208,8 +240,12 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           />
           <div className={styles.progress}>
             <p className={lists.lead}>
-              {!out.length ? (
-                'Tethr doesn’t have the episode list yet. It usually turns up within a minute of the first watch.'
+              {!outlined && seen ? (
+                <>
+                  You’ve seen <strong>{seen}</strong> so far. Tethr is fetching the rest of the episode list.
+                </>
+              ) : !out.length ? (
+                'You haven’t started this yet.'
               ) : !left ? (
                 'You’ve seen every episode that’s aired.'
               ) : (
@@ -221,7 +257,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               {paused &&
                 ` Paused in ${ep(paused.episode.season, paused.episode.number)}, ${Math.round(paused.resume?.progress ?? 0)}% in.`}
             </p>
-            {!!numbered.length && (
+            {outlined && !!numbered.length && (
               <div className={styles.tally} aria-hidden="true">
                 {numbered.map((s) => (
                   <span key={s.number} className={styles.tallyGroup}>
@@ -241,40 +277,27 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
         </div>
       </header>
 
-      {season && (
+      {current !== undefined && (
         <section className={styles.episodes}>
           <div className={lists.filters}>
             <span className={lists.faint}>Season</span>
             <fieldset className={lists.options}>
               <legend className={lists.hidden}>Season</legend>
-              {seasons.map((s) => (
-                <label
-                  key={s.number}
-                  className={s.number === season.number ? `${lists.option} ${lists.chosen}` : lists.option}
-                >
-                  <input
-                    type="radio"
-                    name="season"
-                    checked={s.number === season.number}
-                    onChange={() => setChosen(s.number)}
-                  />
-                  {s.number ? s.number : 'Specials'}
+              {numbers.map((n) => (
+                <label key={n} className={n === current ? `${lists.option} ${lists.chosen}` : lists.option}>
+                  <input type="radio" name="season" checked={n === current} onChange={() => setChosen(n)} />
+                  {n ? n : 'Specials'}
                 </label>
               ))}
             </fieldset>
           </div>
-          <Episodes show={d} episodes={season.episodes} season={season.number} behind={behind} profileID={profileID} />
-          {rest.length > 1 && (
-            <p>
-              <Button
-                onClick={() => log.mutate(rest.map((e) => ({ type: 'episode', ids: { tethr: e.episode.ids.tethr } })))}
-                disabled={log.isPending}
-              >
-                Tick off the rest of {season.number ? `season ${season.number}` : 'the specials'}
-              </Button>
-            </p>
-          )}
-          {log.isError && <p className={lists.error}>{problemMessage(log.error)}</p>}
+          <Episodes
+            show={d}
+            episodes={seasons.find((s) => s.number === current)?.episodes ?? []}
+            season={current}
+            behind={behind}
+            profileID={profileID}
+          />
         </section>
       )}
     </div>
@@ -295,6 +318,9 @@ function Episodes({
   profileID: number
 }) {
   const info = useSeason(show.title.ids.tmdb, season)
+  const log = useLog(profileID)
+  const rows = merge(episodes, info ?? undefined, season)
+  const rest = rows.filter((e) => aired(e) && !e.watches.length)
   return (
     <>
       {info?.overview && (
@@ -305,9 +331,45 @@ function Episodes({
           className={styles.seasonBlurb}
         />
       )}
-      <EpisodeTable episodes={episodes} info={info ?? undefined} profileID={profileID} />
+      <EpisodeTable show={show} episodes={rows} info={info ?? undefined} profileID={profileID} />
+      {rest.length > 1 && (
+        <p>
+          <Button onClick={() => log.mutate(rest.map((e) => episodeRef(show, e)))} disabled={log.isPending}>
+            Tick off the rest of {season ? `season ${season}` : 'the specials'}
+          </Button>
+        </p>
+      )}
+      {log.isError && <p className={lists.error}>{problemMessage(log.error)}</p>}
     </>
   )
+}
+
+function merge(server: EpisodeDetail[], info: Season | undefined, season: number): EpisodeDetail[] {
+  if (!info) return server
+  const known = new Map(server.map((e) => [e.episode.number, e]))
+  const rows = info.episodes.map((m): EpisodeDetail => {
+    const first_aired = m.air_date ?? undefined
+    const e = known.get(m.number)
+    if (!e) return { episode: { ids: {}, season, number: m.number, first_aired }, watches: [] }
+    return e.episode.first_aired ? e : { ...e, episode: { ...e.episode, first_aired } }
+  })
+  const listed = new Set(info.episodes.map((m) => m.number))
+  return [...rows, ...server.filter((e) => !listed.has(e.episode.number))].sort(
+    (a, b) => a.episode.number - b.episode.number,
+  )
+}
+
+function useOutline(profileID: number, waiting: boolean) {
+  const queries = useQueryClient()
+  useEffect(() => {
+    if (!waiting) return
+    let tries = 0
+    const timer = setInterval(() => {
+      if (++tries > 8) clearInterval(timer)
+      queries.invalidateQueries({ queryKey: ['title', profileID] })
+    }, 15000)
+    return () => clearInterval(timer)
+  }, [queries, profileID, waiting])
 }
 
 function Synopsis({
@@ -349,7 +411,17 @@ function Synopsis({
   )
 }
 
-function EpisodeTable({ episodes, info, profileID }: { episodes: EpisodeDetail[]; info?: Season; profileID: number }) {
+function EpisodeTable({
+  show,
+  episodes,
+  info,
+  profileID,
+}: {
+  show: Detail
+  episodes: EpisodeDetail[]
+  info?: Season
+  profileID: number
+}) {
   return (
     <table className={styles.eps}>
       <thead>
@@ -370,7 +442,8 @@ function EpisodeTable({ episodes, info, profileID }: { episodes: EpisodeDetail[]
       <tbody>
         {episodes.map((e) => (
           <Episode
-            key={e.episode.ids.tethr}
+            key={e.episode.ids.tethr ?? `n${e.episode.number}`}
+            show={show}
             e={e}
             info={info?.episodes.find((n) => n.number === e.episode.number)}
             profileID={profileID}
@@ -381,7 +454,17 @@ function EpisodeTable({ episodes, info, profileID }: { episodes: EpisodeDetail[]
   )
 }
 
-function Episode({ e, info, profileID }: { e: EpisodeDetail; info?: Season['episodes'][number]; profileID: number }) {
+function Episode({
+  show,
+  e,
+  info,
+  profileID,
+}: {
+  show: Detail
+  e: EpisodeDetail
+  info?: Season['episodes'][number]
+  profileID: number
+}) {
   const log = useLog(profileID)
   const unlog = useUnlog(profileID)
   const [confirming, setConfirming] = useState(false)
@@ -391,7 +474,7 @@ function Episode({ e, info, profileID }: { e: EpisodeDetail; info?: Season['epis
   const busy = log.isPending || unlog.isPending
 
   const toggle = () => {
-    if (!seen) log.mutate([{ type: 'episode', ids: { tethr: e.episode.ids.tethr } }])
+    if (!seen) log.mutate([episodeRef(show, e)])
     else if (e.watches.length > 1) setConfirming(true)
     else unlog.mutate(e.watches)
   }
@@ -468,21 +551,21 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const log = useLog(profileID)
   const unlog = useUnlog(profileID)
   const plays = d.watches
-  const self: ItemRef = { type: 'movie', ids: { tethr: d.title.ids.tethr } }
+  const self = titleRef(d)
   const runtime = d.title.runtime_minutes ?? meta?.runtime
 
   return (
     <div className={`${lists.page} ${styles.page}`}>
       <Back />
       <header className={styles.masthead}>
-        <Cover id={d.title.ids.tethr ?? 0} name={name} poster={meta?.poster} size="l" />
+        <Cover id={coverID(d)} name={name} poster={meta?.poster} size="l" />
         <div className={styles.body}>
           <h1 className={lists.title}>{name}</h1>
           <About meta={meta} made="Directed by" />
           <Facts
             facts={[
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
-              ['Released', d.title.year?.toString()],
+              ['Released', (d.title.year ?? meta?.year)?.toString()],
               ['Runtime', runtime ? duration(runtime) : undefined],
               ['Genre', meta?.genres?.join(', ')],
               ['Rated', rated(meta)],
@@ -543,7 +626,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
 
 function Yours({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const refresh = useRefresh(profileID)
-  const self: ItemRef = { type: d.type, ids: { tethr: d.title.ids.tethr } }
+  const self = titleRef(d)
   const params = { query: { profile_id: profileID } }
 
   const rate = useMutation({
