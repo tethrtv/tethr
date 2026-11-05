@@ -8,6 +8,10 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
+	"unicode/utf8"
 
 	"github.com/tethrtv/tethr/internal/tmdb"
 )
@@ -16,11 +20,24 @@ const (
 	movieCache  = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800"
 	showCache   = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400"
 	seasonCache = "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400"
+	searchCache = "private, max-age=300"
+
+	searchesPerMinute = 30
+	searchResults     = 10
 )
 
 type Server struct {
-	TMDB *tmdb.Client
-	Log  *slog.Logger
+	TMDB     *tmdb.Client
+	Log      *slog.Logger
+	SignedIn func(func(http.ResponseWriter, *http.Request, int64)) http.Handler
+
+	mu       sync.Mutex
+	searches map[int64]window
+}
+
+type window struct {
+	start time.Time
+	count int
 }
 
 type title struct {
@@ -37,6 +54,20 @@ type title struct {
 	Networks    []string     `json:"networks,omitempty"`
 	Status      string       `json:"status,omitempty"`
 	Next        *episode     `json:"next_episode,omitempty"`
+	Seasons     []season     `json:"seasons,omitempty"`
+}
+
+type season struct {
+	Number   int32 `json:"number"`
+	Episodes int   `json:"episodes"`
+}
+
+type result struct {
+	Type   string  `json:"type"`
+	TMDB   int32   `json:"tmdb"`
+	Name   string  `json:"name"`
+	Year   *int    `json:"year"`
+	Poster *string `json:"poster"`
 }
 
 type certificate struct {
@@ -57,6 +88,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /meta/movie/{id}", s.ownSite(s.title(s.TMDB.Movie, movieCache)))
 	mux.HandleFunc("GET /meta/tv/{id}", s.ownSite(s.title(s.TMDB.Show, showCache)))
 	mux.HandleFunc("GET /meta/tv/{id}/season/{season}", s.ownSite(s.season))
+	mux.Handle("GET /meta/search", s.SignedIn(s.search))
 }
 
 // Only Tethr's own pages may ask; apps fetch from TMDB with their own keys.
@@ -93,6 +125,9 @@ func (s *Server) title(fetch func(context.Context, int32) (tmdb.Title, error), c
 		if c := t.Certificate; c.Rating != "" {
 			out.Certificate = &certificate{Country: c.Country, Rating: c.Rating}
 		}
+		for _, c := range t.Seasons {
+			out.Seasons = append(out.Seasons, season{Number: c.Number, Episodes: c.Episodes})
+		}
 		if n := t.Next; n != nil {
 			out.Next = &episode{Season: n.Season, Number: n.Number, Name: n.Name, AirDate: optional(n.AirDate)}
 		}
@@ -118,6 +153,48 @@ func (s *Server) season(w http.ResponseWriter, r *http.Request) {
 		out = append(out, episode{Number: e.Number, Name: e.Name, AirDate: optional(e.AirDate), Overview: e.Overview, Runtime: e.Runtime})
 	}
 	write(w, seasonCache, map[string]any{"overview": season.Overview, "episodes": out})
+}
+
+func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if utf8.RuneCountInString(q) < 2 || len(q) > 100 {
+		write(w, "no-store", map[string]any{"results": []result{}})
+		return
+	}
+	if !s.allow(accountID, time.Now()) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, "too many searches, try again in a minute", http.StatusTooManyRequests)
+		return
+	}
+	found, err := s.TMDB.Search(r.Context(), q)
+	if !s.found(w, r, err) {
+		return
+	}
+	out := make([]result, 0, searchResults)
+	for _, f := range found[:min(searchResults, len(found))] {
+		res := result{Type: f.Kind, TMDB: f.ID, Name: f.Name, Poster: optional(f.Poster)}
+		if f.Year > 0 {
+			res.Year = &f.Year
+		}
+		out = append(out, res)
+	}
+	write(w, searchCache, map[string]any{"results": out})
+}
+
+func (s *Server) allow(accountID int64, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.searches == nil {
+		s.searches = map[int64]window{}
+	}
+	w := s.searches[accountID]
+	if now.Sub(w.start) >= time.Minute {
+		w = window{start: now}
+	}
+	w.count++
+	s.searches[accountID] = w
+	return w.count <= searchesPerMinute
 }
 
 func (s *Server) found(w http.ResponseWriter, r *http.Request, err error) bool {
