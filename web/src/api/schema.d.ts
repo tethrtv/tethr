@@ -1495,6 +1495,8 @@ export interface components {
             apps: components["schemas"]["DeveloperApp"][];
             /** @description Apps connected to profiles in the household. */
             connections: components["schemas"]["Connection"][];
+            /** @description Media servers sending plays, with who on each is matched to which profile. Their addresses aren't included. */
+            media_servers: components["schemas"]["MediaServer"][];
             profiles: components["schemas"]["ProfileExport"][];
         };
         ProfileExport: {

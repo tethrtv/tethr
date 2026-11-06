@@ -64,14 +64,15 @@ func (s *Server) ExportData(ctx context.Context, _ ExportDataRequestObject) (Exp
 
 func exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
 	doc := Export{
-		Format:      Tethr,
-		Version:     1,
-		ExportedAt:  at.UTC(),
-		Account:     Account{Id: h.Account.ID, Email: h.Account.Email, Name: h.Account.Name, CreatedAt: h.Account.CreatedAt},
-		Passkeys:    make([]Passkey, 0, len(h.Passkeys)),
-		Apps:        make([]DeveloperApp, 0, len(h.Apps)),
-		Connections: make([]Connection, 0, len(h.Connections)),
-		Profiles:    make([]ProfileExport, 0, len(h.Profiles)),
+		Format:       Tethr,
+		Version:      1,
+		ExportedAt:   at.UTC(),
+		Account:      Account{Id: h.Account.ID, Email: h.Account.Email, Name: h.Account.Name, CreatedAt: h.Account.CreatedAt},
+		Passkeys:     make([]Passkey, 0, len(h.Passkeys)),
+		Apps:         make([]DeveloperApp, 0, len(h.Apps)),
+		Connections:  make([]Connection, 0, len(h.Connections)),
+		MediaServers: make([]MediaServer, 0, len(h.MediaServers)),
+		Profiles:     make([]ProfileExport, 0, len(h.Profiles)),
 	}
 	for _, p := range h.Passkeys {
 		doc.Passkeys = append(doc.Passkeys, toPasskey(p))
@@ -81,6 +82,10 @@ func exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
 	}
 	for _, g := range h.Connections {
 		doc.Connections = append(doc.Connections, Connection{Id: g.ID, AppName: g.AppName, ProfileId: g.ProfileID, ProfileName: g.ProfileName, Label: g.Label, UserAgent: g.UserAgent, CreatedAt: g.CreatedAt, LastUsedAt: g.LastUsedAt})
+	}
+
+	for _, m := range h.MediaServers {
+		doc.MediaServers = append(doc.MediaServers, toMediaServer(m))
 	}
 
 	var rows [][]string

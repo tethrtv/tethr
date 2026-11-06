@@ -46,11 +46,12 @@ type ProfileExport struct {
 }
 
 type HouseholdExport struct {
-	Account     store.Account
-	Passkeys    []store.Passkey
-	Apps        []store.AccountAppsRow
-	Connections []store.HouseholdGrantsRow
-	Profiles    []ProfileExport
+	Account      store.Account
+	Passkeys     []store.Passkey
+	Apps         []store.AccountAppsRow
+	Connections  []store.HouseholdGrantsRow
+	MediaServers []MediaServer
+	Profiles     []ProfileExport
 }
 
 func StartExport(ctx context.Context, db *pgxpool.Pool, token string) (ExportStart, error) {
@@ -101,6 +102,9 @@ func Export(ctx context.Context, db *pgxpool.Pool, accountID int64) (HouseholdEx
 		return out, err
 	}
 	if out.Connections, err = ListGrants(ctx, db, accountID); err != nil {
+		return out, err
+	}
+	if out.MediaServers, err = MediaServers(ctx, db, accountID); err != nil {
 		return out, err
 	}
 	all := Page{Page: 1, Limit: math.MaxInt32}

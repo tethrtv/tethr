@@ -23,6 +23,9 @@ func TestExportData(t *testing.T) {
 	if rec := do(t, h, "POST", "/v1/history", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"watched_at":"2024-05-01T20:00:00Z"}]}`, cookie); rec.Code != http.StatusOK {
 		t.Fatalf("add history = %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(t, h, "POST", "/v1/media-servers", `{"kind":"plex"}`, cookie); rec.Code != http.StatusCreated {
+		t.Fatalf("add a media server = %d %s", rec.Code, rec.Body)
+	}
 	if _, err := s.DB.Exec(context.Background(), `UPDATE titles SET name = '=HYPERLINK("x")', year = 2010`); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +66,7 @@ func TestExportData(t *testing.T) {
 	if err := json.Unmarshal(read("tethr.json"), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.Format != Tethr || doc.Account.Email != "nathan@example.com" || len(doc.Profiles) != 1 || len(doc.Profiles[0].History) != 1 {
+	if doc.Format != Tethr || doc.Account.Email != "nathan@example.com" || len(doc.Profiles) != 1 || len(doc.Profiles[0].History) != 1 || len(doc.MediaServers) != 1 || doc.MediaServers[0].Kind != MediaServerKindPlex {
 		t.Errorf("doc = %+v", doc)
 	}
 	rows, err := csv.NewReader(bytes.NewReader(read("history.csv"))).ReadAll()
