@@ -1117,6 +1117,8 @@ export interface components {
         Device: {
             code: string;
             app_name: string;
+            /** @description Made by Tethr, like the plugins for media servers. */
+            official: boolean;
         };
         ProfileChoice: {
             /** Format: int64 */
@@ -1141,6 +1143,8 @@ export interface components {
             /** Format: int64 */
             id: number;
             app_name: string;
+            /** @description Made by Tethr, like the plugins for media servers. */
+            official: boolean;
             /** Format: int64 */
             profile_id: number;
             profile_name: string;

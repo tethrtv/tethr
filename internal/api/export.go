@@ -81,7 +81,7 @@ func exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
 		doc.Apps = append(doc.Apps, DeveloperApp{Id: a.ID, Name: a.Name, ClientId: a.ClientID, RedirectUris: a.RedirectUris, Connections: a.Connections, CreatedAt: a.CreatedAt})
 	}
 	for _, g := range h.Connections {
-		doc.Connections = append(doc.Connections, Connection{Id: g.ID, AppName: g.AppName, ProfileId: g.ProfileID, ProfileName: g.ProfileName, Label: g.Label, UserAgent: g.UserAgent, CreatedAt: g.CreatedAt, LastUsedAt: g.LastUsedAt})
+		doc.Connections = append(doc.Connections, Connection{Id: g.ID, AppName: g.AppName, Official: g.Official, ProfileId: g.ProfileID, ProfileName: g.ProfileName, Label: g.Label, UserAgent: g.UserAgent, CreatedAt: g.CreatedAt, LastUsedAt: g.LastUsedAt})
 	}
 
 	for _, m := range h.MediaServers {

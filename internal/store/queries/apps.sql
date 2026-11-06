@@ -36,7 +36,7 @@ RETURNING *;
 SELECT * FROM device_codes WHERE device_code_hash = $1 FOR UPDATE;
 
 -- name: PendingDeviceCode :one
-SELECT d.*, a.name AS app_name
+SELECT d.*, a.name AS app_name, a.official
 FROM device_codes d
 JOIN apps a ON a.id = d.app_id
 WHERE d.user_code = $1 AND d.status = 'pending' AND d.expires_at > now()
@@ -102,7 +102,7 @@ WHERE code_hash = $1 AND app_id = $2 AND used_at IS NULL AND expires_at > now()
 RETURNING *;
 
 -- name: HouseholdGrants :many
-SELECT g.*, a.name AS app_name, p.name AS profile_name
+SELECT g.*, a.name AS app_name, a.official, p.name AS profile_name
 FROM oauth_grants g
 JOIN apps a ON a.id = g.app_id
 JOIN profiles p ON p.id = g.profile_id

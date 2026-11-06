@@ -11,7 +11,7 @@ import (
 )
 
 const accountApps = `-- name: AccountApps :many
-SELECT a.id, a.owner_account_id, a.client_id, a.client_secret_hash, a.name, a.redirect_uris, a.created_at, a.revoked_at, a.built_in,
+SELECT a.id, a.owner_account_id, a.client_id, a.client_secret_hash, a.name, a.redirect_uris, a.created_at, a.revoked_at, a.built_in, a.official,
     (SELECT count(*) FROM oauth_grants g WHERE g.app_id = a.id AND g.revoked_at IS NULL) AS connections
 FROM apps a
 WHERE a.owner_account_id = $1 AND a.revoked_at IS NULL
@@ -28,6 +28,7 @@ type AccountAppsRow struct {
 	CreatedAt        time.Time
 	RevokedAt        *time.Time
 	BuiltIn          bool
+	Official         bool
 	Connections      int64
 }
 
@@ -50,6 +51,7 @@ func (q *Queries) AccountApps(ctx context.Context, ownerAccountID *int64) ([]Acc
 			&i.CreatedAt,
 			&i.RevokedAt,
 			&i.BuiltIn,
+			&i.Official,
 			&i.Connections,
 		); err != nil {
 			return nil, err
@@ -63,7 +65,7 @@ func (q *Queries) AccountApps(ctx context.Context, ownerAccountID *int64) ([]Acc
 }
 
 const appByClientID = `-- name: AppByClientID :one
-SELECT id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in FROM apps WHERE client_id = $1 AND revoked_at IS NULL AND NOT built_in
+SELECT id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in, official FROM apps WHERE client_id = $1 AND revoked_at IS NULL AND NOT built_in
 `
 
 func (q *Queries) AppByClientID(ctx context.Context, clientID string) (App, error) {
@@ -79,6 +81,7 @@ func (q *Queries) AppByClientID(ctx context.Context, clientID string) (App, erro
 		&i.CreatedAt,
 		&i.RevokedAt,
 		&i.BuiltIn,
+		&i.Official,
 	)
 	return i, err
 }
@@ -97,7 +100,7 @@ func (q *Queries) CountAccountApps(ctx context.Context, ownerAccountID *int64) (
 const createApp = `-- name: CreateApp :one
 INSERT INTO apps (owner_account_id, client_id, client_secret_hash, name, redirect_uris)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in
+RETURNING id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in, official
 `
 
 type CreateAppParams struct {
@@ -127,6 +130,7 @@ func (q *Queries) CreateApp(ctx context.Context, arg CreateAppParams) (App, erro
 		&i.CreatedAt,
 		&i.RevokedAt,
 		&i.BuiltIn,
+		&i.Official,
 	)
 	return i, err
 }
@@ -295,7 +299,7 @@ func (q *Queries) DeviceCodeByHash(ctx context.Context, deviceCodeHash []byte) (
 }
 
 const householdGrants = `-- name: HouseholdGrants :many
-SELECT g.id, g.app_id, g.profile_id, g.any_profile, g.scopes, g.label, g.user_agent, g.approved_via, g.created_at, g.last_used_at, g.revoked_at, a.name AS app_name, p.name AS profile_name
+SELECT g.id, g.app_id, g.profile_id, g.any_profile, g.scopes, g.label, g.user_agent, g.approved_via, g.created_at, g.last_used_at, g.revoked_at, a.name AS app_name, a.official, p.name AS profile_name
 FROM oauth_grants g
 JOIN apps a ON a.id = g.app_id
 JOIN profiles p ON p.id = g.profile_id
@@ -317,6 +321,7 @@ type HouseholdGrantsRow struct {
 	LastUsedAt  *time.Time
 	RevokedAt   *time.Time
 	AppName     string
+	Official    bool
 	ProfileName string
 }
 
@@ -342,6 +347,7 @@ func (q *Queries) HouseholdGrants(ctx context.Context, ownerAccountID int64) ([]
 			&i.LastUsedAt,
 			&i.RevokedAt,
 			&i.AppName,
+			&i.Official,
 			&i.ProfileName,
 		); err != nil {
 			return nil, err
@@ -355,7 +361,7 @@ func (q *Queries) HouseholdGrants(ctx context.Context, ownerAccountID int64) ([]
 }
 
 const pendingDeviceCode = `-- name: PendingDeviceCode :one
-SELECT d.id, d.app_id, d.device_code_hash, d.user_code, d.status, d.profile_id, d.expires_at, d.interval_seconds, d.last_polled_at, d.created_at, a.name AS app_name
+SELECT d.id, d.app_id, d.device_code_hash, d.user_code, d.status, d.profile_id, d.expires_at, d.interval_seconds, d.last_polled_at, d.created_at, a.name AS app_name, a.official
 FROM device_codes d
 JOIN apps a ON a.id = d.app_id
 WHERE d.user_code = $1 AND d.status = 'pending' AND d.expires_at > now()
@@ -374,6 +380,7 @@ type PendingDeviceCodeRow struct {
 	LastPolledAt    *time.Time
 	CreatedAt       time.Time
 	AppName         string
+	Official        bool
 }
 
 func (q *Queries) PendingDeviceCode(ctx context.Context, userCode string) (PendingDeviceCodeRow, error) {
@@ -391,6 +398,7 @@ func (q *Queries) PendingDeviceCode(ctx context.Context, userCode string) (Pendi
 		&i.LastPolledAt,
 		&i.CreatedAt,
 		&i.AppName,
+		&i.Official,
 	)
 	return i, err
 }
@@ -639,7 +647,7 @@ func (q *Queries) TouchGrant(ctx context.Context, id int64) error {
 const updateApp = `-- name: UpdateApp :one
 UPDATE apps SET name = coalesce($3, name), redirect_uris = coalesce($4::text[], redirect_uris)
 WHERE id = $1 AND owner_account_id = $2 AND revoked_at IS NULL
-RETURNING id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in
+RETURNING id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in, official
 `
 
 type UpdateAppParams struct {
@@ -667,6 +675,7 @@ func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, erro
 		&i.CreatedAt,
 		&i.RevokedAt,
 		&i.BuiltIn,
+		&i.Official,
 	)
 	return i, err
 }

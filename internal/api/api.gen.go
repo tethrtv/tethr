@@ -490,14 +490,17 @@ type AuthorizingApp struct {
 
 // Connection defines model for Connection.
 type Connection struct {
-	AppName     string     `json:"app_name"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Id          int64      `json:"id"`
-	Label       *string    `json:"label,omitempty"`
-	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
-	ProfileId   int64      `json:"profile_id"`
-	ProfileName string     `json:"profile_name"`
-	UserAgent   *string    `json:"user_agent,omitempty"`
+	AppName    string     `json:"app_name"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Id         int64      `json:"id"`
+	Label      *string    `json:"label,omitempty"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// Official Made by Tethr, like the plugins for media servers.
+	Official    bool    `json:"official"`
+	ProfileId   int64   `json:"profile_id"`
+	ProfileName string  `json:"profile_name"`
+	UserAgent   *string `json:"user_agent,omitempty"`
 }
 
 // ConnectionChanges defines model for ConnectionChanges.
@@ -521,6 +524,9 @@ type DeveloperApp struct {
 type Device struct {
 	AppName string `json:"app_name"`
 	Code    string `json:"code"`
+
+	// Official Made by Tethr, like the plugins for media servers.
+	Official bool `json:"official"`
 }
 
 // DeviceSignIn defines model for DeviceSignIn.

@@ -24,7 +24,7 @@ func (s *Server) GetDevice(ctx context.Context, req GetDeviceRequestObject) (Get
 	if err != nil {
 		return nil, err
 	}
-	return GetDevice200JSONResponse{Code: device.UserCode, AppName: device.AppName}, nil
+	return GetDevice200JSONResponse{Code: device.UserCode, AppName: device.AppName, Official: device.Official}, nil
 }
 
 func (s *Server) ApproveDevice(ctx context.Context, req ApproveDeviceRequestObject) (ApproveDeviceResponseObject, error) {
@@ -133,6 +133,7 @@ func (s *Server) ListConnections(ctx context.Context, _ ListConnectionsRequestOb
 		out = append(out, Connection{
 			Id:          g.ID,
 			AppName:     g.AppName,
+			Official:    g.Official,
 			ProfileId:   g.ProfileID,
 			ProfileName: g.ProfileName,
 			Label:       g.Label,

@@ -35,6 +35,7 @@ type App struct {
 	CreatedAt        time.Time
 	RevokedAt        *time.Time
 	BuiltIn          bool
+	Official         bool
 }
 
 type AuditLog struct {

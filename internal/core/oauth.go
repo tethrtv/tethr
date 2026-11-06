@@ -179,6 +179,7 @@ func PollDeviceCode(ctx context.Context, db *pgxpool.Pool, clientID, secret, cod
 type PendingDevice struct {
 	UserCode string
 	AppName  string
+	Official bool
 }
 
 func FindDevice(ctx context.Context, db *pgxpool.Pool, userCode string) (PendingDevice, error) {
@@ -189,7 +190,7 @@ func FindDevice(ctx context.Context, db *pgxpool.Pool, userCode string) (Pending
 	if err != nil {
 		return PendingDevice{}, err
 	}
-	return PendingDevice{UserCode: d.UserCode, AppName: d.AppName}, nil
+	return PendingDevice{UserCode: d.UserCode, AppName: d.AppName, Official: d.Official}, nil
 }
 
 func ApproveDevice(ctx context.Context, db *pgxpool.Pool, accountID int64, userCode string, profileID int64) error {
