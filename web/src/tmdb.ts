@@ -40,7 +40,7 @@ const day = 24 * 60 * 60 * 1000
 
 async function meta<T>(path: string): Promise<T | null> {
   // Bump v when the shape of /meta's answers changes, or browsers and Cloudflare keep serving the old one.
-  const res = await fetch(`${apiURL}/meta${path}?v=2`)
+  const res = await fetch(`${apiURL}/meta${path}?v=3`)
   return res.ok ? res.json() : null
 }
 
