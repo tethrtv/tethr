@@ -76,3 +76,10 @@ SELECT id FROM list_items WHERE list_id = $1;
 UPDATE list_items li SET rank = x.rank::int
 FROM unnest(sqlc.arg(ids)::bigint[]) WITH ORDINALITY AS x(id, rank)
 WHERE li.id = x.id AND li.list_id = sqlc.arg(list_id);
+
+-- name: TitleLists :many
+SELECT i.list_id, i.id
+FROM list_items i
+JOIN lists l ON l.id = i.list_id
+WHERE l.profile_id = $1 AND l.kind = 'custom' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
+ORDER BY i.list_id;

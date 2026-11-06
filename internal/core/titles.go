@@ -19,8 +19,14 @@ type TitleState struct {
 	Resume  *Entry
 	Rating  *Entry
 	Listing *Entry
+	Lists   []InList
 	Order   string
 	Seasons []SeasonState
+}
+
+type InList struct {
+	ListID int64
+	ItemID int64
 }
 
 type SeasonState struct {
@@ -57,6 +63,14 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 		s.Listing = &Entry{ID: listing.ID, At: listing.ListedAt}
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return s, err
+	}
+
+	inLists, err := q.TitleLists(ctx, store.TitleListsParams{ProfileID: profileID, TitleID: t.ID})
+	if err != nil {
+		return s, err
+	}
+	for _, l := range inLists {
+		s.Lists = append(s.Lists, InList{ListID: l.ListID, ItemID: l.ID})
 	}
 
 	watches, err := q.TitleWatches(ctx, store.TitleWatchesParams{ProfileID: profileID, TitleID: t.ID})

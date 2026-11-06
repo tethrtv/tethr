@@ -1631,6 +1631,8 @@ export interface components {
             resume?: components["schemas"]["Resume"];
             rating?: components["schemas"]["TitleRating"];
             listing?: components["schemas"]["TitleListing"];
+            /** @description Your own lists the film or show itself is on. */
+            lists?: components["schemas"]["TitleInList"][];
             /** @description The TMDB episode group the show follows for this profile. Left out, it's aired order. */
             episode_order?: string;
             /** @description Numbered in the show's episode order, with specials last. Episodes the order leaves out aren't listed. */
@@ -1650,6 +1652,12 @@ export interface components {
             id: number;
             /** Format: date-time */
             listed_at: string;
+        };
+        TitleInList: {
+            /** Format: int64 */
+            list_id: number;
+            /** Format: int64 */
+            item_id: number;
         };
         SeasonDetail: {
             number: number;

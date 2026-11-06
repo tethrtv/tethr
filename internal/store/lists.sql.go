@@ -325,6 +325,44 @@ func (q *Queries) SetListItemNotes(ctx context.Context, arg SetListItemNotesPara
 	return result.RowsAffected(), nil
 }
 
+const titleLists = `-- name: TitleLists :many
+SELECT i.list_id, i.id
+FROM list_items i
+JOIN lists l ON l.id = i.list_id
+WHERE l.profile_id = $1 AND l.kind = 'custom' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
+ORDER BY i.list_id
+`
+
+type TitleListsParams struct {
+	ProfileID int64
+	TitleID   int64
+}
+
+type TitleListsRow struct {
+	ListID int64
+	ID     int64
+}
+
+func (q *Queries) TitleLists(ctx context.Context, arg TitleListsParams) ([]TitleListsRow, error) {
+	rows, err := q.db.Query(ctx, titleLists, arg.ProfileID, arg.TitleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TitleListsRow
+	for rows.Next() {
+		var i TitleListsRow
+		if err := rows.Scan(&i.ListID, &i.ID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateList = `-- name: UpdateList :one
 UPDATE lists
 SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, updated_at = now()

@@ -33,6 +33,13 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 	if l := t.Listing; l != nil {
 		out.Listing = &TitleListing{Id: l.ID, ListedAt: l.At}
 	}
+	if len(t.Lists) > 0 {
+		inLists := make([]TitleInList, 0, len(t.Lists))
+		for _, l := range t.Lists {
+			inLists = append(inLists, TitleInList{ListId: l.ListID, ItemId: l.ItemID})
+		}
+		out.Lists = &inLists
+	}
 	if t.Item.Kind() == "show" {
 		if t.Order != "" {
 			out.EpisodeOrder = &t.Order

@@ -1226,6 +1226,9 @@ type TitleDetail struct {
 	// Listing Set when the film or show itself is on your watchlist.
 	Listing *TitleListing `json:"listing,omitempty"`
 
+	// Lists Your own lists the film or show itself is on.
+	Lists *[]TitleInList `json:"lists,omitempty"`
+
 	// Rating Your rating of the film or show itself.
 	Rating *TitleRating `json:"rating,omitempty"`
 
@@ -1243,6 +1246,12 @@ type TitleDetail struct {
 
 // TitleDetailType defines model for TitleDetail.Type.
 type TitleDetailType string
+
+// TitleInList defines model for TitleInList.
+type TitleInList struct {
+	ItemId int64 `json:"item_id"`
+	ListId int64 `json:"list_id"`
+}
 
 // TitleListing Set when the film or show itself is on your watchlist.
 type TitleListing struct {
