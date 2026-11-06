@@ -1216,7 +1216,7 @@ export interface components {
             first_aired?: string;
             order?: components["schemas"]["OrderNumber"];
         };
-        /** @description The episode's season and number in the episode order picked for the show, when they differ from aired order. Given in Up next and title details. */
+        /** @description The episode's season and number in the episode order the profile picked for the show, when they differ from aired order. */
         OrderNumber: {
             season: number;
             number: number;
