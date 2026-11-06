@@ -1718,8 +1718,14 @@ export interface components {
             playback: components["schemas"]["ResumePoint"][];
             ratings: components["schemas"]["Rating"][];
             watchlist: components["schemas"]["Listing"][];
+            lists: components["schemas"]["ListExport"][];
             hidden: components["schemas"]["HiddenItem"][];
             imports: components["schemas"]["Import"][];
+        };
+        ListExport: {
+            list: components["schemas"]["List"];
+            /** @description In the list's own order. */
+            items: components["schemas"]["Listing"][];
         };
         HiddenItem: {
             section: string;

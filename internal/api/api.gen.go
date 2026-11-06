@@ -853,6 +853,13 @@ type ListChanges struct {
 	SortHow *ListSortHow `json:"sort_how,omitempty"`
 }
 
+// ListExport defines model for ListExport.
+type ListExport struct {
+	// Items In the list's own order.
+	Items []Listing `json:"items"`
+	List  List      `json:"list"`
+}
+
 // ListItem defines model for ListItem.
 type ListItem struct {
 	Id       int64     `json:"id"`
@@ -1096,6 +1103,7 @@ type ProfileExport struct {
 	Hidden    []HiddenItem  `json:"hidden"`
 	History   []Watch       `json:"history"`
 	Imports   []Import      `json:"imports"`
+	Lists     []ListExport  `json:"lists"`
 	Playback  []ResumePoint `json:"playback"`
 	Profile   Profile       `json:"profile"`
 	Ratings   []Rating      `json:"ratings"`

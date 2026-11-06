@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,6 +27,12 @@ func TestExportData(t *testing.T) {
 	if rec := do(t, h, "POST", "/v1/media-servers", `{"kind":"plex"}`, cookie); rec.Code != http.StatusCreated {
 		t.Fatalf("add a media server = %d %s", rec.Code, rec.Body)
 	}
+	rec := do(t, h, "POST", "/v1/lists", `{"name":"Friday films"}`, cookie)
+	var list List
+	_ = json.Unmarshal(rec.Body.Bytes(), &list)
+	if rec := do(t, h, "POST", "/v1/lists/"+strconv.FormatInt(list.Id, 10)+"/items", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"notes":"Twice"}]}`, cookie); rec.Code != http.StatusOK {
+		t.Fatalf("add to a list = %d %s", rec.Code, rec.Body)
+	}
 	if _, err := s.DB.Exec(context.Background(), `UPDATE titles SET name = '=HYPERLINK("x")', year = 2010`); err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +49,7 @@ func TestExportData(t *testing.T) {
 		t.Errorf("from another site = %d", rec.Code)
 	}
 
-	rec := export("same-site")
+	rec = export("same-site")
 	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Disposition"), `attachment; filename="tethr-`) {
 		t.Fatalf("export = %d %s", rec.Code, rec.Header())
 	}
@@ -68,6 +75,9 @@ func TestExportData(t *testing.T) {
 	}
 	if doc.Format != Tethr || doc.Account.Email != "nathan@example.com" || len(doc.Profiles) != 1 || len(doc.Profiles[0].History) != 1 || len(doc.MediaServers) != 1 || doc.MediaServers[0].Kind != MediaServerKindPlex {
 		t.Errorf("doc = %+v", doc)
+	}
+	if l := doc.Profiles[0].Lists; len(l) != 1 || l[0].List.Name != "Friday films" || len(l[0].Items) != 1 || *l[0].Items[0].Notes != "Twice" {
+		t.Errorf("lists = %+v", l)
 	}
 	rows, err := csv.NewReader(bytes.NewReader(read("history.csv"))).ReadAll()
 	if err != nil || len(rows) != 2 {

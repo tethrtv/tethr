@@ -2903,7 +2903,7 @@ components:
             $ref: '#/components/schemas/ProfileExport'
     ProfileExport:
       type: object
-      required: [profile, history, playback, ratings, watchlist, hidden, imports]
+      required: [profile, history, playback, ratings, watchlist, lists, hidden, imports]
       properties:
         profile:
           $ref: '#/components/schemas/Profile'
@@ -2923,6 +2923,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Listing'
+        lists:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListExport'
         hidden:
           type: array
           items:
@@ -2931,6 +2935,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Import'
+    ListExport:
+      type: object
+      required: [list, items]
+      properties:
+        list:
+          $ref: '#/components/schemas/List'
+        items:
+          type: array
+          description: In the list's own order.
+          items:
+            $ref: '#/components/schemas/Listing'
     HiddenItem:
       type: object
       required: [section, hidden_at, item]

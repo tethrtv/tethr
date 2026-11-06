@@ -41,8 +41,14 @@ type ProfileExport struct {
 	Playback  []Entry
 	Ratings   []Entry
 	Watchlist []Entry
+	Lists     []ListExport
 	Hidden    []HiddenEntry
 	Imports   []Import
+}
+
+type ListExport struct {
+	List    List
+	Entries []ListEntry
 }
 
 type HouseholdExport struct {
@@ -121,6 +127,17 @@ func Export(ctx context.Context, db *pgxpool.Pool, accountID int64) (HouseholdEx
 		}
 		if e.Watchlist, err = Watchlist(ctx, db, p.ID, ""); err != nil {
 			return out, err
+		}
+		lists, err := visibleLists(ctx, store.New(db), p.ID, store.VisibleListsParams{Owner: &p.ID})
+		if err != nil {
+			return out, err
+		}
+		for _, l := range lists {
+			_, entries, _, err := ListEntries(ctx, db, p.ID, l.ID, ListQuery{SortBy: "rank", SortHow: "asc"})
+			if err != nil {
+				return out, err
+			}
+			e.Lists = append(e.Lists, ListExport{List: l, Entries: entries})
 		}
 		for _, section := range hiddenSections {
 			hidden, err := Hidden(ctx, db, p.ID, section, "")
