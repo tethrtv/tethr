@@ -183,9 +183,14 @@ func nameSlug(ctx context.Context, q *store.Queries, t store.Title, name string,
 }
 
 func slugFor(name string, year int) string {
-	if year == 0 {
+	base := slugify(name)
+	if year == 0 || base == "" {
 		return ""
 	}
+	return base + "-" + strconv.Itoa(year)
+}
+
+func slugify(name string) string {
 	var b strings.Builder
 	gap := false
 	for _, r := range norm.NFKD.String(strings.ToLower(name)) {
@@ -201,10 +206,7 @@ func slugFor(name string, year int) string {
 			gap = true
 		}
 	}
-	if b.Len() == 0 {
-		return ""
-	}
-	return b.String() + "-" + strconv.Itoa(year)
+	return b.String()
 }
 
 func text(s string) *string {

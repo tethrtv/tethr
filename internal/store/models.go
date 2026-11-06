@@ -173,6 +173,9 @@ type List struct {
 	Privacy     string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	SortBy      string
+	SortHow     string
+	ImportID    *int64
 }
 
 type ListItem struct {
