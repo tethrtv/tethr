@@ -20,8 +20,8 @@ func TestMediaServers(t *testing.T) {
 	var sam Profile
 	_ = json.Unmarshal(do(t, h, "POST", "/v1/profiles", `{"name":"Sam","kind":"person"}`, cookie).Body.Bytes(), &sam)
 
-	if rec := do(t, h, "POST", "/v1/media-servers", `{"kind":"plex"}`, cookie); rec.Code != http.StatusBadRequest {
-		t.Errorf("plex for now = %d %s", rec.Code, rec.Body)
+	if rec := do(t, h, "POST", "/v1/media-servers", `{"kind":"kodi"}`, cookie); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown kind = %d %s", rec.Code, rec.Body)
 	}
 	rec := do(t, h, "POST", "/v1/media-servers", `{"kind":"jellyfin"}`, cookie)
 	var added AddedMediaServer

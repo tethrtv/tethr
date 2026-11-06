@@ -221,7 +221,7 @@ function ConnectedApps() {
         <Link to="/activate" className={styles.inline}>
           Enter the code here
         </Link>
-        . Disconnecting an app stops it logging, and never touches your history. Run Jellyfin?{' '}
+        . Disconnecting an app stops it logging, and never touches your history. Run Jellyfin, Plex or Emby?{' '}
         <Link to="/media-servers" className={styles.inline}>
           Log plays from the server
         </Link>

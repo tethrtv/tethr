@@ -126,13 +126,19 @@ func (e ItemRefType) Valid() bool {
 
 // Defines values for MediaServerKind.
 const (
+	MediaServerKindEmby     MediaServerKind = "emby"
 	MediaServerKindJellyfin MediaServerKind = "jellyfin"
+	MediaServerKindPlex     MediaServerKind = "plex"
 )
 
 // Valid indicates whether the value is a known member of the MediaServerKind enum.
 func (e MediaServerKind) Valid() bool {
 	switch e {
+	case MediaServerKindEmby:
+		return true
 	case MediaServerKindJellyfin:
+		return true
+	case MediaServerKindPlex:
 		return true
 	default:
 		return false
@@ -141,13 +147,19 @@ func (e MediaServerKind) Valid() bool {
 
 // Defines values for NewMediaServerKind.
 const (
+	NewMediaServerKindEmby     NewMediaServerKind = "emby"
 	NewMediaServerKindJellyfin NewMediaServerKind = "jellyfin"
+	NewMediaServerKindPlex     NewMediaServerKind = "plex"
 )
 
 // Valid indicates whether the value is a known member of the NewMediaServerKind enum.
 func (e NewMediaServerKind) Valid() bool {
 	switch e {
+	case NewMediaServerKindEmby:
+		return true
 	case NewMediaServerKindJellyfin:
+		return true
+	case NewMediaServerKindPlex:
 		return true
 	default:
 		return false

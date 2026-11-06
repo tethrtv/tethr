@@ -1213,7 +1213,7 @@ paths:
     post:
       operationId: addMediaServer
       summary: Get a webhook address for a media server
-      description: The address comes back once, as a path to add to the API's own address. On Jellyfin, add it as a Generic destination in the Webhook plugin with Send All Properties ticked, for Playback Start, Playback Stop and User Data Saved. Webhooks are limited to 600 a minute per server.
+      description: The address comes back once, as a path to add to the API's own address. On Jellyfin, add it as a Generic destination in the Webhook plugin with Send All Properties ticked, for Playback Start, Playback Stop and User Data Saved. On Plex, which needs Plex Pass, add it under Webhooks in the account settings. On Emby, which needs Emby Premiere, add it as a webhook for playback and mark played events. Webhooks are limited to 600 a minute per server.
       security:
         - session: []
       requestBody:
@@ -2112,7 +2112,7 @@ components:
           format: int64
         kind:
           type: string
-          enum: [jellyfin]
+          enum: [jellyfin, plex, emby]
         name:
           type: string
           description: The name the server gives itself, once it has sent something.
@@ -2148,7 +2148,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [jellyfin]
+          enum: [jellyfin, plex, emby]
     AddedMediaServer:
       type: object
       required: [server, path]

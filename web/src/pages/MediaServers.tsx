@@ -11,26 +11,29 @@ import styles from './Developers.module.css'
 import home from './Home.module.css'
 
 type MediaServer = components['schemas']['MediaServer']
+type Kind = MediaServer['kind']
+
+const names: Record<Kind, string> = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }
 
 const apiURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 
 export function MediaServers() {
   const me = useSignedIn()
   const queries = useQueryClient()
-  const [address, setAddress] = useState<string | null>(null)
+  const [address, setAddress] = useState<{ kind: Kind; url: string } | null>(null)
   const servers = useQuery({
     queryKey: ['media-servers'],
     enabled: !!me,
     queryFn: async () => (await api.GET('/v1/media-servers')).data ?? [],
   })
   const add = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST('/v1/media-servers', { body: { kind: 'jellyfin' } })
+    mutationFn: async (kind: Kind) => {
+      const { data, error } = await api.POST('/v1/media-servers', { body: { kind } })
       if (error) throw error
       return data
     },
     onSuccess: (data) => {
-      setAddress(apiURL + data.path)
+      setAddress({ kind: data.server.kind, url: apiURL + data.path })
       queries.invalidateQueries({ queryKey: ['media-servers'] })
     },
   })
@@ -50,28 +53,40 @@ export function MediaServers() {
         <header className={home.head}>
           <h1 className={home.title}>Media servers</h1>
           <p className={home.lead}>
-            Log what everyone watches on your Jellyfin server, whichever app they use. Match each person on the server
-            to a profile below. Plays from people you haven’t matched aren’t logged.
+            Log what everyone watches on your Jellyfin, Plex or Emby server, whichever app they use. Match each person
+            on the server to a profile below. Plays from people you haven’t matched aren’t logged.
           </p>
         </header>
 
-        {address && <Setup address={address} onDone={() => setAddress(null)} />}
+        {address && <Setup kind={address.kind} address={address.url} onDone={() => setAddress(null)} />}
 
         <section>
           <h2 className={home.sectionTitle}>Your servers</h2>
           {servers.data?.length ? (
             <ul className={home.rows}>
               {servers.data.map((s) => (
-                <ServerRow key={s.id} server={s} profiles={me.profiles} onAddress={setAddress} />
+                <ServerRow
+                  key={s.id}
+                  server={s}
+                  profiles={me.profiles}
+                  onAddress={(url) => setAddress({ kind: s.kind, url })}
+                />
               ))}
             </ul>
           ) : (
             <p className={home.note}>None yet.</p>
           )}
           <div className={home.rowActions}>
-            <Button variant="primary" aria-busy={add.isPending} onClick={() => add.mutate()}>
-              Add Jellyfin
-            </Button>
+            {(Object.keys(names) as Kind[]).map((kind) => (
+              <Button
+                key={kind}
+                variant="plain"
+                aria-busy={add.isPending && add.variables === kind}
+                onClick={() => add.mutate(kind)}
+              >
+                Add {names[kind]}
+              </Button>
+            ))}
           </div>
           {add.isError && <p className={home.error}>{problemMessage(add.error)}</p>}
         </section>
@@ -80,12 +95,31 @@ export function MediaServers() {
   )
 }
 
-function Setup({ address, onDone }: { address: string; onDone: () => void }) {
+const steps: Record<Kind, string[]> = {
+  jellyfin: [
+    'In Jellyfin, open Dashboard, then Plugins, then Catalogue. Install Webhook and restart Jellyfin.',
+    'Open the Webhook plugin’s settings and choose Add Generic Destination.',
+    'Paste the address into the webhook URL and tick Send All Properties.',
+    'Under Notification Type, tick Playback Start, Playback Stop and User Data Saved. Under Item Type, tick Movies and Episodes. Save.',
+  ],
+  plex: [
+    'Webhooks need Plex Pass on the account that owns the server.',
+    'In Plex, open your account settings and choose Webhooks.',
+    'Choose Add Webhook, paste the address and save.',
+  ],
+  emby: [
+    'Webhooks need Emby Premiere.',
+    'In Emby’s dashboard, open Notifications, add a notification and choose Webhooks.',
+    'Paste the address as the URL, and choose the playback events and Mark played. Save.',
+  ],
+}
+
+function Setup({ kind, address, onDone }: { kind: Kind; address: string; onDone: () => void }) {
   return (
     <div className={styles.secret} role="alert">
       <p>
-        Here’s the address for your server. Copy it now. It won’t be shown again, and anyone with it can log plays to
-        the people you match.
+        Here’s the address for your {names[kind]} server. Copy it now. It won’t be shown again, and anyone with it can
+        log plays to the people you match.
       </p>
       <div className={styles.secretRow}>
         <code className={styles.secretValue}>{address}</code>
@@ -97,13 +131,9 @@ function Setup({ address, onDone }: { address: string; onDone: () => void }) {
         </Button>
       </div>
       <ol className={home.note}>
-        <li>In Jellyfin, open Dashboard, then Plugins, then Catalogue. Install Webhook and restart Jellyfin.</li>
-        <li>Open the Webhook plugin’s settings and choose Add Generic Destination.</li>
-        <li>Paste the address into the webhook URL and tick Send All Properties.</li>
-        <li>
-          Under Notification Type, tick Playback Start, Playback Stop and User Data Saved. Under Item Type, tick Movies
-          and Episodes. Save.
-        </li>
+        {steps[kind].map((step) => (
+          <li key={step}>{step}</li>
+        ))}
         <li>Play something. Each person shows up here after their first play, ready to match to a profile.</li>
       </ol>
     </div>
@@ -154,9 +184,9 @@ function ServerRow({
   return (
     <li className={styles.app}>
       <div className={styles.appMain}>
-        <span className={home.name}>{s.name ?? 'Jellyfin'}</span>
+        <span className={home.name}>{s.name ?? names[s.kind]}</span>
         <span className={home.kind}>
-          {s.last_event_at ? `Jellyfin, last heard from ${ago(s.last_event_at)}` : 'Waiting for its first play'}
+          {s.last_event_at ? `${names[s.kind]}, last heard from ${ago(s.last_event_at)}` : 'Waiting for its first play'}
         </span>
       </div>
       <span>

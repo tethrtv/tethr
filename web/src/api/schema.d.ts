@@ -794,7 +794,7 @@ export interface paths {
         put?: never;
         /**
          * Get a webhook address for a media server
-         * @description The address comes back once, as a path to add to the API's own address. On Jellyfin, add it as a Generic destination in the Webhook plugin with Send All Properties ticked, for Playback Start, Playback Stop and User Data Saved. Webhooks are limited to 600 a minute per server.
+         * @description The address comes back once, as a path to add to the API's own address. On Jellyfin, add it as a Generic destination in the Webhook plugin with Send All Properties ticked, for Playback Start, Playback Stop and User Data Saved. On Plex, which needs Plex Pass, add it under Webhooks in the account settings. On Emby, which needs Emby Premiere, add it as a webhook for playback and mark played events. Webhooks are limited to 600 a minute per server.
          */
         post: operations["addMediaServer"];
         delete?: never;
@@ -1327,7 +1327,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            kind: "jellyfin";
+            kind: "jellyfin" | "plex" | "emby";
             /** @description The name the server gives itself, once it has sent something. */
             name?: string;
             /** Format: date-time */
@@ -1350,7 +1350,7 @@ export interface components {
         };
         NewMediaServer: {
             /** @enum {string} */
-            kind: "jellyfin";
+            kind: "jellyfin" | "plex" | "emby";
         };
         AddedMediaServer: {
             server: components["schemas"]["MediaServer"];
