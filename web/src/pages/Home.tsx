@@ -288,6 +288,7 @@ function ConnectionRow({ connection: c }: { connection: Connection }) {
     <li className={styles.row}>
       <span className={styles.name}>
         {c.app_name}
+        {c.official && <span className={styles.handle}> Official</span>}
         {c.label && <span className={styles.handle}> {c.label}</span>}
       </span>
       <span className={styles.kind}>Logs as {c.profile_name}</span>
