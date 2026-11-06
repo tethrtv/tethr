@@ -7,7 +7,7 @@ import { Button } from '../components/Button'
 import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
 import { ago, date, duration, ep, plural } from '../format'
-import { type Details, type Season, useDetails, useSeason } from '../tmdb'
+import { type Details, type Group, type Season, useDetails, useGroup, useOrders, useSeason } from '../tmdb'
 import lists from './Lists.module.css'
 import styles from './Title.module.css'
 
@@ -27,6 +27,7 @@ const episodeRef = (show: Detail, e: EpisodeDetail): ItemRef =>
   e.episode.ids.tethr
     ? { type: 'episode', ids: { tethr: e.episode.ids.tethr } }
     : { type: 'episode', show: { tmdb: show.title.ids.tmdb }, season: e.episode.season, number: e.episode.number }
+const shown = (e: EpisodeDetail) => e.episode.order ?? e.episode
 const coverID = (d: Detail) => d.title.ids.tethr ?? d.title.ids.tmdb ?? 0
 const aired = (e: EpisodeDetail) =>
   e.watches.length > 0 || (!!e.episode.first_aired && e.episode.first_aired <= today())
@@ -182,6 +183,7 @@ function About({ meta, made }: { meta?: Details | null; made: string }) {
 
 function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const meta = useDetails('show', d.title.ids.tmdb)
+  const group = useGroup(d.title.ids.tmdb, d.episode_order)
   const name = meta?.name ?? d.title.name ?? 'Untitled show'
   const seasons = d.seasons ?? []
   const numbered = seasons.filter((s) => s.number > 0)
@@ -190,10 +192,13 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const seen = out.filter((e) => e.watches.length).length
   const left = out.length - seen
   const paused = episodes.find((e) => e.resume && !e.watches.length)
-  const counts = (meta?.seasons ?? []).filter((s) => s.episodes > 0)
+  const sizes = d.episode_order
+    ? group?.seasons.map((s) => ({ number: s.number, episodes: s.episodes.length }))
+    : meta?.seasons
+  const counts = (sizes ?? []).filter((s) => s.episodes > 0)
   const listed = counts.filter((s) => s.number > 0)
   const total = listed.reduce((sum, s) => sum + s.episodes, 0)
-  const outlined = !meta?.seasons || episodes.length >= total
+  const outlined = !sizes || episodes.length >= total
   const numbers = [...new Set([...seasons.map((s) => s.number), ...counts.map((s) => s.number)])].sort(
     (a, b) => Number(a === 0) - Number(b === 0) || a - b,
   )
@@ -255,7 +260,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
                 </>
               )}
               {paused &&
-                ` Paused in ${ep(paused.episode.season, paused.episode.number)}, ${Math.round(paused.resume?.progress ?? 0)}% in.`}
+                ` Paused in ${ep(shown(paused).season, shown(paused).number)}, ${Math.round(paused.resume?.progress ?? 0)}% in.`}
             </p>
             {outlined && !!numbered.length && (
               <div className={styles.tally} aria-hidden="true">
@@ -279,6 +284,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
 
       {current !== undefined && (
         <section className={styles.episodes}>
+          <OrderPicker show={d} profileID={profileID} onPick={() => setChosen(undefined)} />
           <div className={lists.filters}>
             <span className={lists.faint}>Season</span>
             <fieldset className={lists.options}>
@@ -295,6 +301,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
             show={d}
             episodes={seasons.find((s) => s.number === current)?.episodes ?? []}
             season={current}
+            group={d.episode_order ? (group ?? undefined) : undefined}
             behind={behind}
             profileID={profileID}
           />
@@ -308,16 +315,20 @@ function Episodes({
   show,
   episodes,
   season,
+  group,
   behind,
   profileID,
 }: {
   show: Detail
   episodes: EpisodeDetail[]
   season: number
+  group?: Group
   behind: boolean
   profileID: number
 }) {
-  const info = useSeason(show.title.ids.tmdb, season)
+  const broadcast = useSeason(show.title.ids.tmdb, show.episode_order ? undefined : season)
+  const part = group?.seasons.find((s) => s.number === season)
+  const info = show.episode_order ? part && { overview: '', episodes: part.episodes } : broadcast
   const log = useLog(profileID)
   const rows = merge(episodes, info ?? undefined, season)
   const rest = rows.filter((e) => aired(e) && !e.watches.length)
@@ -346,16 +357,55 @@ function Episodes({
 
 function merge(server: EpisodeDetail[], info: Season | undefined, season: number): EpisodeDetail[] {
   if (!info) return server
-  const known = new Map(server.map((e) => [e.episode.number, e]))
+  const known = new Map(server.map((e) => [shown(e).number, e]))
   const rows = info.episodes.map((m): EpisodeDetail => {
     const first_aired = m.air_date ?? undefined
     const e = known.get(m.number)
-    if (!e) return { episode: { ids: {}, season, number: m.number, first_aired }, watches: [] }
+    if (!e) {
+      const order = m.aired && { season, number: m.number }
+      return { episode: { ids: {}, ...(m.aired ?? { season, number: m.number }), order, first_aired }, watches: [] }
+    }
     return e.episode.first_aired ? e : { ...e, episode: { ...e.episode, first_aired } }
   })
   const listed = new Set(info.episodes.map((m) => m.number))
-  return [...rows, ...server.filter((e) => !listed.has(e.episode.number))].sort(
-    (a, b) => a.episode.number - b.episode.number,
+  return [...rows, ...server.filter((e) => !listed.has(shown(e).number))].sort(
+    (a, b) => shown(a).number - shown(b).number,
+  )
+}
+
+function OrderPicker({ show, profileID, onPick }: { show: Detail; profileID: number; onPick: () => void }) {
+  const orders = useOrders(show.title.ids.tmdb)
+  const refresh = useRefresh(profileID)
+  const pick = useMutation({
+    mutationFn: async (group: string) => {
+      const path = { id: String(show.title.ids.tethr) }
+      const query = { profile_id: profileID }
+      const { error } = group
+        ? await api.PUT('/v1/titles/{id}/episode-order', { params: { path, query }, body: { tmdb_group: group } })
+        : await api.DELETE('/v1/titles/{id}/episode-order', { params: { path, query } })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      onPick()
+      refresh()
+    },
+  })
+  if (!orders?.length || !show.title.ids.tethr) return null
+  const current = pick.isPending ? pick.variables : (show.episode_order ?? '')
+  return (
+    <div className={lists.filters}>
+      <span className={lists.faint}>Order</span>
+      <fieldset className={lists.options} disabled={pick.isPending}>
+        <legend className={lists.hidden}>Episode order</legend>
+        {[{ id: '', name: 'Aired' }, ...orders].map((o) => (
+          <label key={o.id} className={o.id === current ? `${lists.option} ${lists.chosen}` : lists.option}>
+            <input type="radio" name="order" checked={o.id === current} onChange={() => pick.mutate(o.id)} />
+            {o.name}
+          </label>
+        ))}
+      </fieldset>
+      {pick.isError && <p className={lists.error}>{problemMessage(pick.error)}</p>}
+    </div>
   )
 }
 
@@ -442,10 +492,10 @@ function EpisodeTable({
       <tbody>
         {episodes.map((e) => (
           <Episode
-            key={e.episode.ids.tethr ?? `n${e.episode.number}`}
+            key={e.episode.ids.tethr ?? `n${shown(e).number}`}
             show={show}
             e={e}
-            info={info?.episodes.find((n) => n.number === e.episode.number)}
+            info={info?.episodes.find((n) => n.number === shown(e).number)}
             profileID={profileID}
           />
         ))}
@@ -470,7 +520,7 @@ function Episode({
   const [confirming, setConfirming] = useState(false)
   const seen = e.watches.length > 0
   const due = !aired(e)
-  const label = info?.name ?? `Episode ${e.episode.number}`
+  const label = info?.name ?? `Episode ${shown(e).number}`
   const busy = log.isPending || unlog.isPending
 
   const toggle = () => {
@@ -501,7 +551,7 @@ function Episode({
           </svg>
         </button>
       </td>
-      <td className={`${lists.code} ${styles.num}`}>{e.episode.number}</td>
+      <td className={`${lists.code} ${styles.num}`}>{shown(e).number}</td>
       <td className={styles.colTitle}>
         <span className={styles.epName}>{label}</span>
         {info?.overview && <Synopsis text={info.overview} hidden={!seen} reveal="Read what happens" />}
