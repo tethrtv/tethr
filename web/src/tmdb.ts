@@ -9,6 +9,7 @@ export type Details = {
   genres?: string[]
   runtime?: number
   certificate?: { country: string; rating: string }
+  score?: number
   creators?: string[]
   cast?: string[]
   networks?: string[]

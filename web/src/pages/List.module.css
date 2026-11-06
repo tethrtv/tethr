@@ -130,6 +130,21 @@
   text-overflow: ellipsis;
 }
 
+.body > .synopsis {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-width: 62ch;
+}
+
+.body > .noteText {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--hl);
+  color: var(--ink);
+}
+
 .note {
   display: flex;
   flex-wrap: wrap;
