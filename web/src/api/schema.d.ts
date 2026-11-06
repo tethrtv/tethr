@@ -1478,6 +1478,13 @@ export interface components {
              * @description How many items the profile reading the list has finished. Left out when signed out.
              */
             watched_count?: number;
+            /**
+             * Format: int64
+             * @description The item picked as the list's cover. Left out when none is picked.
+             */
+            cover_item_id?: number;
+            /** @description The picked cover item, or the first four items in list order when none is picked. Fetch their posters from TMDB. */
+            cover: components["schemas"]["Item"][];
             /** @description The list's page on the website. */
             url: string;
             /** Format: date-time */
@@ -1505,6 +1512,11 @@ export interface components {
             privacy?: components["schemas"]["ListPrivacy"];
             sort_by?: components["schemas"]["ListSortBy"];
             sort_how?: components["schemas"]["ListSortHow"];
+            /**
+             * Format: int64
+             * @description An item on the list to use as its cover. 0 goes back to the first four items.
+             */
+            cover_item_id?: number;
         };
         ListItem: {
             /** Format: int64 */

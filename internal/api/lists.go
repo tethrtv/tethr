@@ -25,6 +25,8 @@ func listProblem(err error) (ProblemJSONResponse, int, bool) {
 		return problem("invalid_privacy", "Lists are private, household or public."), 400, true
 	case errors.Is(err, core.ErrListSort):
 		return problem("invalid_sort", "Lists sort by rank, added, title or year."), 400, true
+	case errors.Is(err, core.ErrListCover):
+		return problem("invalid_cover", "The cover has to be an item on the list."), 400, true
 	case errors.Is(err, core.ErrListOrder):
 		return problem("invalid_order", "Send every item on the list once, in the new order."), 400, true
 	case errors.Is(err, core.ErrPublicList):
@@ -54,6 +56,10 @@ func (s *Server) reader(ctx context.Context, profileID *int64) (int64, bool, err
 }
 
 func (s *Server) toList(l core.List) List {
+	cover := make([]Item, 0, len(l.Cover))
+	for _, i := range l.Cover {
+		cover = append(cover, toItem(i))
+	}
 	return List{
 		Id:           l.ID,
 		Name:         l.Name,
@@ -66,6 +72,8 @@ func (s *Server) toList(l core.List) List {
 		Access:       ListAccess(l.Access),
 		ItemCount:    l.ItemCount,
 		WatchedCount: l.Watched,
+		CoverItemId:  l.CoverItemID,
+		Cover:        cover,
 		Url:          s.AppURL + "/lists/" + strconv.FormatInt(l.ID, 10) + "-" + l.Slug,
 		CreatedAt:    l.CreatedAt,
 		UpdatedAt:    l.UpdatedAt,
@@ -176,6 +184,7 @@ func (s *Server) UpdateList(ctx context.Context, req UpdateListRequestObject) (U
 		Privacy:     (*string)(b.Privacy),
 		SortBy:      (*string)(b.SortBy),
 		SortHow:     (*string)(b.SortHow),
+		Cover:       b.CoverItemId,
 	})
 	if p, status, ok := listProblem(err); ok {
 		switch status {

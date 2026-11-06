@@ -191,6 +191,26 @@ func TestListItems(t *testing.T) {
 		t.Errorf("after reordering = %+v", entries)
 	}
 
+	got, _ = GetList(ctx, db, owner, list.ID)
+	if got.CoverItemID != nil || len(got.Cover) != 3 || got.Cover[0].Kind() != "episode" || got.Cover[1].Kind() != "movie" {
+		t.Errorf("cover from the first items = %+v", got.Cover)
+	}
+	other, _ := CreateList(ctx, db, owner, ListChanges{Name: ptr("Other")})
+	if _, err := UpdateList(ctx, db, owner, other.ID, ListChanges{Cover: &movie.ID}); !errors.Is(err, ErrListCover) {
+		t.Errorf("cover from another list = %v", err)
+	}
+	got, err = UpdateList(ctx, db, owner, list.ID, ListChanges{Cover: &series.ID})
+	if err != nil || *got.CoverItemID != series.ID || len(got.Cover) != 1 || got.Cover[0].Kind() != "show" {
+		t.Errorf("picked cover = %+v, %v", got, err)
+	}
+	if got, _ = UpdateList(ctx, db, owner, list.ID, ListChanges{Name: ptr("Mixed up")}); got.CoverItemID == nil {
+		t.Errorf("renaming dropped the cover")
+	}
+	if got, _ = UpdateList(ctx, db, owner, list.ID, ListChanges{Cover: ptr[int64](0)}); got.CoverItemID != nil || len(got.Cover) != 3 {
+		t.Errorf("cleared cover = %+v", got)
+	}
+	_, _ = UpdateList(ctx, db, owner, list.ID, ListChanges{Cover: &movie.ID})
+
 	if err := RemoveListing(ctx, db, owner, movie.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("removing a list item through the watchlist = %v", err)
 	}
@@ -200,8 +220,8 @@ func TestListItems(t *testing.T) {
 	if err := RemoveFromList(ctx, db, owner, list.ID, movie.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("removing twice = %v", err)
 	}
-	if got, _ := GetList(ctx, db, owner, list.ID); got.ItemCount != 2 {
-		t.Errorf("item count = %d", got.ItemCount)
+	if got, _ := GetList(ctx, db, owner, list.ID); got.ItemCount != 2 || got.CoverItemID != nil || len(got.Cover) != 2 {
+		t.Errorf("after removing the cover item = %d, %+v", got.ItemCount, got.Cover)
 	}
 	if n, err := RemoveManyFromList(ctx, db, owner, list.ID, []int64{ep.ID, movie.ID, series.ID}); err != nil || n != 2 {
 		t.Errorf("removing several = %d, %v", n, err)

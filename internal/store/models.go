@@ -175,6 +175,7 @@ type List struct {
 	UpdatedAt   time.Time
 	SortBy      string
 	SortHow     string
+	CoverItemID *int64
 }
 
 type ListItem struct {

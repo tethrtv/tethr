@@ -6,6 +6,7 @@ import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Cover } from '../components/Cover'
 import { Field } from '../components/Field'
+import { ListCover } from '../components/ListCover'
 import { TitleLink } from '../components/TitleLink'
 import { ep, plural } from '../format'
 import { useDetails } from '../tmdb'
@@ -77,6 +78,16 @@ export function ListPage({ param, profileID }: { param: string; profileID?: numb
     queries.invalidateQueries({ queryKey: ['lists'] })
     queries.invalidateQueries({ queryKey: ['title'] })
   }
+  const cover = useMutation({
+    mutationFn: async (item: number) => {
+      const { error } = await api.PATCH('/v1/lists/{id}', {
+        params: { path: { id }, query },
+        body: { cover_item_id: item },
+      })
+      if (error) throw error
+    },
+    onSuccess: refresh,
+  })
 
   if (page.data === null) {
     return (
@@ -170,7 +181,12 @@ export function ListPage({ param, profileID }: { param: string; profileID?: numb
         ) : view === 'covers' ? (
           <ol className={own.covers}>
             {items.map((i) => (
-              <CoverItem key={i.id} item={i} />
+              <CoverItem
+                key={i.id}
+                item={i}
+                isCover={i.id === list.cover_item_id}
+                onPick={mine && !cover.isPending ? cover.mutate : undefined}
+              />
             ))}
           </ol>
         ) : (
@@ -251,64 +267,67 @@ function Head({
     )
   }
   return (
-    <header className={styles.head}>
-      <h1 className={styles.title}>{list.name}</h1>
-      {list.description && <p className={styles.lead}>{list.description}</p>}
-      <p className={styles.small}>
-        {by}
-        {privacyWords[list.privacy]} can see it.{' '}
-        {list.item_count === 0
-          ? 'Nothing on it yet.'
-          : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
-      </p>
-      <p className={own.actions}>
-        {list.privacy === 'public' && (
-          <button
-            type="button"
-            className={styles.textButton}
-            onClick={() =>
-              navigator.clipboard
-                ?.writeText(list.url)
-                .then(() => setCopied(true))
-                .catch(() => {})
-            }
-          >
-            {copied ? 'Link copied' : 'Copy the link'}
-          </button>
-        )}
-        {mine && !deleting && (
-          <>
-            <button type="button" className={styles.textButton} onClick={() => setEditing(true)}>
-              Change details
-            </button>
-            <button type="button" className={`${styles.textButton} ${own.danger}`} onClick={() => setDeleting(true)}>
-              Delete the list
-            </button>
-          </>
-        )}
-        {deleting && (
-          <span className={styles.small}>
-            Deleting it takes everything off, and can’t be undone.{' '}
-            <button type="button" className={styles.textButton} onClick={() => setDeleting(false)}>
-              Keep it
-            </button>{' '}
+    <header className={own.top}>
+      {list.cover.length > 0 && <ListCover items={list.cover} size="l" />}
+      <div className={styles.head}>
+        <h1 className={styles.title}>{list.name}</h1>
+        {list.description && <p className={styles.lead}>{list.description}</p>}
+        <p className={styles.small}>
+          {by}
+          {privacyWords[list.privacy]} can see it.{' '}
+          {list.item_count === 0
+            ? 'Nothing on it yet.'
+            : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
+        </p>
+        <p className={own.actions}>
+          {list.privacy === 'public' && (
             <button
               type="button"
-              className={`${styles.textButton} ${own.danger}`}
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
+              className={styles.textButton}
+              onClick={() =>
+                navigator.clipboard
+                  ?.writeText(list.url)
+                  .then(() => setCopied(true))
+                  .catch(() => {})
+              }
             >
-              Delete
+              {copied ? 'Link copied' : 'Copy the link'}
             </button>
-          </span>
-        )}
-        {!profileID && (
-          <Link to="/sign-in" className={styles.textButton}>
-            Sign in to see what you’ve watched
-          </Link>
-        )}
-      </p>
-      {remove.isError && <p className={styles.error}>{problemMessage(remove.error)}</p>}
+          )}
+          {mine && !deleting && (
+            <>
+              <button type="button" className={styles.textButton} onClick={() => setEditing(true)}>
+                Change details
+              </button>
+              <button type="button" className={`${styles.textButton} ${own.danger}`} onClick={() => setDeleting(true)}>
+                Delete the list
+              </button>
+            </>
+          )}
+          {deleting && (
+            <span className={styles.small}>
+              Deleting it takes everything off, and can’t be undone.{' '}
+              <button type="button" className={styles.textButton} onClick={() => setDeleting(false)}>
+                Keep it
+              </button>{' '}
+              <button
+                type="button"
+                className={`${styles.textButton} ${own.danger}`}
+                onClick={() => remove.mutate()}
+                disabled={remove.isPending}
+              >
+                Delete
+              </button>
+            </span>
+          )}
+          {!profileID && (
+            <Link to="/sign-in" className={styles.textButton}>
+              Sign in to see what you’ve watched
+            </Link>
+          )}
+        </p>
+        {remove.isError && <p className={styles.error}>{problemMessage(remove.error)}</p>}
+      </div>
     </header>
   )
 }
@@ -349,6 +368,11 @@ function Editor({ list, profileID, onDone }: { list: List; profileID?: number; o
       {privacy === 'public' && (
         <p className={styles.small}>Anyone with the link sees the list, its notes, and your name and username.</p>
       )}
+      <p className={styles.small}>
+        {list.cover_item_id
+          ? 'To change the cover, switch to Covers below and pick another.'
+          : 'The cover is the first four things on the list. To pick one instead, switch to Covers below.'}
+      </p>
       {save.isError && <p className={styles.error}>{problemMessage(save.error)}</p>}
       <p className={own.actions}>
         <Button variant="primary" type="submit" disabled={!name.trim() || save.isPending}>
@@ -626,7 +650,7 @@ function Row({
   )
 }
 
-function CoverItem({ item: i }: { item: Item }) {
+function CoverItem({ item: i, isCover, onPick }: { item: Item; isCover: boolean; onPick?: (item: number) => void }) {
   const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb)
   const name = title?.name ?? i.item.title.name ?? 'Untitled'
   const progress = progressWords(i)
@@ -640,6 +664,19 @@ function CoverItem({ item: i }: { item: Item }) {
         {[what(i), title?.year ?? i.item.title.year].filter(Boolean).join(', ')}
         {progress === 'Watched' && ', watched'}
       </span>
+      {onPick &&
+        (isCover ? (
+          <span className={styles.faint}>
+            The cover.{' '}
+            <button type="button" className={styles.textButton} onClick={() => onPick(0)}>
+              Use the first four
+            </button>
+          </span>
+        ) : (
+          <button type="button" className={`${styles.textButton} ${own.pick}`} onClick={() => onPick(i.id)}>
+            Use as the cover
+          </button>
+        ))}
     </li>
   )
 }

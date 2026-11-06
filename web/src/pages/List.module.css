@@ -1,10 +1,26 @@
 .list {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px 150px;
+  grid-template-columns: 44px minmax(0, 1fr) 190px 150px;
   align-items: center;
   gap: 18px;
   padding: 14px 0;
   border-bottom: 1px solid var(--rule);
+}
+
+.top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 32px;
+}
+
+.top > :only-child {
+  grid-column: 1 / -1;
+}
+
+.pick {
+  justify-self: start;
+  font-size: 0.875rem;
 }
 
 .count {
@@ -212,11 +228,15 @@
 }
 
 @media (max-width: 899px) {
+  .top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
   .filters {
     margin-top: -16px;
   }
   .list {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     gap: 2px 14px;
   }
   .list > :last-child {

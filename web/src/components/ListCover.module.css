@@ -1,0 +1,36 @@
+.cover {
+  display: grid;
+  flex: none;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--paper-3);
+}
+
+.s {
+  width: 44px;
+  height: 62px;
+}
+
+.l {
+  width: 120px;
+  height: 180px;
+}
+
+.grid {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+}
+
+.cover > :is(img, span) {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+@media (max-width: 899px) {
+  .l {
+    width: 88px;
+    height: 132px;
+  }
+}

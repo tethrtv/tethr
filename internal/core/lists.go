@@ -28,11 +28,13 @@ var (
 	ErrTooManyLists    = errors.New("a profile can have up to 100 lists")
 	ErrListFull        = errors.New("a list holds up to 1,000 items")
 	ErrListOrder       = errors.New("an order names every item in the list once")
+	ErrListCover       = errors.New("a list's cover is one of its own items")
 )
 
 const (
 	maxLists     = 100
 	maxListItems = 1000
+	coverItems   = 4
 )
 
 type ListOwner struct {
@@ -54,6 +56,8 @@ type List struct {
 	Access      string
 	ItemCount   int64
 	Watched     *int64
+	CoverItemID *int64
+	Cover       []Item
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	Version     string
@@ -65,6 +69,7 @@ type ListChanges struct {
 	Privacy     *string
 	SortBy      *string
 	SortHow     *string
+	Cover       *int64
 }
 
 type ListQuery struct {
@@ -146,18 +151,25 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 			SortHow:     l.SortHow,
 			Access:      row.Access,
 			ItemCount:   row.ItemCount,
+			CoverItemID: l.CoverItemID,
 			CreatedAt:   l.CreatedAt,
 			UpdatedAt:   l.UpdatedAt,
 			Version:     hex.EncodeToString(version[:12]),
 		})
 		ids = append(ids, l.ID)
 	}
-	if viewer == 0 || len(ids) == 0 {
+	if len(ids) == 0 {
 		return lists, nil
 	}
 	items, err := q.ListItemsIn(ctx, ids)
 	if err != nil {
 		return nil, err
+	}
+	if err := addCovers(ctx, q, viewer, lists, items); err != nil {
+		return nil, err
+	}
+	if viewer == 0 {
+		return lists, nil
 	}
 	progress, err := itemProgress(ctx, q, viewer, items)
 	if err != nil {
@@ -174,6 +186,41 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 		lists[i].Watched = &n
 	}
 	return lists, nil
+}
+
+func addCovers(ctx context.Context, q *store.Queries, viewer int64, lists []List, items []store.ListItemsInRow) error {
+	picked := map[int64]int64{}
+	for _, l := range lists {
+		if l.CoverItemID != nil {
+			picked[l.ID] = *l.CoverItemID
+		}
+	}
+	covers := map[int64][]store.ListItemsInRow{}
+	var titleIDs, episodeIDs []int64
+	for _, item := range items {
+		id, ok := picked[item.ListID]
+		if ok && item.ID != id || !ok && len(covers[item.ListID]) == coverItems {
+			continue
+		}
+		covers[item.ListID] = append(covers[item.ListID], item)
+		titleIDs = append(titleIDs, item.TitleID)
+		if item.EpisodeID != nil {
+			episodeIDs = append(episodeIDs, *item.EpisodeID)
+		}
+	}
+	if len(titleIDs) == 0 {
+		return nil
+	}
+	c, err := loadCatalogue(ctx, q, viewer, titleIDs, episodeIDs)
+	if err != nil {
+		return err
+	}
+	for i := range lists {
+		for _, item := range covers[lists[i].ID] {
+			lists[i].Cover = append(lists[i].Cover, c.item(item.TitleID, item.SeasonNumber, item.EpisodeID))
+		}
+	}
+	return nil
 }
 
 func ListEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query ListQuery) (List, []ListEntry, int, error) {
@@ -378,6 +425,19 @@ func UpdateList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, c Li
 		if err := checkPrivacy(ctx, q, profileID, l.Privacy); err != nil {
 			return err
 		}
+		if c.Cover != nil {
+			l.CoverItemID = nil
+			if *c.Cover != 0 {
+				ok, err := q.OnList(ctx, store.OnListParams{ID: *c.Cover, ListID: l.ID})
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return ErrListCover
+				}
+				l.CoverItemID = c.Cover
+			}
+		}
 		if l.Name != name {
 			slug, err := listSlug(ctx, q, profileID, l.ID, l.Name)
 			if err != nil {
@@ -393,6 +453,7 @@ func UpdateList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, c Li
 			Privacy:     l.Privacy,
 			SortBy:      l.SortBy,
 			SortHow:     l.SortHow,
+			CoverItemID: l.CoverItemID,
 		})
 		return err
 	})

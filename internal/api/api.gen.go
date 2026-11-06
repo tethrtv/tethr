@@ -814,13 +814,19 @@ type ItemRefType string
 // List defines model for List.
 type List struct {
 	// Access Why you can see it. `mine` is your own list, `household` another profile's in your household, and `public` anyone else's.
-	Access      ListAccess `json:"access"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Description *string    `json:"description,omitempty"`
-	Id          int64      `json:"id"`
-	ItemCount   int64      `json:"item_count"`
-	Name        string     `json:"name"`
-	Owner       ListOwner  `json:"owner"`
+	Access ListAccess `json:"access"`
+
+	// Cover The picked cover item, or the first four items in list order when none is picked. Fetch their posters from TMDB.
+	Cover []Item `json:"cover"`
+
+	// CoverItemId The item picked as the list's cover. Left out when none is picked.
+	CoverItemId *int64    `json:"cover_item_id,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	Description *string   `json:"description,omitempty"`
+	Id          int64     `json:"id"`
+	ItemCount   int64     `json:"item_count"`
+	Name        string    `json:"name"`
+	Owner       ListOwner `json:"owner"`
 
 	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
 	Privacy ListPrivacy `json:"privacy"`
@@ -843,6 +849,9 @@ type ListAccess string
 
 // ListChanges defines model for ListChanges.
 type ListChanges struct {
+	// CoverItemId An item on the list to use as its cover. 0 goes back to the first four items.
+	CoverItemId *int64 `json:"cover_item_id,omitempty"`
+
 	// Description Empty clears it.
 	Description *string `json:"description,omitempty"`
 	Name        *string `json:"name,omitempty"`

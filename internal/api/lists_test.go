@@ -94,6 +94,17 @@ func TestListEndpoints(t *testing.T) {
 	if rec := do(t, h, "PUT", path+"/order", `{"ids":[`+strconv.FormatInt(show, 10)+`,`+strconv.FormatInt(film, 10)+`]}`, cookie); rec.Code != http.StatusNoContent {
 		t.Errorf("reorder = %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(t, h, "PATCH", path, `{"cover_item_id":`+strconv.FormatInt(show, 10)+`}`, cookie); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"cover_item_id":`+strconv.FormatInt(show, 10)) {
+		t.Errorf("pick a cover = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "PATCH", path, `{"cover_item_id":1}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_cover") {
+		t.Errorf("cover not on the list = %d %s", rec.Code, rec.Body)
+	}
+	var signedOut List
+	_ = json.Unmarshal(anyone(path, "").Body.Bytes(), &signedOut)
+	if len(signedOut.Cover) != 1 || signedOut.Cover[0].Type != ItemTypeShow || *signedOut.Cover[0].Title.Ids.Tmdb != 1396 {
+		t.Errorf("cover signed out = %+v", signedOut.Cover)
+	}
 	if rec := do(t, h, "PATCH", path+"/items/"+strconv.FormatInt(show, 10), `{"notes":"From the start"}`, cookie); rec.Code != http.StatusNoContent {
 		t.Errorf("notes = %d %s", rec.Code, rec.Body)
 	}
