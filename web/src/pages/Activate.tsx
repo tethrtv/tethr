@@ -11,7 +11,11 @@ import { ProfilePicker, useSignedIn } from './connect'
 
 const LENGTH = 8
 
-type Step = { kind: 'code' } | { kind: 'approve'; app: string } | { kind: 'done'; app: string } | { kind: 'declined' }
+type Step =
+  | { kind: 'code' }
+  | { kind: 'approve'; app: string; official: boolean }
+  | { kind: 'done'; app: string }
+  | { kind: 'declined' }
 
 export function Activate() {
   const me = useSignedIn()
@@ -25,7 +29,7 @@ export function Activate() {
       if (error) throw error
       return data
     },
-    onSuccess: (device) => setStep({ kind: 'approve', app: device.app_name }),
+    onSuccess: (device) => setStep({ kind: 'approve', app: device.app_name, official: device.official }),
   })
 
   const started = useRef(false)
@@ -87,6 +91,7 @@ export function Activate() {
             <Approve
               code={code}
               app={step.app}
+              official={step.official}
               me={me}
               onDone={() => setStep({ kind: 'done', app: step.app })}
               onDeclined={() => setStep({ kind: 'declined' })}
@@ -133,12 +138,14 @@ export function Activate() {
 function Approve({
   code,
   app,
+  official,
   me,
   onDone,
   onDeclined,
 }: {
   code: string
   app: string
+  official: boolean
   me: NonNullable<ReturnType<typeof useSignedIn>>
   onDone: () => void
   onDeclined: () => void
@@ -167,6 +174,7 @@ function Approve({
         Code {code.slice(0, 4)}-{code.slice(4)}
       </p>
       <h1 className={auth.title}>{app} wants to connect</h1>
+      {official && <p className={styles.official}>Made by Tethr</p>}
       <Permissions />
       <ProfilePicker legend="Log plays from it to" profiles={me.profiles} value={profile} onChange={setProfile} />
       <div className={auth.actions}>

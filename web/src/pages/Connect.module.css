@@ -131,3 +131,9 @@
   font-size: 0.875rem;
   color: var(--ink-3);
 }
+
+.official {
+  margin-top: -8px;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+}
