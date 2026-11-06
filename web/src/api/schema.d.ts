@@ -542,6 +542,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your lists, and the household's
+         * @description The profile's own lists, then lists other profiles in the household have shared with it or made public. `access` says which.
+         */
+        get: operations["listLists"];
+        put?: never;
+        /**
+         * Make a list
+         * @description A profile can have up to 100 lists. Lists start private.
+         */
+        post: operations["createList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One list
+         * @description Public lists can be read by anyone, signed in or not. Household lists need a profile in the same household, and private ones the profile that made them. Lists you can't read are a 404.
+         */
+        get: operations["getList"];
+        put?: never;
+        post?: never;
+        /** Delete a list */
+        delete: operations["deleteList"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename a list, or change its description, privacy or order
+         * @description Only the profile that made the list can change it. Renaming changes the slug, but links use the ID, so they keep working.
+         */
+        patch: operations["updateList"];
+        trace?: never;
+    };
+    "/v1/lists/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What's on a list
+         * @description Readable by the same people as the list. Signed in, each item says how much of it the profile has watched, and `hide_watched=true` leaves out what they've finished. Send the ETag back in `If-None-Match` to get a 304 when nothing has changed.
+         */
+        get: operations["listListItems"];
+        put?: never;
+        /**
+         * Add to a list
+         * @description A list holds up to 1,000 items. Unlike the watchlist, watching something leaves it on the list.
+         */
+        post: operations["addToList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/lists/{id}/items/{item}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take an item off a list */
+        delete: operations["removeFromList"];
+        options?: never;
+        head?: never;
+        /** Change an item's notes */
+        patch: operations["updateListItem"];
+        trace?: never;
+    };
+    "/v1/lists/{id}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put a list in a new order
+         * @description Send every item's ID once, first to last.
+         */
+        put: operations["reorderList"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/activity": {
         parameters: {
             query?: never;
@@ -550,7 +661,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * When history, playback and the watchlist last changed
+         * When history, playback, the watchlist, ratings and lists last changed
          * @description Cheap to call. Poll this and only fetch the lists whose time has moved on.
          */
         get: operations["getActivity"];
@@ -1315,6 +1426,91 @@ export interface components {
             notes?: string;
             item: components["schemas"]["Item"];
         };
+        /** @enum {string} */
+        ListSortBy: "rank" | "added" | "title" | "year";
+        /** @enum {string} */
+        ListSortHow: "asc" | "desc";
+        /**
+         * @description `household` lets every profile in the household read it. `public` lets anyone with the link.
+         * @enum {string}
+         */
+        ListPrivacy: "private" | "household" | "public";
+        List: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description Made from the name, and changes with it. */
+            slug: string;
+            description?: string;
+            privacy: components["schemas"]["ListPrivacy"];
+            sort_by: components["schemas"]["ListSortBy"];
+            sort_how: components["schemas"]["ListSortHow"];
+            owner: components["schemas"]["ListOwner"];
+            /**
+             * @description Why you can see it. `mine` is your own list, `household` another profile's in your household, and `public` anyone else's.
+             * @enum {string}
+             */
+            access: "mine" | "household" | "public";
+            /** Format: int64 */
+            item_count: number;
+            /**
+             * Format: int64
+             * @description How many items the profile reading the list has finished. Left out when signed out.
+             */
+            watched_count?: number;
+            /** @description The list's page on the website. */
+            url: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ListOwner: {
+            username: string;
+            name: string;
+        };
+        NewList: {
+            /** @description Up to 100 characters. */
+            name: string;
+            /** @description Up to 1,000 characters. */
+            description?: string;
+            privacy?: components["schemas"]["ListPrivacy"];
+            sort_by?: components["schemas"]["ListSortBy"];
+            sort_how?: components["schemas"]["ListSortHow"];
+        };
+        ListChanges: {
+            name?: string;
+            /** @description Empty clears it. */
+            description?: string;
+            privacy?: components["schemas"]["ListPrivacy"];
+            sort_by?: components["schemas"]["ListSortBy"];
+            sort_how?: components["schemas"]["ListSortHow"];
+        };
+        ListItem: {
+            /** Format: int64 */
+            id: number;
+            rank: number;
+            /** Format: date-time */
+            listed_at: string;
+            notes?: string;
+            item: components["schemas"]["Item"];
+            progress?: components["schemas"]["ItemProgress"];
+        };
+        /** @description How much of the item the profile reading the list has watched. A film or episode has a total of 1, and a show or season counts aired episodes, leaving out specials for a show. Left out when signed out. */
+        ItemProgress: {
+            watched: number;
+            total: number;
+            /** Format: date-time */
+            last_watched_at?: string;
+        };
+        ListItemsPage: {
+            list: components["schemas"]["List"];
+            items: components["schemas"]["ListItem"][];
+            /** @description How many items match, across every page. */
+            total: number;
+            page: number;
+            limit: number;
+        };
         Activity: {
             /** Format: date-time */
             latest: string;
@@ -1326,6 +1522,11 @@ export interface components {
             watchlist: string;
             /** Format: date-time */
             ratings: string;
+            /**
+             * Format: date-time
+             * @description When any list in the household last changed.
+             */
+            lists: string;
         };
         MediaServer: {
             /** Format: int64 */
@@ -1577,6 +1778,8 @@ export interface components {
     parameters: {
         DeviceCode: string;
         Id: number;
+        ItemId: number;
+        IfNoneMatch: string;
         /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
         ProfileId: number;
     };
@@ -2488,6 +2691,328 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listLists: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["List"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewList"];
+            };
+        };
+        responses: {
+            /** @description Made */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["List"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: {
+                "If-None-Match"?: components["parameters"]["IfNoneMatch"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["List"];
+                };
+            };
+            /** @description Not changed since the ETag you sent */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListChanges"];
+            };
+        };
+        responses: {
+            /** @description Changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["List"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listListItems: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+                type?: "movie" | "show" | "season" | "episode";
+                /** @description Left out, the list's own order. */
+                sort_by?: components["schemas"]["ListSortBy"];
+                sort_how?: components["schemas"]["ListSortHow"];
+                hide_watched?: boolean;
+                page?: number;
+                /** @description 100 by default, and up to 1,000. */
+                limit?: number;
+            };
+            header?: {
+                "If-None-Match"?: components["parameters"]["IfNoneMatch"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list and a page of its items */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListItemsPage"];
+                };
+            };
+            /** @description Not changed since the ETag you sent */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    addToList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewListings"];
+            };
+        };
+        responses: {
+            /** @description What was added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    removeFromList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                item: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateListItem: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                item: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Up to 500 characters. Empty clears them. */
+                    notes: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reorderList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description Reordered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

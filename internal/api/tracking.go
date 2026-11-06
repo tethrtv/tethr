@@ -283,9 +283,10 @@ func (s *Server) GetActivity(ctx context.Context, req GetActivityRequestObject) 
 		Playback:  latest("movies.paused_at", "episodes.paused_at"),
 		Watchlist: latest("watchlist.updated_at"),
 		Ratings:   latest("movies.rated_at", "shows.rated_at", "seasons.rated_at", "episodes.rated_at"),
+		Lists:     latest("lists.updated_at"),
 	}
 	out.Latest = out.History
-	for _, t := range []time.Time{out.Playback, out.Watchlist, out.Ratings} {
+	for _, t := range []time.Time{out.Playback, out.Watchlist, out.Ratings, out.Lists} {
 		if t.After(out.Latest) {
 			out.Latest = t
 		}
