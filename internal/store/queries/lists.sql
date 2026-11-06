@@ -23,7 +23,7 @@ RETURNING *;
 DELETE FROM lists WHERE id = $1;
 
 -- name: VisibleLists :many
-SELECT sqlc.embed(l), o.username AS owner_username, o.name AS owner_name,
+SELECT sqlc.embed(l), o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
     CASE WHEN l.profile_id = sqlc.arg(viewer)::bigint THEN 'mine'
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,

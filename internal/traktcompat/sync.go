@@ -375,7 +375,7 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 		},
 		"sharing_text": map[string]string{"watching": "", "watched": "", "rated": ""},
 		"limits": map[string]any{
-			"list":      map[string]int{"count": 0, "item_count": 0},
+			"list":      map[string]int{"count": 100, "item_count": 1000},
 			"watchlist": map[string]int{"item_count": 10000},
 			"favorites": map[string]int{"item_count": 0},
 		},
