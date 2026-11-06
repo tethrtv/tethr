@@ -22,9 +22,9 @@ func (q *Queries) CountLists(ctx context.Context, profileID int64) (int64, error
 }
 
 const createList = `-- name: CreateList :one
-INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how, import_id)
-VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, import_id
+INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how)
+VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7)
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how
 `
 
 type CreateListParams struct {
@@ -35,7 +35,6 @@ type CreateListParams struct {
 	Privacy     string
 	SortBy      string
 	SortHow     string
-	ImportID    *int64
 }
 
 func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, error) {
@@ -47,7 +46,6 @@ func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, e
 		arg.Privacy,
 		arg.SortBy,
 		arg.SortHow,
-		arg.ImportID,
 	)
 	var i List
 	err := row.Scan(
@@ -62,7 +60,6 @@ func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, e
 		&i.UpdatedAt,
 		&i.SortBy,
 		&i.SortHow,
-		&i.ImportID,
 	)
 	return i, err
 }
@@ -221,7 +218,7 @@ func (q *Queries) ListSlugs(ctx context.Context, arg ListSlugsParams) ([]string,
 }
 
 const ownedList = `-- name: OwnedList :one
-SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, import_id FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UPDATE
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UPDATE
 `
 
 type OwnedListParams struct {
@@ -244,7 +241,6 @@ func (q *Queries) OwnedList(ctx context.Context, arg OwnedListParams) (List, err
 		&i.UpdatedAt,
 		&i.SortBy,
 		&i.SortHow,
-		&i.ImportID,
 	)
 	return i, err
 }
@@ -367,7 +363,7 @@ const updateList = `-- name: UpdateList :one
 UPDATE lists
 SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, updated_at = now()
 WHERE id = $1
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, import_id
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how
 `
 
 type UpdateListParams struct {
@@ -403,13 +399,12 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 		&i.UpdatedAt,
 		&i.SortBy,
 		&i.SortHow,
-		&i.ImportID,
 	)
 	return i, err
 }
 
 const visibleLists = `-- name: VisibleLists :many
-SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, l.import_id, o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
+SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
     CASE WHEN l.profile_id = $1::bigint THEN 'mine'
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
@@ -463,7 +458,6 @@ func (q *Queries) VisibleLists(ctx context.Context, arg VisibleListsParams) ([]V
 			&i.List.UpdatedAt,
 			&i.List.SortBy,
 			&i.List.SortHow,
-			&i.List.ImportID,
 			&i.OwnerUsername,
 			&i.OwnerName,
 			&i.OwnerPrivate,
