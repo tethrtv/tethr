@@ -31,7 +31,7 @@ func (s *Server) AddMediaServer(ctx context.Context, req AddMediaServerRequestOb
 		return AddMediaServer401JSONResponse(notSignedIn), err
 	}
 	if !req.Body.Kind.Valid() {
-		return AddMediaServer400JSONResponse{problem("unknown_server", "Tethr can take plays from Jellyfin for now.")}, nil
+		return AddMediaServer400JSONResponse{problem("unknown_server", "Tethr can take plays from Jellyfin, Plex and Emby.")}, nil
 	}
 	m, secret, err := core.AddMediaServer(ctx, s.DB, accountID, string(req.Body.Kind))
 	if err != nil {
