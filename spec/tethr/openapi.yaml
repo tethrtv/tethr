@@ -2745,6 +2745,11 @@ components:
           $ref: '#/components/schemas/TitleRating'
         listing:
           $ref: '#/components/schemas/TitleListing'
+        lists:
+          type: array
+          description: Your own lists the film or show itself is on.
+          items:
+            $ref: '#/components/schemas/TitleInList'
         episode_order:
           type: string
           description: The TMDB episode group the show follows for this profile. Left out, it's aired order.
@@ -2777,6 +2782,16 @@ components:
         listed_at:
           type: string
           format: date-time
+    TitleInList:
+      type: object
+      required: [list_id, item_id]
+      properties:
+        list_id:
+          type: integer
+          format: int64
+        item_id:
+          type: integer
+          format: int64
     SeasonDetail:
       type: object
       required: [number, episodes]

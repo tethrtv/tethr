@@ -46,6 +46,10 @@ func TestListEndpoints(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"added":2`) {
 		t.Fatalf("add = %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(t, h, "GET", "/v1/titles/tmdb-27205?type=movie", "", cookie); !strings.Contains(rec.Body.String(), `"lists":[{"item_id":`) ||
+		!strings.Contains(rec.Body.String(), `"list_id":`+strconv.FormatInt(list.Id, 10)) {
+		t.Errorf("title's lists = %s", rec.Body)
+	}
 	if rec := do(t, h, "POST", "/v1/history", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}}}]}`, cookie); rec.Code != http.StatusOK {
 		t.Fatalf("watch = %d %s", rec.Code, rec.Body)
 	}
