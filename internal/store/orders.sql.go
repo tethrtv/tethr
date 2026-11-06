@@ -82,6 +82,85 @@ func (q *Queries) DueEpisodeOrders(ctx context.Context, limit int32) ([]string, 
 	return items, nil
 }
 
+const episodeInOrder = `-- name: EpisodeInOrder :one
+SELECT e.id, e.show_id, e.season_number, e.episode_number, e.tmdb_episode_id, e.created_at, e.first_aired, e.removed_at
+FROM profile_show_settings s
+JOIN episode_order_entries x ON x.order_id = s.episode_order_id
+JOIN episodes e ON e.tmdb_episode_id = x.tmdb_episode_id AND e.show_id = s.show_id AND e.removed_at IS NULL
+WHERE s.profile_id = $1 AND s.show_id = $2 AND x.season_number = $3 AND x.episode_number = $4
+`
+
+type EpisodeInOrderParams struct {
+	ProfileID     int64
+	ShowID        int64
+	SeasonNumber  int32
+	EpisodeNumber int32
+}
+
+type EpisodeInOrderRow struct {
+	Episode Episode
+}
+
+func (q *Queries) EpisodeInOrder(ctx context.Context, arg EpisodeInOrderParams) (EpisodeInOrderRow, error) {
+	row := q.db.QueryRow(ctx, episodeInOrder,
+		arg.ProfileID,
+		arg.ShowID,
+		arg.SeasonNumber,
+		arg.EpisodeNumber,
+	)
+	var i EpisodeInOrderRow
+	err := row.Scan(
+		&i.Episode.ID,
+		&i.Episode.ShowID,
+		&i.Episode.SeasonNumber,
+		&i.Episode.EpisodeNumber,
+		&i.Episode.TmdbEpisodeID,
+		&i.Episode.CreatedAt,
+		&i.Episode.FirstAired,
+		&i.Episode.RemovedAt,
+	)
+	return i, err
+}
+
+const episodeOrderNumbers = `-- name: EpisodeOrderNumbers :many
+SELECT e.id, x.season_number, x.episode_number
+FROM episodes e
+JOIN profile_show_settings s ON s.profile_id = $1 AND s.show_id = e.show_id
+JOIN episode_order_entries x ON x.order_id = s.episode_order_id AND x.tmdb_episode_id = e.tmdb_episode_id
+WHERE e.id = ANY($2::bigint[])
+`
+
+type EpisodeOrderNumbersParams struct {
+	ProfileID  int64
+	EpisodeIds []int64
+}
+
+type EpisodeOrderNumbersRow struct {
+	ID            int64
+	SeasonNumber  int32
+	EpisodeNumber int32
+}
+
+func (q *Queries) EpisodeOrderNumbers(ctx context.Context, arg EpisodeOrderNumbersParams) ([]EpisodeOrderNumbersRow, error) {
+	rows, err := q.db.Query(ctx, episodeOrderNumbers, arg.ProfileID, arg.EpisodeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EpisodeOrderNumbersRow
+	for rows.Next() {
+		var i EpisodeOrderNumbersRow
+		if err := rows.Scan(&i.ID, &i.SeasonNumber, &i.EpisodeNumber); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const episodeOrderShow = `-- name: EpisodeOrderShow :one
 SELECT show_id FROM episode_orders WHERE tmdb_group_id = $1
 `

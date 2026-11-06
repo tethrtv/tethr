@@ -68,7 +68,7 @@ func (s *Server) rate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var ratings []core.Rating
-	for _, e := range in.entries() {
+	for _, e := range in.entries(caller(r).ProfileID) {
 		var rating int16
 		if e.rating != nil {
 			rating = *e.rating
@@ -92,7 +92,7 @@ func (s *Server) unrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var refs []core.Ref
-	for _, e := range in.entries() {
+	for _, e := range in.entries(caller(r).ProfileID) {
 		refs = append(refs, e.ref)
 	}
 	result, err := core.Unrate(r.Context(), s.DB, caller(r).ProfileID, refs)
@@ -150,11 +150,11 @@ type watchedSeason struct {
 func watchedSeasons(episodes []core.WatchedEpisode) []watchedSeason {
 	out := []watchedSeason{}
 	for _, e := range episodes {
-		if len(out) == 0 || out[len(out)-1].Number != e.Episode.SeasonNumber {
-			out = append(out, watchedSeason{Number: e.Episode.SeasonNumber})
+		if len(out) == 0 || out[len(out)-1].Number != e.Episode.Season {
+			out = append(out, watchedSeason{Number: e.Episode.Season})
 		}
 		s := &out[len(out)-1]
-		s.Episodes = append(s.Episodes, watchedEpisode{Number: e.Episode.EpisodeNumber, Plays: e.Plays.Plays, LastWatchedAt: stamp(e.LastWatchedAt)})
+		s.Episodes = append(s.Episodes, watchedEpisode{Number: e.Episode.Number, Plays: e.Plays.Plays, LastWatchedAt: stamp(e.LastWatchedAt)})
 	}
 	return out
 }
@@ -276,7 +276,7 @@ func (s *Server) hide(section string, remove bool) http.HandlerFunc {
 			return
 		}
 		var refs []core.Ref
-		for _, e := range in.entries() {
+		for _, e := range in.entries(caller(r).ProfileID) {
 			refs = append(refs, e.ref)
 		}
 		change, key := core.Hide, "added"

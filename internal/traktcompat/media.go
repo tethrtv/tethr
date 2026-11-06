@@ -58,7 +58,7 @@ func titleJSON(i core.Item) title {
 
 func episodeJSON(i core.Item) episode {
 	e := i.Episode
-	return episode{Season: e.SeasonNumber, Number: e.EpisodeNumber, IDs: ids{Trakt: e.ID, TMDB: e.TmdbEpisodeID}}
+	return episode{Season: e.Season, Number: e.Number, IDs: ids{Trakt: e.ID, TMDB: e.TmdbEpisodeID}}
 }
 
 func itemFields(i core.Item, out map[string]any) map[string]any {
@@ -166,7 +166,7 @@ type entryIn struct {
 	rating    *int16
 }
 
-func (in syncIn) entries() []entryIn {
+func (in syncIn) entries(profileID int64) []entryIn {
 	var out []entryIn
 	for _, m := range in.Movies {
 		out = append(out, entryIn{core.Ref{Kind: "movie", IDs: m.IDs.core()}, m.WatchedAt, m.ListedAt, m.Notes, m.RatedAt, m.Rating})
@@ -181,7 +181,7 @@ func (in syncIn) entries() []entryIn {
 				out = append(out, entryIn{core.Ref{Kind: "season", Show: show, Season: s.Number}, first(s.WatchedAt, m.WatchedAt), first(s.ListedAt, m.ListedAt), s.Notes, first(s.RatedAt, m.RatedAt), s.Rating})
 			}
 			for _, e := range s.Episodes {
-				ref := core.Ref{Kind: "episode", IDs: e.IDs.core(), Show: show, Season: s.Number, Number: e.Number}
+				ref := core.Ref{Kind: "episode", IDs: e.IDs.core(), Show: show, Season: s.Number, Number: e.Number, OrderedFor: profileID}
 				out = append(out, entryIn{ref, first(e.WatchedAt, s.WatchedAt, m.WatchedAt), first(e.ListedAt, s.ListedAt, m.ListedAt), e.Notes, first(e.RatedAt, s.RatedAt, m.RatedAt), e.Rating})
 			}
 		}

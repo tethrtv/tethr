@@ -115,7 +115,7 @@ func scrobble(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble, step 
 			return err
 		}
 		result.Progress = s.Progress
-		result.Item, err = describe(ctx, q, r)
+		result.Item, err = describe(ctx, q, c.ProfileID, r)
 		return err
 	})
 	return result, err
@@ -268,7 +268,7 @@ func History(ctx context.Context, db *pgxpool.Pool, profileID int64, f HistoryFi
 			episodeIDs = append(episodeIDs, *e.EpisodeID)
 		}
 	}
-	c, err := loadCatalogue(ctx, q, titleIDs, episodeIDs)
+	c, err := loadCatalogue(ctx, q, profileID, titleIDs, episodeIDs)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -430,7 +430,7 @@ func Playback(ctx context.Context, db *pgxpool.Pool, profileID int64, kind strin
 			episodeIDs = append(episodeIDs, *row.EpisodeID)
 		}
 	}
-	c, err := loadCatalogue(ctx, q, titleIDs, episodeIDs)
+	c, err := loadCatalogue(ctx, q, profileID, titleIDs, episodeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +472,7 @@ func Watchlist(ctx context.Context, db *pgxpool.Pool, profileID int64, kind stri
 			episodeIDs = append(episodeIDs, *row.EpisodeID)
 		}
 	}
-	c, err := loadCatalogue(ctx, q, titleIDs, episodeIDs)
+	c, err := loadCatalogue(ctx, q, profileID, titleIDs, episodeIDs)
 	if err != nil {
 		return nil, err
 	}

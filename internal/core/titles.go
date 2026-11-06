@@ -40,7 +40,7 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 	if err != nil {
 		return TitleState{}, err
 	}
-	item, err := describe(ctx, q, resolved{title: t})
+	item, err := describe(ctx, q, 0, resolved{title: t})
 	if err != nil {
 		return TitleState{}, err
 	}
@@ -150,7 +150,7 @@ func Search(ctx context.Context, db *pgxpool.Pool, profileID int64, words, kind 
 	if err != nil {
 		return nil, err
 	}
-	c, err := loadCatalogue(ctx, q, ids, nil)
+	c, err := loadCatalogue(ctx, q, 0, ids, nil)
 	if err != nil {
 		return nil, err
 	}

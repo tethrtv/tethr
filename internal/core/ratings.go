@@ -35,7 +35,7 @@ func Ratings(ctx context.Context, db *pgxpool.Pool, profileID int64, kind string
 			episodeIDs = append(episodeIDs, *row.EpisodeID)
 		}
 	}
-	c, err := loadCatalogue(ctx, q, titleIDs, episodeIDs)
+	c, err := loadCatalogue(ctx, q, profileID, titleIDs, episodeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func Hidden(ctx context.Context, db *pgxpool.Pool, profileID int64, section, kin
 	for _, row := range rows {
 		titleIDs = append(titleIDs, row.TitleID)
 	}
-	c, err := loadCatalogue(ctx, q, titleIDs, nil)
+	c, err := loadCatalogue(ctx, q, 0, titleIDs, nil)
 	if err != nil {
 		return nil, err
 	}

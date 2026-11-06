@@ -97,11 +97,7 @@ func (s *Server) UseAiredOrder(ctx context.Context, req UseAiredOrderRequestObje
 var noSuchShow = problem("not_found", "There’s no show with that ID or slug.")
 
 func toEpisode(e core.OrderedEpisode) Episode {
-	out := *toItem(core.Item{Episode: &e.Episode}).Episode
-	if e.Season != e.SeasonNumber || e.Number != e.EpisodeNumber {
-		out.Order = &OrderNumber{Season: int(e.Season), Number: int(e.Number)}
-	}
-	return out
+	return *toItem(core.Item{Episode: &e}).Episode
 }
 
 func (s *Server) Search(ctx context.Context, req SearchRequestObject) (SearchResponseObject, error) {

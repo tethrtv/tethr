@@ -53,3 +53,17 @@ SELECT show_id FROM episode_orders WHERE tmdb_group_id = $1;
 -- name: ForgetEpisodeOrder :exec
 UPDATE profile_show_settings SET episode_order_id = NULL, updated_at = now()
 WHERE episode_order_id = (SELECT id FROM episode_orders WHERE tmdb_group_id = $1);
+
+-- name: EpisodeInOrder :one
+SELECT sqlc.embed(e)
+FROM profile_show_settings s
+JOIN episode_order_entries x ON x.order_id = s.episode_order_id
+JOIN episodes e ON e.tmdb_episode_id = x.tmdb_episode_id AND e.show_id = s.show_id AND e.removed_at IS NULL
+WHERE s.profile_id = $1 AND s.show_id = $2 AND x.season_number = $3 AND x.episode_number = $4;
+
+-- name: EpisodeOrderNumbers :many
+SELECT e.id, x.season_number, x.episode_number
+FROM episodes e
+JOIN profile_show_settings s ON s.profile_id = $1 AND s.show_id = e.show_id
+JOIN episode_order_entries x ON x.order_id = s.episode_order_id AND x.tmdb_episode_id = e.tmdb_episode_id
+WHERE e.id = ANY(sqlc.arg(episode_ids)::bigint[]);
