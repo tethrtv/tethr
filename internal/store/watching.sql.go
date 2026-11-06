@@ -780,41 +780,6 @@ func (q *Queries) SetWatching(ctx context.Context, arg SetWatchingParams) error 
 	return err
 }
 
-const showOutline = `-- name: ShowOutline :many
-SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes
-WHERE show_id = $1 AND removed_at IS NULL
-ORDER BY season_number = 0, season_number, episode_number
-`
-
-func (q *Queries) ShowOutline(ctx context.Context, showID int64) ([]Episode, error) {
-	rows, err := q.db.Query(ctx, showOutline, showID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Episode
-	for rows.Next() {
-		var i Episode
-		if err := rows.Scan(
-			&i.ID,
-			&i.ShowID,
-			&i.SeasonNumber,
-			&i.EpisodeNumber,
-			&i.TmdbEpisodeID,
-			&i.CreatedAt,
-			&i.FirstAired,
-			&i.RemovedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const titleListing = `-- name: TitleListing :one
 SELECT i.id, i.listed_at
 FROM list_items i

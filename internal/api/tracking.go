@@ -418,10 +418,9 @@ func (s *Server) GetUpNext(ctx context.Context, req GetUpNextRequestObject) (Get
 	}
 	out := make(GetUpNext200JSONResponse, 0, len(entries))
 	for _, e := range entries {
-		next := core.Item{Title: e.Show.Title, Episode: &e.Next}
 		entry := UpNextEntry{
 			Show:          toItem(e.Show).Title,
-			Next:          *toItem(next).Episode,
+			Next:          toEpisode(e.Next),
 			LastWatchedAt: e.LastWatchedAt,
 			Aired:         int(e.Aired),
 			Watched:       int(e.Watched),

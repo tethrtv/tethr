@@ -12,8 +12,8 @@ import (
 
 type UpNextEntry struct {
 	Show          Item
-	Next          store.Episode
-	Last          *store.Episode
+	Next          OrderedEpisode
+	Last          *OrderedEpisode
 	LastWatchedAt time.Time
 	Aired         int64
 	Watched       int64
@@ -57,13 +57,9 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 		}
 		watched[r.TitleID][*r.EpisodeID] = r.LastWatchedAt
 	}
-	outlines, err := q.OutlineEpisodes(ctx, showIDs)
+	episodes, err := showEpisodes(ctx, q, profileID, showIDs)
 	if err != nil {
 		return nil, err
-	}
-	episodes := map[int64][]store.Episode{}
-	for _, e := range outlines {
-		episodes[e.ShowID] = append(episodes[e.ShowID], e)
 	}
 
 	now := time.Now()

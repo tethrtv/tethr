@@ -559,6 +559,47 @@ func TestUpNextEndpoints(t *testing.T) {
 	if rec := do(t, h, "PUT", "/v1/up-next/hidden/5", "", cookie); rec.Code != http.StatusNotFound {
 		t.Errorf("hide unknown = %d", rec.Code)
 	}
+
+	order := "/v1/titles/tmdb-1396/episode-order"
+	if rec := do(t, h, "PUT", order, `{"tmdb_group":"dvd"}`, cookie); rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("without tmdb = %d %s", rec.Code, rec.Body)
+	}
+	s.FetchOrder = func(_ context.Context, id string) (core.EpisodeOrder, error) {
+		if id != "dvd" {
+			return core.EpisodeOrder{}, core.ErrWrongShow
+		}
+		return core.EpisodeOrder{TMDBGroupID: id, TMDBType: 3, Episodes: []core.OrderEntry{
+			{TMDBID: 2, ShowTMDBID: 1396, Season: 1, Number: 1},
+			{TMDBID: 1, ShowTMDBID: 1396, Season: 1, Number: 2},
+		}}, nil
+	}
+	h = s.Handler()
+	if rec := do(t, h, "PUT", order, `{"tmdb_group":"nope"}`, cookie); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("unknown group = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "PUT", "/v1/titles/tmdb-1/episode-order", `{"tmdb_group":"dvd"}`, cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown show = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "PUT", order, `{"tmdb_group":"dvd"}`, cookie); rec.Code != http.StatusNoContent {
+		t.Fatalf("pick = %d %s", rec.Code, rec.Body)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/up-next", "", cookie).Body.Bytes(), &next)
+	if len(next) != 1 || next[0].Next.Number != 2 || next[0].Next.Order == nil || next[0].Next.Order.Number != 1 {
+		t.Errorf("up next in dvd order = %+v", next)
+	}
+	var title TitleDetail
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/titles/tmdb-1396?type=show", "", cookie).Body.Bytes(), &title)
+	if title.EpisodeOrder == nil || *title.EpisodeOrder != "dvd" || (*title.Seasons)[0].Episodes[0].Episode.Number != 2 {
+		t.Errorf("title in dvd order = %+v", title)
+	}
+	if rec := do(t, h, "DELETE", order, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("back to aired = %d %s", rec.Code, rec.Body)
+	}
+	var aired []UpNextEntry
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/up-next", "", cookie).Body.Bytes(), &aired)
+	if len(aired) != 1 || aired[0].Next.Order != nil {
+		t.Errorf("up next in aired order = %+v", aired)
+	}
 }
 
 func traktZip(t *testing.T) string {

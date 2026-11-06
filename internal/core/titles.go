@@ -1,8 +1,10 @@
 package core
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -17,6 +19,7 @@ type TitleState struct {
 	Resume  *Entry
 	Rating  *Entry
 	Listing *Entry
+	Order   string
 	Seasons []SeasonState
 }
 
@@ -26,30 +29,14 @@ type SeasonState struct {
 }
 
 type EpisodeState struct {
-	Episode store.Episode
+	Episode OrderedEpisode
 	Watches []Entry
 	Resume  *Entry
 }
 
 func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind string) (TitleState, error) {
 	q := store.New(db)
-	ids := IDs{Slug: id}
-	if n, err := strconv.ParseInt(id, 10, 64); err == nil {
-		ids = IDs{Trakt: n}
-	} else if n, err := strconv.ParseInt(strings.TrimPrefix(id, "tmdb-"), 10, 64); err == nil && strings.HasPrefix(id, "tmdb-") {
-		ids = IDs{TMDB: n}
-	}
-	kinds := []string{"movie", "show"}
-	if kind != "" {
-		kinds = []string{kind}
-	}
-	var t store.Title
-	var err error
-	for _, kind := range kinds {
-		if t, err = findTitle(ctx, q, kind, ids); !errors.Is(err, ErrNotFound) {
-			break
-		}
-	}
+	t, err := titleByPath(ctx, q, id, kind)
 	if err != nil {
 		return TitleState{}, err
 	}
@@ -102,18 +89,51 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 		return s, nil
 	}
 
-	episodes, err := q.ShowOutline(ctx, t.ID)
+	s.Order, err = q.ShowOrder(ctx, store.ShowOrderParams{ProfileID: profileID, ShowID: t.ID})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return s, err
+	}
+	episodes, err := showEpisodes(ctx, q, profileID, []int64{t.ID})
 	if err != nil {
 		return s, err
 	}
-	for _, e := range episodes {
-		if len(s.Seasons) == 0 || s.Seasons[len(s.Seasons)-1].Number != e.SeasonNumber {
-			s.Seasons = append(s.Seasons, SeasonState{Number: e.SeasonNumber})
+	shown := episodes[t.ID]
+	special := func(e OrderedEpisode) int {
+		if e.Season == 0 {
+			return 1
+		}
+		return 0
+	}
+	slices.SortStableFunc(shown, func(a, b OrderedEpisode) int { return cmp.Compare(special(a), special(b)) })
+	for _, e := range shown {
+		if len(s.Seasons) == 0 || s.Seasons[len(s.Seasons)-1].Number != e.Season {
+			s.Seasons = append(s.Seasons, SeasonState{Number: e.Season})
 		}
 		season := &s.Seasons[len(s.Seasons)-1]
 		season.Episodes = append(season.Episodes, EpisodeState{Episode: e, Watches: plays[e.ID], Resume: resume[e.ID]})
 	}
 	return s, nil
+}
+
+func titleByPath(ctx context.Context, q *store.Queries, id, kind string) (store.Title, error) {
+	ids := IDs{Slug: id}
+	if n, err := strconv.ParseInt(id, 10, 64); err == nil {
+		ids = IDs{Trakt: n}
+	} else if n, err := strconv.ParseInt(strings.TrimPrefix(id, "tmdb-"), 10, 64); err == nil && strings.HasPrefix(id, "tmdb-") {
+		ids = IDs{TMDB: n}
+	}
+	kinds := []string{"movie", "show"}
+	if kind != "" {
+		kinds = []string{kind}
+	}
+	var t store.Title
+	var err error
+	for _, kind := range kinds {
+		if t, err = findTitle(ctx, q, kind, ids); !errors.Is(err, ErrNotFound) {
+			break
+		}
+	}
+	return t, err
 }
 
 func Search(ctx context.Context, db *pgxpool.Pool, profileID int64, words, kind string) ([]Item, error) {

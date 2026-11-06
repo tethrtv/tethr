@@ -143,7 +143,9 @@ func serve(log *slog.Logger) error {
 	var details *meta.Server
 	if token := os.Getenv("TMDB_TOKEN"); token != "" {
 		client := &tmdb.Client{Token: token}
-		go jobs.Outlines{DB: db, TMDB: client, Log: log}.Run(ctx)
+		outlines := jobs.Outlines{DB: db, TMDB: client, Log: log}
+		go outlines.Run(ctx)
+		v1.FetchOrder = outlines.Order
 		details = &meta.Server{TMDB: client, Log: log, SignedIn: v1.SignedIn}
 	} else {
 		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in and the website shows no names or posters")

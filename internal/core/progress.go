@@ -76,7 +76,7 @@ func Watched(ctx context.Context, db *pgxpool.Pool, profileID int64, kind string
 }
 
 type EpisodeProgress struct {
-	Episode       store.Episode
+	Episode       OrderedEpisode
 	LastWatchedAt *time.Time
 }
 
@@ -94,8 +94,8 @@ type ShowProgress struct {
 	LastWatchedAt *time.Time
 	Seasons       []SeasonProgress
 	HiddenSeasons []int32
-	Next          *store.Episode
-	Last          *store.Episode
+	Next          *OrderedEpisode
+	Last          *OrderedEpisode
 }
 
 func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, specials bool) (ShowProgress, error) {
@@ -111,7 +111,7 @@ func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, 
 	if err != nil {
 		return ShowProgress{}, err
 	}
-	episodes, err := q.OutlineEpisodes(ctx, []int64{r.title.ID})
+	episodes, err := showEpisodes(ctx, q, profileID, []int64{r.title.ID})
 	if err != nil {
 		return ShowProgress{}, err
 	}
@@ -127,14 +127,14 @@ func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, 
 	if err != nil {
 		return ShowProgress{}, err
 	}
-	p := showProgress(episodes, watched, hidden, specials, time.Now())
+	p := showProgress(episodes[r.title.ID], watched, hidden, specials, time.Now())
 	p.Show = item
 	p.HiddenSeasons = hidden
 	return p, nil
 }
 
-// Episodes come in the order the profile watches the show in, so next is worked out by position, not by number.
-func showProgress(episodes []store.Episode, watched map[int64]time.Time, hidden []int32, specials bool, now time.Time) ShowProgress {
+// Episodes come in the profile's chosen order, so next is worked out by position, not by number.
+func showProgress(episodes []OrderedEpisode, watched map[int64]time.Time, hidden []int32, specials bool, now time.Time) ShowProgress {
 	p := ShowProgress{Seasons: []SeasonProgress{}}
 	last := -1
 	for i, e := range episodes {
@@ -147,13 +147,13 @@ func showProgress(episodes []store.Episode, watched map[int64]time.Time, hidden 
 		p.Last = &episodes[last]
 	}
 
-	var afterLast, gap *store.Episode
+	var afterLast, gap *OrderedEpisode
 	for i, e := range episodes {
-		if e.FirstAired == nil || e.FirstAired.After(now) || slices.Contains(hidden, e.SeasonNumber) || (e.SeasonNumber == 0 && !specials) {
+		if e.FirstAired == nil || e.FirstAired.After(now) || slices.Contains(hidden, e.Season) || (e.Season == 0 && !specials) {
 			continue
 		}
-		if len(p.Seasons) == 0 || p.Seasons[len(p.Seasons)-1].Number != e.SeasonNumber {
-			p.Seasons = append(p.Seasons, SeasonProgress{Number: e.SeasonNumber})
+		if len(p.Seasons) == 0 || p.Seasons[len(p.Seasons)-1].Number != e.Season {
+			p.Seasons = append(p.Seasons, SeasonProgress{Number: e.Season})
 		}
 		s := &p.Seasons[len(p.Seasons)-1]
 		ep := EpisodeProgress{Episode: e}
@@ -161,7 +161,7 @@ func showProgress(episodes []store.Episode, watched map[int64]time.Time, hidden 
 			ep.LastWatchedAt = &at
 			s.Completed++
 			p.Completed++
-		} else if e.SeasonNumber > 0 {
+		} else if e.Season > 0 {
 			if gap == nil {
 				gap = &episodes[i]
 			}
