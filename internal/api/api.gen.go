@@ -124,6 +124,90 @@ func (e ItemRefType) Valid() bool {
 	}
 }
 
+// Defines values for ListAccess.
+const (
+	ListAccessHousehold ListAccess = "household"
+	ListAccessMine      ListAccess = "mine"
+	ListAccessPublic    ListAccess = "public"
+)
+
+// Valid indicates whether the value is a known member of the ListAccess enum.
+func (e ListAccess) Valid() bool {
+	switch e {
+	case ListAccessHousehold:
+		return true
+	case ListAccessMine:
+		return true
+	case ListAccessPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListPrivacy.
+const (
+	ListPrivacyHousehold ListPrivacy = "household"
+	ListPrivacyPrivate   ListPrivacy = "private"
+	ListPrivacyPublic    ListPrivacy = "public"
+)
+
+// Valid indicates whether the value is a known member of the ListPrivacy enum.
+func (e ListPrivacy) Valid() bool {
+	switch e {
+	case ListPrivacyHousehold:
+		return true
+	case ListPrivacyPrivate:
+		return true
+	case ListPrivacyPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListSortBy.
+const (
+	ListSortByAdded ListSortBy = "added"
+	ListSortByRank  ListSortBy = "rank"
+	ListSortByTitle ListSortBy = "title"
+	ListSortByYear  ListSortBy = "year"
+)
+
+// Valid indicates whether the value is a known member of the ListSortBy enum.
+func (e ListSortBy) Valid() bool {
+	switch e {
+	case ListSortByAdded:
+		return true
+	case ListSortByRank:
+		return true
+	case ListSortByTitle:
+		return true
+	case ListSortByYear:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListSortHow.
+const (
+	Asc  ListSortHow = "asc"
+	Desc ListSortHow = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListSortHow enum.
+func (e ListSortHow) Valid() bool {
+	switch e {
+	case Asc:
+		return true
+	case Desc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MediaServerKind.
 const (
 	MediaServerKindEmby     MediaServerKind = "emby"
@@ -331,6 +415,30 @@ func (e ListHistoryParamsType) Valid() bool {
 	}
 }
 
+// Defines values for ListListItemsParamsType.
+const (
+	ListListItemsParamsTypeEpisode ListListItemsParamsType = "episode"
+	ListListItemsParamsTypeMovie   ListListItemsParamsType = "movie"
+	ListListItemsParamsTypeSeason  ListListItemsParamsType = "season"
+	ListListItemsParamsTypeShow    ListListItemsParamsType = "show"
+)
+
+// Valid indicates whether the value is a known member of the ListListItemsParamsType enum.
+func (e ListListItemsParamsType) Valid() bool {
+	switch e {
+	case ListListItemsParamsTypeEpisode:
+		return true
+	case ListListItemsParamsTypeMovie:
+		return true
+	case ListListItemsParamsTypeSeason:
+		return true
+	case ListListItemsParamsTypeShow:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListPlaybackParamsType.
 const (
 	ListPlaybackParamsTypeEpisode ListPlaybackParamsType = "episode"
@@ -443,8 +551,11 @@ type Account struct {
 
 // Activity defines model for Activity.
 type Activity struct {
-	History   time.Time `json:"history"`
-	Latest    time.Time `json:"latest"`
+	History time.Time `json:"history"`
+	Latest  time.Time `json:"latest"`
+
+	// Lists When any list in the household last changed.
+	Lists     time.Time `json:"lists"`
 	Playback  time.Time `json:"playback"`
 	Ratings   time.Time `json:"ratings"`
 	Watchlist time.Time `json:"watchlist"`
@@ -678,6 +789,13 @@ type Item struct {
 // ItemType defines model for Item.Type.
 type ItemType string
 
+// ItemProgress How much of the item the profile reading the list has watched. A film or episode has a total of 1, and a show or season counts aired episodes, leaving out specials for a show. Left out when signed out.
+type ItemProgress struct {
+	LastWatchedAt *time.Time `json:"last_watched_at,omitempty"`
+	Total         int        `json:"total"`
+	Watched       int        `json:"watched"`
+}
+
 // ItemRef A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 type ItemRef struct {
 	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
@@ -692,6 +810,86 @@ type ItemRef struct {
 
 // ItemRefType defines model for ItemRef.Type.
 type ItemRefType string
+
+// List defines model for List.
+type List struct {
+	// Access Why you can see it. `mine` is your own list, `household` another profile's in your household, and `public` anyone else's.
+	Access      ListAccess `json:"access"`
+	CreatedAt   time.Time  `json:"created_at"`
+	Description *string    `json:"description,omitempty"`
+	Id          int64      `json:"id"`
+	ItemCount   int64      `json:"item_count"`
+	Name        string     `json:"name"`
+	Owner       ListOwner  `json:"owner"`
+
+	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
+	Privacy ListPrivacy `json:"privacy"`
+
+	// Slug Made from the name, and changes with it.
+	Slug      string      `json:"slug"`
+	SortBy    ListSortBy  `json:"sort_by"`
+	SortHow   ListSortHow `json:"sort_how"`
+	UpdatedAt time.Time   `json:"updated_at"`
+
+	// Url The list's page on the website.
+	Url string `json:"url"`
+
+	// WatchedCount How many items the profile reading the list has finished. Left out when signed out.
+	WatchedCount *int64 `json:"watched_count,omitempty"`
+}
+
+// ListAccess Why you can see it. `mine` is your own list, `household` another profile's in your household, and `public` anyone else's.
+type ListAccess string
+
+// ListChanges defines model for ListChanges.
+type ListChanges struct {
+	// Description Empty clears it.
+	Description *string `json:"description,omitempty"`
+	Name        *string `json:"name,omitempty"`
+
+	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
+	Privacy *ListPrivacy `json:"privacy,omitempty"`
+	SortBy  *ListSortBy  `json:"sort_by,omitempty"`
+	SortHow *ListSortHow `json:"sort_how,omitempty"`
+}
+
+// ListItem defines model for ListItem.
+type ListItem struct {
+	Id       int64     `json:"id"`
+	Item     Item      `json:"item"`
+	ListedAt time.Time `json:"listed_at"`
+	Notes    *string   `json:"notes,omitempty"`
+
+	// Progress How much of the item the profile reading the list has watched. A film or episode has a total of 1, and a show or season counts aired episodes, leaving out specials for a show. Left out when signed out.
+	Progress *ItemProgress `json:"progress,omitempty"`
+	Rank     int           `json:"rank"`
+}
+
+// ListItemsPage defines model for ListItemsPage.
+type ListItemsPage struct {
+	Items []ListItem `json:"items"`
+	Limit int        `json:"limit"`
+	List  List       `json:"list"`
+	Page  int        `json:"page"`
+
+	// Total How many items match, across every page.
+	Total int `json:"total"`
+}
+
+// ListOwner defines model for ListOwner.
+type ListOwner struct {
+	Name     string `json:"name"`
+	Username string `json:"username"`
+}
+
+// ListPrivacy `household` lets every profile in the household read it. `public` lets anyone with the link.
+type ListPrivacy string
+
+// ListSortBy defines model for ListSortBy.
+type ListSortBy string
+
+// ListSortHow defines model for ListSortHow.
+type ListSortHow string
 
 // Listing defines model for Listing.
 type Listing struct {
@@ -750,6 +948,20 @@ type NewApp struct {
 
 	// RedirectUris Where browser sign-in returns to. https, a custom scheme like `myplayer://callback`, or http on localhost.
 	RedirectUris *[]string `json:"redirect_uris,omitempty"`
+}
+
+// NewList defines model for NewList.
+type NewList struct {
+	// Description Up to 1,000 characters.
+	Description *string `json:"description,omitempty"`
+
+	// Name Up to 100 characters.
+	Name string `json:"name"`
+
+	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
+	Privacy *ListPrivacy `json:"privacy,omitempty"`
+	SortBy  *ListSortBy  `json:"sort_by,omitempty"`
+	SortHow *ListSortHow `json:"sort_how,omitempty"`
 }
 
 // NewListings defines model for NewListings.
@@ -1098,6 +1310,12 @@ type DeviceCode = string
 // Id defines model for Id.
 type Id = int64
 
+// IfNoneMatch defines model for IfNoneMatch.
+type IfNoneMatch = string
+
+// ItemId defines model for ItemId.
+type ItemId = int64
+
 // ProfileId defines model for ProfileId.
 type ProfileId = int64
 
@@ -1173,6 +1391,92 @@ type ApplyImportParams struct {
 
 // UndoImportParams defines parameters for UndoImport.
 type UndoImportParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ListListsParams defines parameters for ListLists.
+type ListListsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// CreateListParams defines parameters for CreateList.
+type CreateListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// DeleteListParams defines parameters for DeleteList.
+type DeleteListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// GetListParams defines parameters for GetList.
+type GetListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId   *ProfileId   `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateListParams defines parameters for UpdateList.
+type UpdateListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ListListItemsParams defines parameters for ListListItems.
+type ListListItemsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId               `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Type      *ListListItemsParamsType `form:"type,omitempty" json:"type,omitempty"`
+
+	// SortBy Left out, the list's own order.
+	SortBy      *ListSortBy  `form:"sort_by,omitempty" json:"sort_by,omitempty"`
+	SortHow     *ListSortHow `form:"sort_how,omitempty" json:"sort_how,omitempty"`
+	HideWatched *bool        `form:"hide_watched,omitempty" json:"hide_watched,omitempty"`
+	Page        *int         `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit 100 by default, and up to 1,000.
+	Limit       *int         `form:"limit,omitempty" json:"limit,omitempty"`
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListListItemsParamsType defines parameters for ListListItems.
+type ListListItemsParamsType string
+
+// AddToListParams defines parameters for AddToList.
+type AddToListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// RemoveFromListParams defines parameters for RemoveFromList.
+type RemoveFromListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// UpdateListItemJSONBody defines parameters for UpdateListItem.
+type UpdateListItemJSONBody struct {
+	// Notes Up to 500 characters. Empty clears them.
+	Notes string `json:"notes"`
+}
+
+// UpdateListItemParams defines parameters for UpdateListItem.
+type UpdateListItemParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ReorderListJSONBody defines parameters for ReorderList.
+type ReorderListJSONBody struct {
+	Ids []int64 `json:"ids"`
+}
+
+// ReorderListParams defines parameters for ReorderList.
+type ReorderListParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
@@ -1314,6 +1618,21 @@ type ApproveDeviceJSONRequestBody = ProfileChoice
 // AddHistoryJSONRequestBody defines body for AddHistory for application/json ContentType.
 type AddHistoryJSONRequestBody = NewWatches
 
+// CreateListJSONRequestBody defines body for CreateList for application/json ContentType.
+type CreateListJSONRequestBody = NewList
+
+// UpdateListJSONRequestBody defines body for UpdateList for application/json ContentType.
+type UpdateListJSONRequestBody = ListChanges
+
+// AddToListJSONRequestBody defines body for AddToList for application/json ContentType.
+type AddToListJSONRequestBody = NewListings
+
+// UpdateListItemJSONRequestBody defines body for UpdateListItem for application/json ContentType.
+type UpdateListItemJSONRequestBody UpdateListItemJSONBody
+
+// ReorderListJSONRequestBody defines body for ReorderList for application/json ContentType.
+type ReorderListJSONRequestBody ReorderListJSONBody
+
 // DeleteAccountJSONRequestBody defines body for DeleteAccount for application/json ContentType.
 type DeleteAccountJSONRequestBody DeleteAccountJSONBody
 
@@ -1349,7 +1668,7 @@ type ServerInterface interface {
 	// CreateAccount Start a sign-up by emailing a sign-in link
 	// (POST /v1/accounts)
 	CreateAccount(w http.ResponseWriter, r *http.Request)
-	// GetActivity When history, playback and the watchlist last changed
+	// GetActivity When history, playback, the watchlist, ratings and lists last changed
 	// (GET /v1/activity)
 	GetActivity(w http.ResponseWriter, r *http.Request, params GetActivityParams)
 	// ListApps Apps you've registered
@@ -1433,6 +1752,36 @@ type ServerInterface interface {
 	// UndoImport Take out everything an import added
 	// (POST /v1/imports/{id}/undo)
 	UndoImport(w http.ResponseWriter, r *http.Request, id Id, params UndoImportParams)
+	// ListLists Your lists, and the household's
+	// (GET /v1/lists)
+	ListLists(w http.ResponseWriter, r *http.Request, params ListListsParams)
+	// CreateList Make a list
+	// (POST /v1/lists)
+	CreateList(w http.ResponseWriter, r *http.Request, params CreateListParams)
+	// DeleteList Delete a list
+	// (DELETE /v1/lists/{id})
+	DeleteList(w http.ResponseWriter, r *http.Request, id Id, params DeleteListParams)
+	// GetList One list
+	// (GET /v1/lists/{id})
+	GetList(w http.ResponseWriter, r *http.Request, id Id, params GetListParams)
+	// UpdateList Rename a list, or change its description, privacy or order
+	// (PATCH /v1/lists/{id})
+	UpdateList(w http.ResponseWriter, r *http.Request, id Id, params UpdateListParams)
+	// ListListItems What's on a list
+	// (GET /v1/lists/{id}/items)
+	ListListItems(w http.ResponseWriter, r *http.Request, id Id, params ListListItemsParams)
+	// AddToList Add to a list
+	// (POST /v1/lists/{id}/items)
+	AddToList(w http.ResponseWriter, r *http.Request, id Id, params AddToListParams)
+	// RemoveFromList Take an item off a list
+	// (DELETE /v1/lists/{id}/items/{item})
+	RemoveFromList(w http.ResponseWriter, r *http.Request, id Id, item ItemId, params RemoveFromListParams)
+	// UpdateListItem Change an item's notes
+	// (PATCH /v1/lists/{id}/items/{item})
+	UpdateListItem(w http.ResponseWriter, r *http.Request, id Id, item ItemId, params UpdateListItemParams)
+	// ReorderList Put a list in a new order
+	// (PUT /v1/lists/{id}/order)
+	ReorderList(w http.ResponseWriter, r *http.Request, id Id, params ReorderListParams)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(w http.ResponseWriter, r *http.Request)
@@ -2343,6 +2692,546 @@ func (siw *ServerInterfaceWrapper) UndoImport(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UndoImport(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLists operation middleware
+func (siw *ServerInterfaceWrapper) ListLists(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListListsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLists(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateList operation middleware
+func (siw *ServerInterfaceWrapper) CreateList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateList(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteList operation middleware
+func (siw *ServerInterfaceWrapper) DeleteList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetList operation middleware
+func (siw *ServerInterfaceWrapper) GetList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateList operation middleware
+func (siw *ServerInterfaceWrapper) UpdateList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListListItems operation middleware
+func (siw *ServerInterfaceWrapper) ListListItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListListItemsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_by" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_by", r.URL.Query(), &params.SortBy, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_by"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_by", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_how" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_how", r.URL.Query(), &params.SortHow, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_how"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_how", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hide_watched" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hide_watched", r.URL.Query(), &params.HideWatched, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hide_watched"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hide_watched", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListListItems(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddToList operation middleware
+func (siw *ServerInterfaceWrapper) AddToList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddToListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddToList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveFromList operation middleware
+func (siw *ServerInterfaceWrapper) RemoveFromList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "item" -------------
+	var item ItemId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "item", r.PathValue("item"), &item, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "item", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveFromListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveFromList(w, r, id, item, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateListItem operation middleware
+func (siw *ServerInterfaceWrapper) UpdateListItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "item" -------------
+	var item ItemId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "item", r.PathValue("item"), &item, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "item", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateListItemParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateListItem(w, r, id, item, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderList operation middleware
+func (siw *ServerInterfaceWrapper) ReorderList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReorderListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderList(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3494,6 +4383,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/watchlist", wrapper.ListWatchlist)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/watchlist", wrapper.AddToWatchlist)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/watchlist/{id}", wrapper.RemoveFromWatchlist)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists", wrapper.ListLists)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists", wrapper.CreateList)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/lists/{id}", wrapper.DeleteList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists/{id}", wrapper.GetList)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/lists/{id}", wrapper.UpdateList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists/{id}/items", wrapper.ListListItems)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists/{id}/items", wrapper.AddToList)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/lists/{id}/items/{item}", wrapper.RemoveFromList)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/lists/{id}/items/{item}", wrapper.UpdateListItem)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/lists/{id}/order", wrapper.ReorderList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.GetActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
@@ -5004,6 +5903,659 @@ func (response UndoImport401JSONResponse) VisitUndoImportResponse(w http.Respons
 type UndoImport404JSONResponse Problem
 
 func (response UndoImport404JSONResponse) VisitUndoImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListListsRequestObject struct {
+	Params ListListsParams
+}
+
+type ListListsResponseObject interface {
+	VisitListListsResponse(w http.ResponseWriter) error
+}
+
+type ListLists200JSONResponse []List
+
+func (response ListLists200JSONResponse) VisitListListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLists401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListLists401JSONResponse) VisitListListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLists404JSONResponse Problem
+
+func (response ListLists404JSONResponse) VisitListListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateListRequestObject struct {
+	Params CreateListParams
+	Body   *CreateListJSONRequestBody
+}
+
+type CreateListResponseObject interface {
+	VisitCreateListResponse(w http.ResponseWriter) error
+}
+
+type CreateList201JSONResponse List
+
+func (response CreateList201JSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response CreateList400JSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateList401JSONResponse Problem
+
+func (response CreateList401JSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateList403JSONResponse Problem
+
+func (response CreateList403JSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateList404JSONResponse Problem
+
+func (response CreateList404JSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateList422JSONResponse Problem
+
+func (response CreateList422JSONResponse) VisitCreateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteListRequestObject struct {
+	Id     Id `json:"id"`
+	Params DeleteListParams
+}
+
+type DeleteListResponseObject interface {
+	VisitDeleteListResponse(w http.ResponseWriter) error
+}
+
+type DeleteList204Response struct {
+}
+
+func (response DeleteList204Response) VisitDeleteListResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response DeleteList401JSONResponse) VisitDeleteListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteList404JSONResponse Problem
+
+func (response DeleteList404JSONResponse) VisitDeleteListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetListRequestObject struct {
+	Id     Id `json:"id"`
+	Params GetListParams
+}
+
+type GetListResponseObject interface {
+	VisitGetListResponse(w http.ResponseWriter) error
+}
+
+type GetList200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetList200JSONResponse struct {
+	Body    List
+	Headers GetList200ResponseHeaders
+}
+
+func (response GetList200JSONResponse) VisitGetListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetList304Response struct {
+}
+
+func (response GetList304Response) VisitGetListResponse(w http.ResponseWriter) error {
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetList401JSONResponse) VisitGetListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetList404JSONResponse Problem
+
+func (response GetList404JSONResponse) VisitGetListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateListRequestObject struct {
+	Id     Id `json:"id"`
+	Params UpdateListParams
+	Body   *UpdateListJSONRequestBody
+}
+
+type UpdateListResponseObject interface {
+	VisitUpdateListResponse(w http.ResponseWriter) error
+}
+
+type UpdateList200JSONResponse List
+
+func (response UpdateList200JSONResponse) VisitUpdateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response UpdateList400JSONResponse) VisitUpdateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateList401JSONResponse Problem
+
+func (response UpdateList401JSONResponse) VisitUpdateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateList403JSONResponse Problem
+
+func (response UpdateList403JSONResponse) VisitUpdateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateList404JSONResponse Problem
+
+func (response UpdateList404JSONResponse) VisitUpdateListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListListItemsRequestObject struct {
+	Id     Id `json:"id"`
+	Params ListListItemsParams
+}
+
+type ListListItemsResponseObject interface {
+	VisitListListItemsResponse(w http.ResponseWriter) error
+}
+
+type ListListItems200ResponseHeaders struct {
+	ETag *string
+}
+
+type ListListItems200JSONResponse struct {
+	Body    ListItemsPage
+	Headers ListListItems200ResponseHeaders
+}
+
+func (response ListListItems200JSONResponse) VisitListListItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListListItems304Response struct {
+}
+
+func (response ListListItems304Response) VisitListListItemsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(304)
+	return nil
+}
+
+type ListListItems401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListListItems401JSONResponse) VisitListListItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListListItems404JSONResponse Problem
+
+func (response ListListItems404JSONResponse) VisitListListItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddToListRequestObject struct {
+	Id     Id `json:"id"`
+	Params AddToListParams
+	Body   *AddToListJSONRequestBody
+}
+
+type AddToListResponseObject interface {
+	VisitAddToListResponse(w http.ResponseWriter) error
+}
+
+type AddToList200JSONResponse SyncResult
+
+func (response AddToList200JSONResponse) VisitAddToListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddToList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response AddToList400JSONResponse) VisitAddToListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddToList401JSONResponse Problem
+
+func (response AddToList401JSONResponse) VisitAddToListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddToList404JSONResponse Problem
+
+func (response AddToList404JSONResponse) VisitAddToListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddToList422JSONResponse Problem
+
+func (response AddToList422JSONResponse) VisitAddToListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveFromListRequestObject struct {
+	Id     Id     `json:"id"`
+	Item   ItemId `json:"item"`
+	Params RemoveFromListParams
+}
+
+type RemoveFromListResponseObject interface {
+	VisitRemoveFromListResponse(w http.ResponseWriter) error
+}
+
+type RemoveFromList204Response struct {
+}
+
+func (response RemoveFromList204Response) VisitRemoveFromListResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveFromList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response RemoveFromList401JSONResponse) VisitRemoveFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveFromList404JSONResponse Problem
+
+func (response RemoveFromList404JSONResponse) VisitRemoveFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateListItemRequestObject struct {
+	Id     Id     `json:"id"`
+	Item   ItemId `json:"item"`
+	Params UpdateListItemParams
+	Body   *UpdateListItemJSONRequestBody
+}
+
+type UpdateListItemResponseObject interface {
+	VisitUpdateListItemResponse(w http.ResponseWriter) error
+}
+
+type UpdateListItem204Response struct {
+}
+
+func (response UpdateListItem204Response) VisitUpdateListItemResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UpdateListItem400JSONResponse struct{ ProblemJSONResponse }
+
+func (response UpdateListItem400JSONResponse) VisitUpdateListItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateListItem401JSONResponse Problem
+
+func (response UpdateListItem401JSONResponse) VisitUpdateListItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateListItem404JSONResponse Problem
+
+func (response UpdateListItem404JSONResponse) VisitUpdateListItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderListRequestObject struct {
+	Id     Id `json:"id"`
+	Params ReorderListParams
+	Body   *ReorderListJSONRequestBody
+}
+
+type ReorderListResponseObject interface {
+	VisitReorderListResponse(w http.ResponseWriter) error
+}
+
+type ReorderList204Response struct {
+}
+
+func (response ReorderList204Response) VisitReorderListResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReorderList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response ReorderList400JSONResponse) VisitReorderListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderList401JSONResponse Problem
+
+func (response ReorderList401JSONResponse) VisitReorderListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderList404JSONResponse Problem
+
+func (response ReorderList404JSONResponse) VisitReorderListResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -6705,7 +8257,7 @@ type StrictServerInterface interface {
 	// CreateAccount Start a sign-up by emailing a sign-in link
 	// (POST /v1/accounts)
 	CreateAccount(ctx context.Context, request CreateAccountRequestObject) (CreateAccountResponseObject, error)
-	// GetActivity When history, playback and the watchlist last changed
+	// GetActivity When history, playback, the watchlist, ratings and lists last changed
 	// (GET /v1/activity)
 	GetActivity(ctx context.Context, request GetActivityRequestObject) (GetActivityResponseObject, error)
 	// ListApps Apps you've registered
@@ -6789,6 +8341,36 @@ type StrictServerInterface interface {
 	// UndoImport Take out everything an import added
 	// (POST /v1/imports/{id}/undo)
 	UndoImport(ctx context.Context, request UndoImportRequestObject) (UndoImportResponseObject, error)
+	// ListLists Your lists, and the household's
+	// (GET /v1/lists)
+	ListLists(ctx context.Context, request ListListsRequestObject) (ListListsResponseObject, error)
+	// CreateList Make a list
+	// (POST /v1/lists)
+	CreateList(ctx context.Context, request CreateListRequestObject) (CreateListResponseObject, error)
+	// DeleteList Delete a list
+	// (DELETE /v1/lists/{id})
+	DeleteList(ctx context.Context, request DeleteListRequestObject) (DeleteListResponseObject, error)
+	// GetList One list
+	// (GET /v1/lists/{id})
+	GetList(ctx context.Context, request GetListRequestObject) (GetListResponseObject, error)
+	// UpdateList Rename a list, or change its description, privacy or order
+	// (PATCH /v1/lists/{id})
+	UpdateList(ctx context.Context, request UpdateListRequestObject) (UpdateListResponseObject, error)
+	// ListListItems What's on a list
+	// (GET /v1/lists/{id}/items)
+	ListListItems(ctx context.Context, request ListListItemsRequestObject) (ListListItemsResponseObject, error)
+	// AddToList Add to a list
+	// (POST /v1/lists/{id}/items)
+	AddToList(ctx context.Context, request AddToListRequestObject) (AddToListResponseObject, error)
+	// RemoveFromList Take an item off a list
+	// (DELETE /v1/lists/{id}/items/{item})
+	RemoveFromList(ctx context.Context, request RemoveFromListRequestObject) (RemoveFromListResponseObject, error)
+	// UpdateListItem Change an item's notes
+	// (PATCH /v1/lists/{id}/items/{item})
+	UpdateListItem(ctx context.Context, request UpdateListItemRequestObject) (UpdateListItemResponseObject, error)
+	// ReorderList Put a list in a new order
+	// (PUT /v1/lists/{id}/order)
+	ReorderList(ctx context.Context, request ReorderListRequestObject) (ReorderListResponseObject, error)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
@@ -7733,6 +9315,311 @@ func (sh *strictHandler) UndoImport(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UndoImportResponseObject); ok {
 		if err := validResponse.VisitUndoImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLists operation middleware
+func (sh *strictHandler) ListLists(w http.ResponseWriter, r *http.Request, params ListListsParams) {
+	var request ListListsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLists(ctx, request.(ListListsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLists")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListListsResponseObject); ok {
+		if err := validResponse.VisitListListsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateList operation middleware
+func (sh *strictHandler) CreateList(w http.ResponseWriter, r *http.Request, params CreateListParams) {
+	var request CreateListRequestObject
+
+	request.Params = params
+
+	var body CreateListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateList(ctx, request.(CreateListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateListResponseObject); ok {
+		if err := validResponse.VisitCreateListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteList operation middleware
+func (sh *strictHandler) DeleteList(w http.ResponseWriter, r *http.Request, id Id, params DeleteListParams) {
+	var request DeleteListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteList(ctx, request.(DeleteListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteListResponseObject); ok {
+		if err := validResponse.VisitDeleteListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetList operation middleware
+func (sh *strictHandler) GetList(w http.ResponseWriter, r *http.Request, id Id, params GetListParams) {
+	var request GetListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetList(ctx, request.(GetListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetListResponseObject); ok {
+		if err := validResponse.VisitGetListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateList operation middleware
+func (sh *strictHandler) UpdateList(w http.ResponseWriter, r *http.Request, id Id, params UpdateListParams) {
+	var request UpdateListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpdateListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateList(ctx, request.(UpdateListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateListResponseObject); ok {
+		if err := validResponse.VisitUpdateListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListListItems operation middleware
+func (sh *strictHandler) ListListItems(w http.ResponseWriter, r *http.Request, id Id, params ListListItemsParams) {
+	var request ListListItemsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListListItems(ctx, request.(ListListItemsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListListItems")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListListItemsResponseObject); ok {
+		if err := validResponse.VisitListListItemsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddToList operation middleware
+func (sh *strictHandler) AddToList(w http.ResponseWriter, r *http.Request, id Id, params AddToListParams) {
+	var request AddToListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body AddToListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddToList(ctx, request.(AddToListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddToList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddToListResponseObject); ok {
+		if err := validResponse.VisitAddToListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveFromList operation middleware
+func (sh *strictHandler) RemoveFromList(w http.ResponseWriter, r *http.Request, id Id, item ItemId, params RemoveFromListParams) {
+	var request RemoveFromListRequestObject
+
+	request.Id = id
+	request.Item = item
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveFromList(ctx, request.(RemoveFromListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveFromList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveFromListResponseObject); ok {
+		if err := validResponse.VisitRemoveFromListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateListItem operation middleware
+func (sh *strictHandler) UpdateListItem(w http.ResponseWriter, r *http.Request, id Id, item ItemId, params UpdateListItemParams) {
+	var request UpdateListItemRequestObject
+
+	request.Id = id
+	request.Item = item
+	request.Params = params
+
+	var body UpdateListItemJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateListItem(ctx, request.(UpdateListItemRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateListItem")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateListItemResponseObject); ok {
+		if err := validResponse.VisitUpdateListItemResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReorderList operation middleware
+func (sh *strictHandler) ReorderList(w http.ResponseWriter, r *http.Request, id Id, params ReorderListParams) {
+	var request ReorderListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body ReorderListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderList(ctx, request.(ReorderListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderListResponseObject); ok {
+		if err := validResponse.VisitReorderListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

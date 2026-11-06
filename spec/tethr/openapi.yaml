@@ -791,10 +791,311 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/lists:
+    get:
+      operationId: listLists
+      summary: Your lists, and the household's
+      description: The profile's own lists, then lists other profiles in the household have shared with it or made public. `access` says which.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/List'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createList
+      summary: Make a list
+      description: A profile can have up to 100 lists. Lists start private.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewList'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/lists/{id}:
+    get:
+      operationId: getList
+      summary: One list
+      description: Public lists can be read by anyone, signed in or not. Household lists need a profile in the same household, and private ones the profile that made them. Lists you can't read are a 404.
+      security:
+        - session: []
+        - bearer: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The list
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '304':
+          description: Not changed since the ETag you sent
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateList
+      summary: Rename a list, or change its description, privacy or order
+      description: Only the profile that made the list can change it. Renaming changes the slug, but links use the ID, so they keep working.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListChanges'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteList
+      summary: Delete a list
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/lists/{id}/items:
+    get:
+      operationId: listListItems
+      summary: What's on a list
+      description: Readable by the same people as the list. Signed in, each item says how much of it the profile has watched, and `hide_watched=true` leaves out what they've finished. Send the ETag back in `If-None-Match` to get a 304 when nothing has changed.
+      security:
+        - session: []
+        - bearer: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfNoneMatch'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, show, season, episode]
+        - name: sort_by
+          in: query
+          description: Left out, the list's own order.
+          schema:
+            $ref: '#/components/schemas/ListSortBy'
+        - name: sort_how
+          in: query
+          schema:
+            $ref: '#/components/schemas/ListSortHow'
+        - name: hide_watched
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: 100 by default, and up to 1,000.
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The list and a page of its items
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListItemsPage'
+        '304':
+          description: Not changed since the ETag you sent
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: addToList
+      summary: Add to a list
+      description: A list holds up to 1,000 items. Unlike the watchlist, watching something leaves it on the list.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewListings'
+      responses:
+        '200':
+          description: What was added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResult'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/lists/{id}/items/{item}:
+    patch:
+      operationId: updateListItem
+      summary: Change an item's notes
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [notes]
+              properties:
+                notes:
+                  type: string
+                  description: Up to 500 characters. Empty clears them.
+      responses:
+        '204':
+          description: Changed
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: removeFromList
+      summary: Take an item off a list
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/lists/{id}/order:
+    put:
+      operationId: reorderList
+      summary: Put a list in a new order
+      description: Send every item's ID once, first to last.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+      responses:
+        '204':
+          description: Reordered
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/activity:
     get:
       operationId: getActivity
-      summary: When history, playback and the watchlist last changed
+      summary: When history, playback, the watchlist, ratings and lists last changed
       description: Cheap to call. Poll this and only fetch the lists whose time has moved on.
       security:
         - session: []
@@ -1554,6 +1855,18 @@ components:
       schema:
         type: integer
         format: int64
+    ItemId:
+      name: item
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      schema:
+        type: string
     ProfileId:
       name: profile_id
       in: query
@@ -2090,9 +2403,146 @@ components:
           type: string
         item:
           $ref: '#/components/schemas/Item'
+    ListSortBy:
+      type: string
+      enum: [rank, added, title, year]
+    ListSortHow:
+      type: string
+      enum: [asc, desc]
+    ListPrivacy:
+      type: string
+      description: '`household` lets every profile in the household read it. `public` lets anyone with the link.'
+      enum: [private, household, public]
+    List:
+      type: object
+      required: [id, name, slug, privacy, sort_by, sort_how, owner, access, item_count, url, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        slug:
+          type: string
+          description: Made from the name, and changes with it.
+        description:
+          type: string
+        privacy:
+          $ref: '#/components/schemas/ListPrivacy'
+        sort_by:
+          $ref: '#/components/schemas/ListSortBy'
+        sort_how:
+          $ref: '#/components/schemas/ListSortHow'
+        owner:
+          $ref: '#/components/schemas/ListOwner'
+        access:
+          type: string
+          description: Why you can see it. `mine` is your own list, `household` another profile's in your household, and `public` anyone else's.
+          enum: [mine, household, public]
+        item_count:
+          type: integer
+          format: int64
+        watched_count:
+          type: integer
+          format: int64
+          description: How many items the profile reading the list has finished. Left out when signed out.
+        url:
+          type: string
+          description: The list's page on the website.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ListOwner:
+      type: object
+      required: [username, name]
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+    NewList:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Up to 100 characters.
+        description:
+          type: string
+          description: Up to 1,000 characters.
+        privacy:
+          $ref: '#/components/schemas/ListPrivacy'
+        sort_by:
+          $ref: '#/components/schemas/ListSortBy'
+        sort_how:
+          $ref: '#/components/schemas/ListSortHow'
+    ListChanges:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          description: Empty clears it.
+        privacy:
+          $ref: '#/components/schemas/ListPrivacy'
+        sort_by:
+          $ref: '#/components/schemas/ListSortBy'
+        sort_how:
+          $ref: '#/components/schemas/ListSortHow'
+    ListItem:
+      type: object
+      required: [id, rank, listed_at, item]
+      properties:
+        id:
+          type: integer
+          format: int64
+        rank:
+          type: integer
+        listed_at:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        item:
+          $ref: '#/components/schemas/Item'
+        progress:
+          $ref: '#/components/schemas/ItemProgress'
+    ItemProgress:
+      type: object
+      description: How much of the item the profile reading the list has watched. A film or episode has a total of 1, and a show or season counts aired episodes, leaving out specials for a show. Left out when signed out.
+      required: [watched, total]
+      properties:
+        watched:
+          type: integer
+        total:
+          type: integer
+        last_watched_at:
+          type: string
+          format: date-time
+    ListItemsPage:
+      type: object
+      required: [list, items, total, page, limit]
+      properties:
+        list:
+          $ref: '#/components/schemas/List'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListItem'
+        total:
+          type: integer
+          description: How many items match, across every page.
+        page:
+          type: integer
+        limit:
+          type: integer
     Activity:
       type: object
-      required: [latest, history, playback, watchlist, ratings]
+      required: [latest, history, playback, watchlist, ratings, lists]
       properties:
         latest:
           type: string
@@ -2109,6 +2559,10 @@ components:
         ratings:
           type: string
           format: date-time
+        lists:
+          type: string
+          format: date-time
+          description: When any list in the household last changed.
     MediaServer:
       type: object
       required: [id, kind, created_at, users]
