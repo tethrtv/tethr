@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -19,6 +18,8 @@ import (
 // Marking a whole series played sends one event per episode, and servers don't retry.
 var serverLimit = limit.Rule{Name: "MEDIA_SERVER_LIMIT", Limit: 600, Period: time.Minute, Burst: 600}
 
+const maxBody = 1 << 20
+
 type Server struct {
 	DB   *pgxpool.Pool
 	TMDB *tmdb.Client
@@ -28,132 +29,109 @@ type Server struct {
 	events *limit.Limiter
 }
 
+type action int
+
+const (
+	ignore action = iota
+	started
+	paused
+	finished
+	marked
+)
+
+type event struct {
+	server   string
+	userID   string
+	userName string
+	action   action
+	ref      core.Ref
+	tvdb     string
+	imdb     string
+	progress float64
+	duration *float64
+}
+
 func (s *Server) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /hooks/jellyfin/{secret}", s.jellyfin)
+	mux.HandleFunc("POST /hooks/jellyfin/{secret}", s.receive("jellyfin", jellyfin))
+	mux.HandleFunc("POST /hooks/plex/{secret}", s.receive("plex", plex))
+	mux.HandleFunc("POST /hooks/emby/{secret}", s.receive("emby", emby))
 }
 
-type jellyfinEvent struct {
-	NotificationType      string
-	ServerName            string
-	UserID                string `json:"UserId"`
-	NotificationUsername  string
-	ItemType              string
-	RunTimeTicks          int64
-	PlaybackPositionTicks int64
-	PlayedToCompletion    bool
-	Played                bool
-	SaveReason            string
-	TMDB                  string `json:"Provider_tmdb"`
-	IMDB                  string `json:"Provider_imdb"`
-	TVDB                  string `json:"Provider_tvdb"`
+func (s *Server) receive(kind string, read func(*http.Request) (event, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		secret := r.PathValue("secret")
+		if !s.allow(w, secret) {
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+		e, err := read(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if e.action == ignore {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		ctx := r.Context()
+		c, matched, err := core.ServerCaller(ctx, s.DB, core.ServerEvent{Kind: kind, Secret: secret, ServerName: e.server, UserID: e.userID, UserName: e.userName})
+		if errors.Is(err, core.ErrNotFound) {
+			http.Error(w, "there's no media server with this address", http.StatusNotFound)
+			return
+		}
+		if err == nil && matched && e.ref.Kind != "" {
+			err = s.log(ctx, c, e)
+		}
+		var already core.AlreadyScrobbled
+		switch {
+		case err == nil, errors.As(err, &already), errors.Is(err, core.ErrProgressTooLow):
+		case errors.Is(err, core.ErrNotFound):
+			s.Log.Info("media server sent something tethr can't match", "kind", kind, "type", e.ref.Kind, "tmdb", e.ref.IDs.TMDB, "tvdb", e.tvdb, "imdb", e.imdb)
+		default:
+			s.Log.Error("media server event failed", "kind", kind, "err", err)
+			http.Error(w, "something went wrong", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
-func (s *Server) jellyfin(w http.ResponseWriter, r *http.Request) {
-	secret := r.PathValue("secret")
-	if !s.allow(w, secret) {
-		return
-	}
-	var e jellyfinEvent
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&e); err != nil {
-		http.Error(w, "send all properties as JSON", http.StatusBadRequest)
-		return
-	}
-	switch e.NotificationType {
-	case "PlaybackStart", "PlaybackStop", "UserDataSaved":
-	default:
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	ctx := r.Context()
-	c, matched, err := core.ServerCaller(ctx, s.DB, core.ServerEvent{Kind: "jellyfin", Secret: secret, ServerName: e.ServerName, UserID: e.UserID, UserName: e.NotificationUsername})
-	if errors.Is(err, core.ErrNotFound) {
-		http.Error(w, "there's no media server with this address", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	ref, ok := jellyfinRef(e)
-	if !matched || !ok {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	scrobble := core.Scrobble{Ref: ref}
-	if e.RunTimeTicks > 0 {
-		scrobble.Progress = 100 * float64(e.PlaybackPositionTicks) / float64(e.RunTimeTicks)
-		seconds := float64(e.RunTimeTicks) / 1e7
-		scrobble.Duration = &seconds
-	}
-	var log func(core.Ref) error
-	switch {
-	case e.NotificationType == "PlaybackStart":
-		log = func(ref core.Ref) error {
-			scrobble.Ref = ref
-			_, err := core.ScrobbleStart(ctx, s.DB, c, scrobble)
-			return err
-		}
-	case e.NotificationType == "PlaybackStop" && e.PlayedToCompletion:
-		log = func(ref core.Ref) error {
-			scrobble.Ref, scrobble.Progress = ref, 100
-			_, err := core.ScrobbleStop(ctx, s.DB, c, scrobble)
-			return err
-		}
-	case e.NotificationType == "PlaybackStop":
-		log = func(ref core.Ref) error {
-			scrobble.Ref = ref
-			_, err := core.ScrobblePause(ctx, s.DB, c, scrobble)
-			return err
-		}
-	case e.SaveReason == "TogglePlayed" && e.Played:
-		log = func(ref core.Ref) error {
-			result, err := core.AddHistory(ctx, s.DB, c, []core.Watch{{Ref: ref, At: time.Now()}})
+func (s *Server) log(ctx context.Context, c core.Caller, e event) error {
+	send := func(ref core.Ref) error {
+		scrobble := core.Scrobble{Ref: ref, Progress: e.progress, Duration: e.duration}
+		var err error
+		switch e.action {
+		case started:
+			_, err = core.ScrobbleStart(ctx, s.DB, c, scrobble)
+		case paused:
+			_, err = core.ScrobblePause(ctx, s.DB, c, scrobble)
+		case finished:
+			scrobble.Progress = 100
+			_, err = core.ScrobbleStop(ctx, s.DB, c, scrobble)
+		case marked:
+			var result core.SyncResult
+			result, err = core.AddHistory(ctx, s.DB, c, []core.Watch{{Ref: ref, At: time.Now()}})
 			if err == nil && len(result.NotFound) > 0 {
-				return core.ErrNotFound
+				err = core.ErrNotFound
 			}
-			return err
 		}
-	default:
-		w.WriteHeader(http.StatusNoContent)
-		return
+		return err
 	}
-
-	err = log(ref)
-	if errors.Is(err, core.ErrNotFound) && ref.Kind == "episode" {
+	err := send(e.ref)
+	if errors.Is(err, core.ErrNotFound) && e.ref.Kind == "episode" {
 		if found, ok := s.findShow(ctx, e); ok {
-			err = log(found)
+			err = send(found)
 		}
 	}
-	var already core.AlreadyScrobbled
-	switch {
-	case err == nil, errors.As(err, &already), errors.Is(err, core.ErrProgressTooLow):
-	case errors.Is(err, core.ErrNotFound):
-		s.Log.Info("media server sent something tethr can't match", "kind", "jellyfin", "type", e.ItemType, "tmdb", e.TMDB, "tvdb", e.TVDB, "imdb", e.IMDB)
-	default:
-		s.fail(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return err
 }
 
-func jellyfinRef(e jellyfinEvent) (core.Ref, bool) {
-	tmdbID, _ := strconv.ParseInt(e.TMDB, 10, 64)
-	switch e.ItemType {
-	case "Movie":
-		return core.Ref{Kind: "movie", IDs: core.IDs{TMDB: tmdbID, IMDB: e.IMDB}}, tmdbID > 0 || e.IMDB != ""
-	case "Episode":
-		return core.Ref{Kind: "episode", IDs: core.IDs{TMDB: tmdbID}}, tmdbID > 0 || e.TVDB != "" || e.IMDB != ""
-	}
-	return core.Ref{}, false
-}
-
-// Jellyfin only sends the episode's own IDs, so a show Tethr hasn't seen yet is found through TMDB.
-func (s *Server) findShow(ctx context.Context, e jellyfinEvent) (core.Ref, bool) {
+// Servers often send only the episode's own IDs, so a show Tethr hasn't seen yet is found through TMDB.
+func (s *Server) findShow(ctx context.Context, e event) (core.Ref, bool) {
 	if s.TMDB == nil {
 		return core.Ref{}, false
 	}
-	for _, id := range []struct{ source, value string }{{"tvdb_id", e.TVDB}, {"imdb_id", e.IMDB}} {
+	for _, id := range []struct{ source, value string }{{"tvdb_id", e.tvdb}, {"imdb_id", e.imdb}} {
 		if id.value == "" {
 			continue
 		}
@@ -171,6 +149,21 @@ func (s *Server) findShow(ctx context.Context, e jellyfinEvent) (core.Ref, bool)
 	return core.Ref{}, false
 }
 
+func ref(kind, tmdbID, imdb, tvdb string) core.Ref {
+	id, _ := strconv.ParseInt(tmdbID, 10, 64)
+	switch kind {
+	case "movie":
+		if id > 0 || imdb != "" {
+			return core.Ref{Kind: "movie", IDs: core.IDs{TMDB: id, IMDB: imdb}}
+		}
+	case "episode":
+		if id > 0 || imdb != "" || tvdb != "" {
+			return core.Ref{Kind: "episode", IDs: core.IDs{TMDB: id}}
+		}
+	}
+	return core.Ref{}
+}
+
 func (s *Server) allow(w http.ResponseWriter, secret string) bool {
 	s.once.Do(func() { s.events = limit.New(serverLimit) })
 	now := time.Now()
@@ -180,9 +173,4 @@ func (s *Server) allow(w http.ResponseWriter, secret string) bool {
 		http.Error(w, "too many events, try again in a moment", http.StatusTooManyRequests)
 	}
 	return ok
-}
-
-func (s *Server) fail(w http.ResponseWriter, err error) {
-	s.Log.Error("media server event failed", "kind", "jellyfin", "err", err)
-	http.Error(w, "something went wrong", http.StatusInternalServerError)
 }
