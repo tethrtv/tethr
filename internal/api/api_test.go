@@ -592,6 +592,11 @@ func TestUpNextEndpoints(t *testing.T) {
 	if title.EpisodeOrder == nil || *title.EpisodeOrder != "dvd" || (*title.Seasons)[0].Episodes[0].Episode.Number != 2 {
 		t.Errorf("title in dvd order = %+v", title)
 	}
+	var history HistoryPage
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/history", "", cookie).Body.Bytes(), &history)
+	if len(history.Items) != 1 || history.Items[0].Item.Episode.Number != 1 || history.Items[0].Item.Episode.Order == nil || history.Items[0].Item.Episode.Order.Number != 2 {
+		t.Errorf("history should keep aired numbers and add the dvd's: %+v", history)
+	}
 	if rec := do(t, h, "DELETE", order, "", cookie); rec.Code != http.StatusNoContent {
 		t.Errorf("back to aired = %d %s", rec.Code, rec.Body)
 	}

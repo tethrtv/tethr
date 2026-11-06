@@ -83,7 +83,7 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 	}
 	slices.SortStableFunc(entries, func(a, b UpNextEntry) int { return b.LastWatchedAt.Compare(a.LastWatchedAt) })
 
-	c, err := loadCatalogue(ctx, q, listed, nil)
+	c, err := loadCatalogue(ctx, q, 0, listed, nil)
 	if err != nil {
 		return nil, err
 	}

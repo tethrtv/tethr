@@ -21,10 +21,10 @@ type scrobbleIn struct {
 	Duration *float64   `json:"duration"`
 }
 
-func (in scrobbleIn) ref() core.Ref {
+func (in scrobbleIn) ref(profileID int64) core.Ref {
 	switch {
 	case in.Episode != nil:
-		ref := core.Ref{Kind: "episode", IDs: in.Episode.IDs.core(), Season: in.Episode.Season, Number: in.Episode.Number}
+		ref := core.Ref{Kind: "episode", IDs: in.Episode.IDs.core(), Season: in.Episode.Season, Number: in.Episode.Number, OrderedFor: profileID}
 		if in.Show != nil {
 			ref.Show = in.Show.IDs.core()
 		}
@@ -43,7 +43,7 @@ func (s *Server) scrobble(step scrobbler) http.HandlerFunc {
 		if !readJSON(w, r, &in) {
 			return
 		}
-		result, err := step(r.Context(), s.DB, caller(r), core.Scrobble{Ref: in.ref(), Progress: in.Progress, Duration: in.Duration})
+		result, err := step(r.Context(), s.DB, caller(r), core.Scrobble{Ref: in.ref(caller(r).ProfileID), Progress: in.Progress, Duration: in.Duration})
 		var already core.AlreadyScrobbled
 		switch {
 		case errors.As(err, &already):
@@ -211,7 +211,7 @@ func (s *Server) addHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var watches []core.Watch
-	for _, e := range in.entries() {
+	for _, e := range in.entries(caller(r).ProfileID) {
 		at := time.Now()
 		if t := parseTime(e.watchedAt); t != nil {
 			at = *t
@@ -235,7 +235,7 @@ func (s *Server) removeHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var refs []core.Ref
-	for _, e := range in.entries() {
+	for _, e := range in.entries(caller(r).ProfileID) {
 		refs = append(refs, e.ref)
 	}
 	result, err := core.RemoveHistory(r.Context(), s.DB, caller(r).ProfileID, in.IDs, refs)
@@ -305,7 +305,7 @@ func (s *Server) addToWatchlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var listings []core.Listing
-	for _, e := range in.entries() {
+	for _, e := range in.entries(caller(r).ProfileID) {
 		listings = append(listings, core.Listing{Ref: e.ref, At: parseTime(e.listedAt), Notes: strings.TrimSpace(e.notes)})
 	}
 	result, err := core.AddToWatchlist(r.Context(), s.DB, caller(r).ProfileID, listings)
@@ -327,7 +327,7 @@ func (s *Server) removeFromWatchlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var refs []core.Ref
-	for _, e := range in.entries() {
+	for _, e := range in.entries(caller(r).ProfileID) {
 		refs = append(refs, e.ref)
 	}
 	result, err := core.RemoveFromWatchlist(r.Context(), s.DB, caller(r).ProfileID, refs)

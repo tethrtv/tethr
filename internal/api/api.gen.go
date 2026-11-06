@@ -551,7 +551,7 @@ type Episode struct {
 	Ids    Ids `json:"ids"`
 	Number int `json:"number"`
 
-	// Order The episode's season and number in the episode order picked for the show, when they differ from aired order. Given in Up next and title details.
+	// Order The episode's season and number in the episode order the profile picked for the show, when they differ from aired order.
 	Order  *OrderNumber `json:"order,omitempty"`
 	Season int          `json:"season"`
 }
@@ -804,7 +804,7 @@ type NewWatches struct {
 	} `json:"items"`
 }
 
-// OrderNumber The episode's season and number in the episode order picked for the show, when they differ from aired order. Given in Up next and title details.
+// OrderNumber The episode's season and number in the episode order the profile picked for the show, when they differ from aired order.
 type OrderNumber struct {
 	Number int `json:"number"`
 	Season int `json:"season"`

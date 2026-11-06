@@ -399,6 +399,9 @@ func toItem(i core.Item) Item {
 			tmdb := int(*e.TmdbEpisodeID)
 			episode.Ids.Tmdb = &tmdb
 		}
+		if e.Season != e.SeasonNumber || e.Number != e.EpisodeNumber {
+			episode.Order = &OrderNumber{Season: int(e.Season), Number: int(e.Number)}
+		}
 		out.Episode = episode
 	}
 	return out

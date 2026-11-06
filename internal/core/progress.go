@@ -17,7 +17,7 @@ type Plays struct {
 
 type WatchedEpisode struct {
 	Plays
-	Episode store.Episode
+	Episode OrderedEpisode
 }
 
 type WatchedTitle struct {
@@ -38,7 +38,7 @@ func Watched(ctx context.Context, db *pgxpool.Pool, profileID int64, kind string
 		for _, r := range rows {
 			ids = append(ids, r.TitleID)
 		}
-		c, err := loadCatalogue(ctx, q, ids, nil)
+		c, err := loadCatalogue(ctx, q, 0, ids, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +56,7 @@ func Watched(ctx context.Context, db *pgxpool.Pool, profileID int64, kind string
 		titleIDs = append(titleIDs, r.TitleID)
 		episodeIDs = append(episodeIDs, *r.EpisodeID)
 	}
-	c, err := loadCatalogue(ctx, q, titleIDs, episodeIDs)
+	c, err := loadCatalogue(ctx, q, profileID, titleIDs, episodeIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +70,11 @@ func Watched(ctx context.Context, db *pgxpool.Pool, profileID int64, kind string
 			show.LastWatchedAt = r.LastWatchedAt
 		}
 		show.Episodes = append(show.Episodes, WatchedEpisode{Plays: Plays{r.Plays, r.LastWatchedAt}, Episode: c.episodes[*r.EpisodeID]})
+	}
+	for _, show := range out {
+		slices.SortStableFunc(show.Episodes, func(a, b WatchedEpisode) int {
+			return cmp.Or(cmp.Compare(a.Episode.Season, b.Episode.Season), cmp.Compare(a.Episode.Number, b.Episode.Number))
+		})
 	}
 	slices.SortStableFunc(out, func(a, b WatchedTitle) int { return b.LastWatchedAt.Compare(a.LastWatchedAt) })
 	return out, nil
@@ -107,7 +112,7 @@ func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, 
 	if r.title.Kind != "show" {
 		return ShowProgress{}, ErrNotFound
 	}
-	item, err := describe(ctx, q, resolved{title: r.title})
+	item, err := describe(ctx, q, 0, resolved{title: r.title})
 	if err != nil {
 		return ShowProgress{}, err
 	}
