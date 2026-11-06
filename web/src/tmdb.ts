@@ -20,6 +20,7 @@ export type Details = {
 type Episode = {
   season?: number
   number: number
+  aired?: { season: number; number: number }
   name: string
   air_date: string | null
   overview?: string
@@ -96,4 +97,25 @@ export function useSeason(show?: number, season?: number) {
 export function useEpisode(show?: number, season?: number, number?: number) {
   const e = useSeason(show, season)?.episodes.find((x) => x.number === number)
   return e ? { name: e.name } : undefined
+}
+
+export type Order = { id: string; name: string; type: number; seasons: number; episodes: number }
+export type Group = { name: string; type: number; seasons: { number: number; name: string; episodes: Episode[] }[] }
+
+export function useOrders(show?: number) {
+  return useQuery({
+    queryKey: ['meta', 'orders', show],
+    enabled: !!show,
+    staleTime: day,
+    queryFn: async () => (await meta<{ orders: Order[] }>(`/tv/${show}/orders`))?.orders ?? [],
+  }).data
+}
+
+export function useGroup(show?: number, group?: string) {
+  return useQuery({
+    queryKey: ['meta', 'order', show, group],
+    enabled: !!show && !!group,
+    staleTime: day,
+    queryFn: () => meta<Group>(`/tv/${show}/order/${group}`),
+  }).data
 }

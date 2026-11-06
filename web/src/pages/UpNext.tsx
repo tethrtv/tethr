@@ -70,6 +70,7 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
   const tmdb = e.show.ids.tmdb
   const show = useDetails('show', tmdb)
   const episode = useEpisode(tmdb, e.next.season, e.next.number)
+  const numbered = e.next.order ?? e.next
   const name = show?.name ?? e.show.name ?? 'Untitled show'
   const left = e.aired - e.watched
 
@@ -91,7 +92,7 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
     <li className={styles.next}>
       <button
         type="button"
-        aria-label={`Mark ${name} ${ep(e.next.season, e.next.number)} as watched`}
+        aria-label={`Mark ${name} ${ep(numbered.season, numbered.number)} as watched`}
         className={watched.isPending ? `${styles.tickbox} ${styles.on}` : styles.tickbox}
         onClick={() => watched.mutate()}
         disabled={watched.isPending}
@@ -112,7 +113,7 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
           {name}
         </TitleLink>
         <p className={styles.line}>
-          <span className={styles.code}>{ep(e.next.season, e.next.number)}</span> {episode?.name}
+          <span className={styles.code}>{ep(numbered.season, numbered.number)}</span> {episode?.name}
         </p>
         {e.resume && <p className={styles.small}>Started, {Math.round(e.resume.progress)}% in</p>}
         {watched.isError && <p className={styles.error}>{problemMessage(watched.error)}</p>}
