@@ -972,7 +972,7 @@ const watchlist = `-- name: Watchlist :one
 INSERT INTO lists (profile_id, kind, name, slug)
 VALUES ($1, 'watchlist', 'Watchlist', 'watchlist')
 ON CONFLICT (profile_id) WHERE kind = 'watchlist' DO UPDATE SET kind = lists.kind
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id
 `
 
 func (q *Queries) Watchlist(ctx context.Context, profileID int64) (List, error) {
@@ -990,6 +990,7 @@ func (q *Queries) Watchlist(ctx context.Context, profileID int64) (List, error) 
 		&i.UpdatedAt,
 		&i.SortBy,
 		&i.SortHow,
+		&i.CoverItemID,
 	)
 	return i, err
 }

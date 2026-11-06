@@ -15,7 +15,7 @@ SELECT * FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UP
 
 -- name: UpdateList :one
 UPDATE lists
-SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, updated_at = now()
+SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, cover_item_id = $8, updated_at = now()
 WHERE id = $1
 RETURNING *;
 
@@ -71,6 +71,9 @@ DELETE FROM list_items WHERE id = $1 AND list_id = $2;
 
 -- name: RemoveListEntries :execrows
 DELETE FROM list_items WHERE list_id = $1 AND id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: OnList :one
+SELECT EXISTS (SELECT 1 FROM list_items WHERE id = $1 AND list_id = $2);
 
 -- name: ListEntryIDs :many
 SELECT id FROM list_items WHERE list_id = $1;

@@ -5,6 +5,7 @@ import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
+import { ListCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { ago, plural } from '../format'
 import own from './List.module.css'
@@ -62,6 +63,7 @@ export function MyLists() {
         <h2 className={styles.sectionTitle}>Yours</h2>
         <ol className={styles.rows}>
           <li className={own.list}>
+            <ListCover items={watchlist.data?.slice(0, 4).map((l) => l.item) ?? []} />
             <div className={styles.main}>
               <Link to="/watchlist" className={`${styles.rowTitle} ${styles.titleLink}`}>
                 Watchlist
@@ -115,6 +117,7 @@ export function MyLists() {
 function ListRow({ list: l }: { list: List }) {
   return (
     <li className={own.list}>
+      <ListCover items={l.cover} />
       <div className={styles.main}>
         <Link to="/lists/$list" params={{ list: listPath(l) }} className={`${styles.rowTitle} ${styles.titleLink}`}>
           {l.name}
