@@ -151,7 +151,7 @@ func serve(log *slog.Logger) error {
 		media.TMDB = client
 		details = &meta.Server{TMDB: client, Log: log, SignedIn: v1.SignedIn}
 	} else {
-		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in and the website shows no names or posters")
+		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in, the website shows no names or posters, and media servers can't log episodes of shows Tethr hasn't seen yet")
 	}
 
 	addr := ":" + envOr("PORT", "8080")
