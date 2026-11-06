@@ -145,6 +145,32 @@
   gap: 10px;
 }
 
+.onLists {
+  display: grid;
+  gap: 10px;
+}
+
+.newList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.newList input {
+  flex: 0 1 16rem;
+  min-height: 32px;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  background: none;
+  font: inherit;
+}
+
+.newList input:focus {
+  outline: none;
+  background: var(--hl-soft);
+}
+
 .rating {
   display: flex;
   flex-wrap: wrap;

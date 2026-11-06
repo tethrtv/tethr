@@ -116,9 +116,10 @@ function Back() {
 function useRefresh(profileID: number) {
   const queries = useQueryClient()
   return () => {
-    for (const key of ['title', 'history', 'up-next', 'playback', 'watchlist']) {
+    for (const key of ['title', 'history', 'up-next', 'playback', 'watchlist', 'lists']) {
       queries.invalidateQueries({ queryKey: [key, profileID] })
     }
+    queries.invalidateQueries({ queryKey: ['list'] })
   }
 }
 
@@ -739,7 +740,100 @@ function Yours({ detail: d, profileID }: { detail: Detail; profileID: number }) 
           </button>
         )}
       </p>
+      <OnLists detail={d} profileID={profileID} />
       {(rate.isError || list.isError) && <p className={lists.error}>{problemMessage(rate.error ?? list.error)}</p>}
+    </div>
+  )
+}
+
+function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }) {
+  const refresh = useRefresh(profileID)
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const self = titleRef(d)
+  const params = { query: { profile_id: profileID } }
+  const on = new Map((d.lists ?? []).map((l) => [l.list_id, l.item_id]))
+  const all = useQuery({
+    queryKey: ['lists', profileID],
+    enabled: open || on.size > 0,
+    queryFn: async () => (await api.GET('/v1/lists', { params })).data ?? [],
+  })
+  const mine = all.data?.filter((l) => l.access === 'mine') ?? []
+  const listed = mine.filter((l) => on.has(l.id)).map((l) => l.name)
+
+  const toggle = useMutation({
+    mutationFn: async (id: number) => {
+      const item = on.get(id)
+      const { error } = item
+        ? await api.DELETE('/v1/lists/{id}/items/{item}', { params: { ...params, path: { id, item } } })
+        : await api.POST('/v1/lists/{id}/items', {
+            params: { ...params, path: { id } },
+            body: { items: [{ item: self }] },
+          })
+      if (error) throw error
+    },
+    onSuccess: refresh,
+  })
+  const create = useMutation({
+    mutationFn: async () => {
+      const made = await api.POST('/v1/lists', { params, body: { name } })
+      if (made.error) throw made.error
+      const { error } = await api.POST('/v1/lists/{id}/items', {
+        params: { ...params, path: { id: made.data.id } },
+        body: { items: [{ item: self }] },
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setName('')
+      refresh()
+    },
+  })
+
+  return (
+    <div className={styles.onLists}>
+      <p className={lists.small}>
+        {listed.length > 0 && <>On {names(listed)}. </>}
+        <button type="button" className={lists.textButton} onClick={() => setOpen(!open)}>
+          {open ? 'Done' : listed.length ? 'Change lists' : 'Add to a list'}
+        </button>
+      </p>
+      {open && (
+        <>
+          {mine.length > 0 && (
+            <fieldset className={lists.options} disabled={toggle.isPending}>
+              <legend className={lists.hidden}>Your lists</legend>
+              {mine.map((l) => (
+                <label key={l.id} className={on.has(l.id) ? `${lists.option} ${lists.chosen}` : lists.option}>
+                  <input type="checkbox" checked={on.has(l.id)} onChange={() => toggle.mutate(l.id)} />
+                  {l.name}
+                </label>
+              ))}
+            </fieldset>
+          )}
+          <form
+            className={styles.newList}
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (name.trim()) create.mutate()
+            }}
+          >
+            <input
+              aria-label="New list"
+              placeholder="New list"
+              value={name}
+              maxLength={100}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <button type="submit" className={lists.textButton} disabled={!name.trim() || create.isPending}>
+              Make it and add this
+            </button>
+          </form>
+          {(toggle.isError || create.isError) && (
+            <p className={lists.error}>{problemMessage(toggle.error ?? create.error)}</p>
+          )}
+        </>
+      )}
     </div>
   )
 }
