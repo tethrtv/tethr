@@ -1,7 +1,8 @@
 import { createRootRoute, createRoute, createRouter, Outlet, useLocation, useParams } from '@tanstack/react-router'
 import { ComingSoon } from './ComingSoon'
 import { cleanCode } from './components/CodeInput'
-import { Shell } from './components/Shell'
+import { Plain } from './components/Plain'
+import { Shell, useWatching } from './components/Shell'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
 import { CheckEmail } from './pages/CheckEmail'
@@ -11,7 +12,9 @@ import { History } from './pages/History'
 import { Home } from './pages/Home'
 import { Import } from './pages/Import'
 import { Join } from './pages/Join'
+import { ListPage } from './pages/List'
 import { MediaServers } from './pages/MediaServers'
+import { MyLists } from './pages/MyLists'
 import { SignIn } from './pages/SignIn'
 import { TitlePage } from './pages/Title'
 import { UpNext } from './pages/UpNext'
@@ -34,6 +37,29 @@ function Titled() {
       <TitlePage key={`${kind}/${slug}`} slug={slug} kind={kind} />
     </Shell>
   )
+}
+
+function OneList() {
+  const { list = '' } = useParams({ strict: false })
+  const me = useMe()
+  if (me.isPending) return null
+  if (me.data) {
+    return (
+      <Shell>
+        <WatchingList key={list} param={list} />
+      </Shell>
+    )
+  }
+  if (import.meta.env.VITE_COMING_SOON === 'true') return <ComingSoon />
+  return (
+    <Plain wide>
+      <ListPage key={list} param={list} />
+    </Plain>
+  )
+}
+
+function WatchingList({ param }: { param: string }) {
+  return <ListPage param={param} profileID={useWatching().profile.id} />
 }
 
 function Front() {
@@ -64,6 +90,16 @@ const routes = [
       </Shell>
     ),
   }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/lists',
+    component: () => (
+      <Shell>
+        <MyLists />
+      </Shell>
+    ),
+  }),
+  createRoute({ getParentRoute: () => root, path: '/lists/$list', component: OneList }),
   createRoute({
     getParentRoute: () => root,
     path: '/shows/$slug',

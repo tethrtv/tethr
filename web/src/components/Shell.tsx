@@ -9,7 +9,7 @@ import styles from './Shell.module.css'
 const links = [
   { to: '/', label: 'Up next' },
   { to: '/history', label: 'History' },
-  { to: '/watchlist', label: 'Watchlist' },
+  { to: '/lists', label: 'Lists' },
   { to: '/account', label: 'Account' },
 ] as const
 
@@ -30,9 +30,11 @@ function stored() {
   }
 }
 
+const section = (path: string) => (path === '/watchlist' || path.startsWith('/lists/') ? '/lists' : path)
+
 export function Shell({ children }: { children: ReactNode }) {
   const me = useSignedIn()
-  const path = useRouterState({ select: (s) => s.location.pathname })
+  const path = section(useRouterState({ select: (s) => s.location.pathname }))
   const [chosen, setChosen] = useState(stored)
 
   if (!me) return null
