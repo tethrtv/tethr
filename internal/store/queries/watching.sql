@@ -142,7 +142,7 @@ UPDATE lists SET updated_at = now() WHERE id = $1 RETURNING updated_at;
 -- name: DeleteListItem :one
 DELETE FROM list_items li
 USING lists l
-WHERE li.id = $1 AND l.id = li.list_id AND l.profile_id = $2
+WHERE li.id = $1 AND l.id = li.list_id AND l.profile_id = $2 AND l.kind = 'watchlist'
 RETURNING li.list_id, li.season_number, li.episode_id, (SELECT kind FROM titles WHERE id = li.title_id)::text AS kind;
 
 -- name: EpisodePlayback :many
