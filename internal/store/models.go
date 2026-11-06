@@ -115,6 +115,16 @@ type ExternalID struct {
 	Value    string
 }
 
+type HeldPlay struct {
+	ID              int64
+	ServerUserID    int64
+	TitleID         int64
+	EpisodeID       *int64
+	Action          string
+	WatchedAt       time.Time
+	DurationSeconds *float64
+}
+
 type HiddenItem struct {
 	ProfileID    int64
 	Section      string
@@ -193,6 +203,7 @@ type MediaServerUser struct {
 	ExternalID  string
 	Name        string
 	GrantID     *int64
+	Ignored     bool
 	LastEventAt time.Time
 }
 

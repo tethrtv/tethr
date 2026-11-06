@@ -127,6 +127,9 @@ func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into i
 	if err := q.MergeTitleHidden(ctx, store.MergeTitleHiddenParams{FromID: from, IntoID: into}); err != nil {
 		return err
 	}
+	if err := q.MergeTitleHeldPlays(ctx, store.MergeTitleHeldPlaysParams{FromID: from, IntoID: into}); err != nil {
+		return err
+	}
 
 	episodes, err := q.ShowEpisodes(ctx, from)
 	if err != nil {

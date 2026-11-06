@@ -94,17 +94,114 @@ func (q *Queries) CreateMediaServer(ctx context.Context, arg CreateMediaServerPa
 	return i, err
 }
 
+const dropHeldPlays = `-- name: DropHeldPlays :exec
+DELETE FROM held_plays WHERE server_user_id = $1
+`
+
+func (q *Queries) DropHeldPlays(ctx context.Context, serverUserID int64) error {
+	_, err := q.db.Exec(ctx, dropHeldPlays, serverUserID)
+	return err
+}
+
+const heldPlayNear = `-- name: HeldPlayNear :one
+SELECT EXISTS (
+    SELECT 1 FROM held_plays
+    WHERE server_user_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM $3
+      AND watched_at BETWEEN $4::timestamptz - interval '10 minutes' AND $4::timestamptz + interval '10 minutes'
+)
+`
+
+type HeldPlayNearParams struct {
+	ServerUserID int64
+	TitleID      int64
+	EpisodeID    *int64
+	At           time.Time
+}
+
+func (q *Queries) HeldPlayNear(ctx context.Context, arg HeldPlayNearParams) (bool, error) {
+	row := q.db.QueryRow(ctx, heldPlayNear,
+		arg.ServerUserID,
+		arg.TitleID,
+		arg.EpisodeID,
+		arg.At,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const heldPlays = `-- name: HeldPlays :many
+SELECT id, server_user_id, title_id, episode_id, action, watched_at, duration_seconds FROM held_plays
+WHERE server_user_id = $1 AND watched_at > now() - interval '7 days'
+ORDER BY watched_at
+`
+
+func (q *Queries) HeldPlays(ctx context.Context, serverUserID int64) ([]HeldPlay, error) {
+	rows, err := q.db.Query(ctx, heldPlays, serverUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HeldPlay
+	for rows.Next() {
+		var i HeldPlay
+		if err := rows.Scan(
+			&i.ID,
+			&i.ServerUserID,
+			&i.TitleID,
+			&i.EpisodeID,
+			&i.Action,
+			&i.WatchedAt,
+			&i.DurationSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const holdPlay = `-- name: HoldPlay :exec
+INSERT INTO held_plays (server_user_id, title_id, episode_id, action, watched_at, duration_seconds)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type HoldPlayParams struct {
+	ServerUserID    int64
+	TitleID         int64
+	EpisodeID       *int64
+	Action          string
+	WatchedAt       time.Time
+	DurationSeconds *float64
+}
+
+func (q *Queries) HoldPlay(ctx context.Context, arg HoldPlayParams) error {
+	_, err := q.db.Exec(ctx, holdPlay,
+		arg.ServerUserID,
+		arg.TitleID,
+		arg.EpisodeID,
+		arg.Action,
+		arg.WatchedAt,
+		arg.DurationSeconds,
+	)
+	return err
+}
+
 const matchMediaServerUser = `-- name: MatchMediaServerUser :exec
-UPDATE media_server_users SET grant_id = $2 WHERE id = $1
+UPDATE media_server_users SET grant_id = $2, ignored = $3 WHERE id = $1
 `
 
 type MatchMediaServerUserParams struct {
 	ID      int64
 	GrantID *int64
+	Ignored bool
 }
 
 func (q *Queries) MatchMediaServerUser(ctx context.Context, arg MatchMediaServerUserParams) error {
-	_, err := q.db.Exec(ctx, matchMediaServerUser, arg.ID, arg.GrantID)
+	_, err := q.db.Exec(ctx, matchMediaServerUser, arg.ID, arg.GrantID, arg.Ignored)
 	return err
 }
 
@@ -135,7 +232,7 @@ func (q *Queries) MediaServerBySecret(ctx context.Context, arg MediaServerBySecr
 }
 
 const mediaServerUser = `-- name: MediaServerUser :one
-SELECT u.id, u.server_id, u.external_id, u.name, u.grant_id, u.last_event_at, s.kind, s.name AS server_name
+SELECT u.id, u.server_id, u.external_id, u.name, u.grant_id, u.ignored, u.last_event_at, s.kind, s.name AS server_name
 FROM media_server_users u
 JOIN media_servers s ON s.id = u.server_id
 WHERE u.id = $1 AND u.server_id = $2 AND s.account_id = $3 AND s.revoked_at IS NULL
@@ -153,6 +250,7 @@ type MediaServerUserRow struct {
 	ExternalID  string
 	Name        string
 	GrantID     *int64
+	Ignored     bool
 	LastEventAt time.Time
 	Kind        string
 	ServerName  *string
@@ -167,6 +265,7 @@ func (q *Queries) MediaServerUser(ctx context.Context, arg MediaServerUserParams
 		&i.ExternalID,
 		&i.Name,
 		&i.GrantID,
+		&i.Ignored,
 		&i.LastEventAt,
 		&i.Kind,
 		&i.ServerName,
@@ -175,7 +274,8 @@ func (q *Queries) MediaServerUser(ctx context.Context, arg MediaServerUserParams
 }
 
 const mediaServerUsers = `-- name: MediaServerUsers :many
-SELECT u.id, u.server_id, u.external_id, u.name, u.grant_id, u.last_event_at, g.profile_id
+SELECT u.id, u.server_id, u.external_id, u.name, u.grant_id, u.ignored, u.last_event_at, g.profile_id,
+    (SELECT count(*) FROM held_plays h WHERE h.server_user_id = u.id) AS held
 FROM media_server_users u
 JOIN media_servers s ON s.id = u.server_id
 LEFT JOIN oauth_grants g ON g.id = u.grant_id AND g.revoked_at IS NULL
@@ -189,8 +289,10 @@ type MediaServerUsersRow struct {
 	ExternalID  string
 	Name        string
 	GrantID     *int64
+	Ignored     bool
 	LastEventAt time.Time
 	ProfileID   *int64
+	Held        int64
 }
 
 func (q *Queries) MediaServerUsers(ctx context.Context, accountID int64) ([]MediaServerUsersRow, error) {
@@ -208,8 +310,10 @@ func (q *Queries) MediaServerUsers(ctx context.Context, accountID int64) ([]Medi
 			&i.ExternalID,
 			&i.Name,
 			&i.GrantID,
+			&i.Ignored,
 			&i.LastEventAt,
 			&i.ProfileID,
+			&i.Held,
 		); err != nil {
 			return nil, err
 		}
@@ -219,6 +323,15 @@ func (q *Queries) MediaServerUsers(ctx context.Context, accountID int64) ([]Medi
 		return nil, err
 	}
 	return items, nil
+}
+
+const pruneHeldPlays = `-- name: PruneHeldPlays :exec
+DELETE FROM held_plays WHERE watched_at < now() - interval '7 days'
+`
+
+func (q *Queries) PruneHeldPlays(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, pruneHeldPlays)
+	return err
 }
 
 const revokeMediaServer = `-- name: RevokeMediaServer :execrows
@@ -253,7 +366,7 @@ const seeMediaServerUser = `-- name: SeeMediaServerUser :one
 INSERT INTO media_server_users (server_id, external_id, name)
 VALUES ($1, $2, $3)
 ON CONFLICT (server_id, external_id) DO UPDATE SET name = excluded.name, last_event_at = now()
-RETURNING id, server_id, external_id, name, grant_id, last_event_at
+RETURNING id, server_id, external_id, name, grant_id, ignored, last_event_at
 `
 
 type SeeMediaServerUserParams struct {
@@ -271,6 +384,7 @@ func (q *Queries) SeeMediaServerUser(ctx context.Context, arg SeeMediaServerUser
 		&i.ExternalID,
 		&i.Name,
 		&i.GrantID,
+		&i.Ignored,
 		&i.LastEventAt,
 	)
 	return i, err
@@ -326,4 +440,31 @@ type TouchMediaServerParams struct {
 func (q *Queries) TouchMediaServer(ctx context.Context, arg TouchMediaServerParams) error {
 	_, err := q.db.Exec(ctx, touchMediaServer, arg.ID, arg.Name)
 	return err
+}
+
+const watchEventNear = `-- name: WatchEventNear :one
+SELECT EXISTS (
+    SELECT 1 FROM watch_events
+    WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM $3
+      AND watched_at BETWEEN $4::timestamptz - interval '10 minutes' AND $4::timestamptz + interval '10 minutes'
+)
+`
+
+type WatchEventNearParams struct {
+	ProfileID int64
+	TitleID   int64
+	EpisodeID *int64
+	At        time.Time
+}
+
+func (q *Queries) WatchEventNear(ctx context.Context, arg WatchEventNearParams) (bool, error) {
+	row := q.db.QueryRow(ctx, watchEventNear,
+		arg.ProfileID,
+		arg.TitleID,
+		arg.EpisodeID,
+		arg.At,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

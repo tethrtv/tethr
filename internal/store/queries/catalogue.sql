@@ -97,6 +97,9 @@ UPDATE ratings SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(fr
 -- name: MergeEpisodeWatching :exec
 UPDATE watching SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
 
+-- name: MergeEpisodeHeldPlays :exec
+UPDATE held_plays SET episode_id = sqlc.arg(into_id) WHERE episode_id = sqlc.arg(from_id);
+
 -- name: DeleteEpisode :exec
 DELETE FROM episodes WHERE id = $1;
 
@@ -216,6 +219,9 @@ WHERE h.title_id = sqlc.arg(from_id)
 
 -- name: MergeTitleHidden :exec
 UPDATE hidden_items SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: MergeTitleHeldPlays :exec
+UPDATE held_plays SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
 
 -- name: MergeTitleExternalIDs :exec
 UPDATE external_ids SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
