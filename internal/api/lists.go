@@ -29,6 +29,8 @@ func listProblem(err error) (ProblemJSONResponse, int, bool) {
 		return problem("invalid_cover", "The cover has to be an item on the list."), 400, true
 	case errors.Is(err, core.ErrListOrder):
 		return problem("invalid_order", "Send every item on the list once, in the new order."), 400, true
+	case errors.Is(err, core.ErrListReadOnly):
+		return problem("read_only", "You can see this list but not change it."), 403, true
 	case errors.Is(err, core.ErrPublicList):
 		return problem("public_not_allowed", "Kids and guest profiles can’t make public lists."), 403, true
 	case errors.Is(err, core.ErrTooManyLists):
@@ -70,6 +72,7 @@ func (s *Server) toList(l core.List) List {
 		SortHow:      ListSortHow(l.SortHow),
 		Owner:        ListOwner{Username: l.Owner.Username, Name: l.Owner.Name},
 		Access:       ListAccess(l.Access),
+		CanEditItems: l.CanEdit,
 		ItemCount:    l.ItemCount,
 		WatchedCount: l.Watched,
 		CoverItemId:  l.CoverItemID,
@@ -278,6 +281,8 @@ func (s *Server) AddToList(ctx context.Context, req AddToListRequestObject) (Add
 	result, err := core.AddToList(ctx, s.DB, c.ProfileID, req.Id, listings)
 	if p, status, ok := listProblem(err); ok {
 		switch status {
+		case 403:
+			return AddToList403JSONResponse(p), nil
 		case 404:
 			return AddToList404JSONResponse(p), nil
 		case 422:
@@ -301,7 +306,10 @@ func (s *Server) UpdateListItem(ctx context.Context, req UpdateListItemRequestOb
 	}
 	err = core.SetListNotes(ctx, s.DB, c.ProfileID, req.Id, req.Item, req.Body.Notes)
 	if p, status, ok := listProblem(err); ok {
-		if status == 404 {
+		switch status {
+		case 403:
+			return UpdateListItem403JSONResponse(p), nil
+		case 404:
 			return UpdateListItem404JSONResponse(problem("not_found", "That isn’t on the list.")), nil
 		}
 		return UpdateListItem400JSONResponse{p}, nil
@@ -321,6 +329,10 @@ func (s *Server) RemoveFromList(ctx context.Context, req RemoveFromListRequestOb
 		return RemoveFromList401JSONResponse{notConnected}, err
 	}
 	err = core.RemoveFromList(ctx, s.DB, c.ProfileID, req.Id, req.Item)
+	if errors.Is(err, core.ErrListReadOnly) {
+		p, _, _ := listProblem(err)
+		return RemoveFromList403JSONResponse(p), nil
+	}
 	if errors.Is(err, core.ErrNotFound) {
 		return RemoveFromList404JSONResponse(problem("not_found", "That isn’t on the list.")), nil
 	}
@@ -340,7 +352,10 @@ func (s *Server) ReorderList(ctx context.Context, req ReorderListRequestObject) 
 	}
 	err = core.ReorderList(ctx, s.DB, c.ProfileID, req.Id, req.Body.Ids)
 	if p, status, ok := listProblem(err); ok {
-		if status == 404 {
+		switch status {
+		case 403:
+			return ReorderList403JSONResponse(p), nil
+		case 404:
 			return ReorderList404JSONResponse(p), nil
 		}
 		return ReorderList400JSONResponse{p}, nil
@@ -360,6 +375,10 @@ func (s *Server) RemoveManyFromList(ctx context.Context, req RemoveManyFromListR
 		return RemoveManyFromList401JSONResponse{notConnected}, err
 	}
 	removed, err := core.RemoveManyFromList(ctx, s.DB, c.ProfileID, req.Id, req.Body.Ids)
+	if errors.Is(err, core.ErrListReadOnly) {
+		p, _, _ := listProblem(err)
+		return RemoveManyFromList403JSONResponse(p), nil
+	}
 	if errors.Is(err, core.ErrNotFound) {
 		return RemoveManyFromList404JSONResponse(noSuchList), nil
 	}

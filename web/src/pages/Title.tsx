@@ -758,8 +758,8 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
     enabled: open || on.size > 0,
     queryFn: async () => (await api.GET('/v1/lists', { params })).data ?? [],
   })
-  const mine = all.data?.filter((l) => l.access === 'mine') ?? []
-  const listed = mine.filter((l) => on.has(l.id)).map((l) => l.name)
+  const editable = all.data?.filter((l) => l.can_edit_items) ?? []
+  const listed = all.data?.filter((l) => on.has(l.id)).map((l) => l.name) ?? []
 
   const toggle = useMutation({
     mutationFn: async (id: number) => {
@@ -800,13 +800,14 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
       </p>
       {open && (
         <>
-          {mine.length > 0 && (
+          {editable.length > 0 && (
             <fieldset className={lists.options} disabled={toggle.isPending}>
-              <legend className={lists.hidden}>Your lists</legend>
-              {mine.map((l) => (
+              <legend className={lists.hidden}>Lists you can add to</legend>
+              {editable.map((l) => (
                 <label key={l.id} className={on.has(l.id) ? `${lists.option} ${lists.chosen}` : lists.option}>
                   <input type="checkbox" checked={on.has(l.id)} onChange={() => toggle.mutate(l.id)} />
                   {l.name}
+                  {l.access !== 'mine' && <span className={lists.faint}>, {l.owner.name}’s</span>}
                 </label>
               ))}
             </fieldset>

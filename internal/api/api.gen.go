@@ -816,6 +816,9 @@ type List struct {
 	// Access Why you can see it. `mine` is your own list, `household` another profile's in your household, and `public` anyone else's.
 	Access ListAccess `json:"access"`
 
+	// CanEditItems Whether the profile reading it can add, remove, reorder and note items. Other profiles in the household can on household lists, and on public ones unless they're kids or guest profiles. Only the owner changes the list's details.
+	CanEditItems bool `json:"can_edit_items"`
+
 	// Cover The picked cover item, or the first four items in list order when none is picked. Fetch their posters from TMDB.
 	Cover []Item `json:"cover"`
 
@@ -1243,7 +1246,7 @@ type TitleDetail struct {
 	// Listing Set when the film or show itself is on your watchlist.
 	Listing *TitleListing `json:"listing,omitempty"`
 
-	// Lists Your own lists the film or show itself is on.
+	// Lists Lists in your household that you can see and that the film or show itself is on.
 	Lists *[]TitleInList `json:"lists,omitempty"`
 
 	// Rating Your rating of the film or show itself.
@@ -6458,6 +6461,20 @@ func (response AddToList401JSONResponse) VisitAddToListResponse(w http.ResponseW
 	return err
 }
 
+type AddToList403JSONResponse Problem
+
+func (response AddToList403JSONResponse) VisitAddToListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AddToList404JSONResponse Problem
 
 func (response AddToList404JSONResponse) VisitAddToListResponse(w http.ResponseWriter) error {
@@ -6526,6 +6543,20 @@ func (response RemoveManyFromList401JSONResponse) VisitRemoveManyFromListRespons
 	return err
 }
 
+type RemoveManyFromList403JSONResponse Problem
+
+func (response RemoveManyFromList403JSONResponse) VisitRemoveManyFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemoveManyFromList404JSONResponse Problem
 
 func (response RemoveManyFromList404JSONResponse) VisitRemoveManyFromListResponse(w http.ResponseWriter) error {
@@ -6568,6 +6599,20 @@ func (response RemoveFromList401JSONResponse) VisitRemoveFromListResponse(w http
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveFromList403JSONResponse Problem
+
+func (response RemoveFromList403JSONResponse) VisitRemoveFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -6633,6 +6678,20 @@ func (response UpdateListItem401JSONResponse) VisitUpdateListItemResponse(w http
 	return err
 }
 
+type UpdateListItem403JSONResponse Problem
+
+func (response UpdateListItem403JSONResponse) VisitUpdateListItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdateListItem404JSONResponse Problem
 
 func (response UpdateListItem404JSONResponse) VisitUpdateListItemResponse(w http.ResponseWriter) error {
@@ -6689,6 +6748,20 @@ func (response ReorderList401JSONResponse) VisitReorderListResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderList403JSONResponse Problem
+
+func (response ReorderList403JSONResponse) VisitReorderListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }

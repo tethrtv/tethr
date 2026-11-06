@@ -1007,6 +1007,8 @@ paths:
           $ref: '#/components/responses/Problem'
         '401':
           $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
         '422':
@@ -1040,6 +1042,8 @@ paths:
           $ref: '#/components/responses/Problem'
         '401':
           $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
     delete:
@@ -1056,6 +1060,8 @@ paths:
         '204':
           description: Removed
         '401':
+          $ref: '#/components/responses/Problem'
+        '403':
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
@@ -1098,6 +1104,8 @@ paths:
                     format: int64
         '401':
           $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
   /v1/lists/{id}/order:
@@ -1130,6 +1138,8 @@ paths:
         '400':
           $ref: '#/components/responses/Problem'
         '401':
+          $ref: '#/components/responses/Problem'
+        '403':
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
@@ -2456,7 +2466,7 @@ components:
       enum: [private, household, public]
     List:
       type: object
-      required: [id, name, slug, privacy, sort_by, sort_how, owner, access, item_count, cover, url, created_at, updated_at]
+      required: [id, name, slug, privacy, sort_by, sort_how, owner, access, can_edit_items, item_count, cover, url, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -2480,6 +2490,9 @@ components:
           type: string
           description: Why you can see it. `mine` is your own list, `household` another profile's in your household, and `public` anyone else's.
           enum: [mine, household, public]
+        can_edit_items:
+          type: boolean
+          description: Whether the profile reading it can add, remove, reorder and note items. Other profiles in the household can on household lists, and on public ones unless they're kids or guest profiles. Only the owner changes the list's details.
         item_count:
           type: integer
           format: int64
@@ -2801,7 +2814,7 @@ components:
           $ref: '#/components/schemas/TitleListing'
         lists:
           type: array
-          description: Your own lists the film or show itself is on.
+          description: Lists in your household that you can see and that the film or show itself is on.
           items:
             $ref: '#/components/schemas/TitleInList'
         episode_order:
