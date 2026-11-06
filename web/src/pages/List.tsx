@@ -106,12 +106,13 @@ export function ListPage({ param, profileID }: { param: string; profileID?: numb
 
   const list = page.data.list
   const mine = list.access === 'mine' && !!profileID
+  const editable = list.can_edit_items && !!profileID
   const chosen = order ?? orders.find((o) => o.by === list.sort_by && o.how === list.sort_how) ?? orders[0]
   const words = find.trim().toLowerCase()
   const items = words
     ? page.data.items.filter((i) => (i.item.title.name ?? '').toLowerCase().includes(words))
     : page.data.items
-  const draggable = mine && chosen.by === 'rank' && chosen.how === 'asc' && kind === 'all' && !hideWatched && !words
+  const draggable = editable && chosen.by === 'rank' && chosen.how === 'asc' && kind === 'all' && !hideWatched && !words
 
   return (
     <div className={styles.page}>
@@ -173,7 +174,7 @@ export function ListPage({ param, profileID }: { param: string; profileID?: numb
         {items.length === 0 ? (
           <p className={styles.quiet}>
             {page.data.total === 0 && kind === 'all' && !hideWatched
-              ? mine
+              ? editable
                 ? 'Nothing on this list yet. Add films and shows from their pages.'
                 : 'Nothing on this list yet.'
               : 'Nothing here matches.'}
@@ -194,7 +195,7 @@ export function ListPage({ param, profileID }: { param: string; profileID?: numb
             key={items.map((i) => i.id).join()}
             list={list}
             items={items}
-            mine={mine}
+            editable={editable}
             draggable={draggable}
             showRank={chosen.by === 'rank'}
             profileID={profileID}
@@ -275,6 +276,7 @@ function Head({
         <p className={styles.small}>
           {by}
           {privacyWords[list.privacy]} can see it.{' '}
+        {!mine && list.can_edit_items && profileID && 'You can add to it, take things off and change the order. '}
           {list.item_count === 0
             ? 'Nothing on it yet.'
             : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
@@ -389,7 +391,7 @@ function Editor({ list, profileID, onDone }: { list: List; profileID?: number; o
 function Rows({
   list,
   items,
-  mine,
+  editable,
   draggable,
   showRank,
   profileID,
@@ -397,7 +399,7 @@ function Rows({
 }: {
   list: List
   items: Item[]
-  mine: boolean
+  editable: boolean
   draggable: boolean
   showRank: boolean
   profileID?: number
@@ -464,7 +466,7 @@ function Rows({
           }}
           item={item}
           list={list}
-          mine={mine}
+          editable={editable}
           rank={showRank ? index + 1 : undefined}
           profileID={profileID}
           onChange={onChange}
@@ -525,7 +527,7 @@ function Row({
   ref,
   item: i,
   list,
-  mine,
+  editable,
   rank,
   profileID,
   onChange,
@@ -535,7 +537,7 @@ function Row({
   ref: (el: HTMLLIElement | null) => void
   item: Item
   list: List
-  mine: boolean
+  editable: boolean
   rank?: number
   profileID?: number
   onChange: () => void
@@ -630,7 +632,7 @@ function Row({
         )}
       </span>
       <span className={own.tools}>
-        {mine && !noting && (
+        {editable && !noting && (
           <>
             <button type="button" className={styles.textButton} onClick={() => setNoting(true)}>
               {i.notes ? 'Change note' : 'Add a note'}

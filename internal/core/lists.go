@@ -29,6 +29,7 @@ var (
 	ErrListFull        = errors.New("a list holds up to 1,000 items")
 	ErrListOrder       = errors.New("an order names every item in the list once")
 	ErrListCover       = errors.New("a list's cover is one of its own items")
+	ErrListReadOnly    = errors.New("the list is shared with this profile to read, not to change")
 )
 
 const (
@@ -54,6 +55,7 @@ type List struct {
 	SortBy      string
 	SortHow     string
 	Access      string
+	CanEdit     bool
 	ItemCount   int64
 	Watched     *int64
 	CoverItemID *int64
@@ -130,10 +132,16 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 		return nil, err
 	}
 	var latest time.Time
+	var viewerKind string
 	if viewer != 0 && len(rows) > 0 {
 		if latest, err = q.LatestActivity(ctx, viewer); err != nil {
 			return nil, err
 		}
+		p, err := q.ProfileByID(ctx, viewer)
+		if err != nil {
+			return nil, err
+		}
+		viewerKind = p.Kind
 	}
 	lists := make([]List, 0, len(rows))
 	ids := make([]int64, 0, len(rows))
@@ -150,6 +158,7 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 			SortBy:      l.SortBy,
 			SortHow:     l.SortHow,
 			Access:      row.Access,
+			CanEdit:     canEditItems(row.Access, l.Privacy, viewerKind),
 			ItemCount:   row.ItemCount,
 			CoverItemID: l.CoverItemID,
 			CreatedAt:   l.CreatedAt,
@@ -476,7 +485,7 @@ func AddToList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, items
 		}
 	}
 	var result SyncResult
-	err := changeList(ctx, db, profileID, id, func(q *store.Queries, list store.List) error {
+	err := changeItems(ctx, db, profileID, id, func(q *store.Queries, list store.List) error {
 		for _, l := range items {
 			r, err := resolve(ctx, q, l.Ref, true)
 			if errors.Is(err, ErrNotFound) {
@@ -516,7 +525,7 @@ func AddToList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, items
 }
 
 func RemoveFromList(ctx context.Context, db *pgxpool.Pool, profileID, listID, itemID int64) error {
-	return changeList(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+	return changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
 		n, err := q.RemoveListEntry(ctx, store.RemoveListEntryParams{ID: itemID, ListID: l.ID})
 		if err == nil && n == 0 {
 			return ErrNotFound
@@ -527,7 +536,7 @@ func RemoveFromList(ctx context.Context, db *pgxpool.Pool, profileID, listID, it
 
 func RemoveManyFromList(ctx context.Context, db *pgxpool.Pool, profileID, listID int64, itemIDs []int64) (int64, error) {
 	var removed int64
-	err := changeList(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+	err := changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
 		var err error
 		removed, err = q.RemoveListEntries(ctx, store.RemoveListEntriesParams{ListID: l.ID, Ids: itemIDs})
 		return err
@@ -540,7 +549,7 @@ func SetListNotes(ctx context.Context, db *pgxpool.Pool, profileID, listID, item
 	if utf8.RuneCountInString(notes) > 500 {
 		return ErrListNotes
 	}
-	return changeList(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+	return changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
 		n, err := q.SetListItemNotes(ctx, store.SetListItemNotesParams{ID: itemID, ListID: l.ID, Notes: optional(notes)})
 		if err == nil && n == 0 {
 			return ErrNotFound
@@ -550,7 +559,7 @@ func SetListNotes(ctx context.Context, db *pgxpool.Pool, profileID, listID, item
 }
 
 func ReorderList(ctx context.Context, db *pgxpool.Pool, profileID, listID int64, order []int64) error {
-	return changeList(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+	return changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
 		ids, err := q.ListEntryIDs(ctx, l.ID)
 		if err != nil {
 			return err
@@ -565,12 +574,50 @@ func ReorderList(ctx context.Context, db *pgxpool.Pool, profileID, listID int64,
 	})
 }
 
+func canEditItems(access, privacy, viewerKind string) bool {
+	switch {
+	case access == "mine":
+		return true
+	case access != "household" || privacy == "private":
+		return false
+	}
+	return privacy == "household" || viewerKind != "kids" && viewerKind != "guest"
+}
+
 func changeList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, change func(*store.Queries, store.List) error) error {
+	return editList(ctx, db, profileID, func(q *store.Queries) (store.List, error) {
+		l, err := q.OwnedList(ctx, store.OwnedListParams{ID: id, ProfileID: profileID})
+		return l, notFound(err)
+	}, change)
+}
+
+func changeItems(ctx context.Context, db *pgxpool.Pool, profileID, id int64, change func(*store.Queries, store.List) error) error {
+	return editList(ctx, db, profileID, func(q *store.Queries) (store.List, error) {
+		l, err := q.LockList(ctx, id)
+		if err != nil {
+			return l, notFound(err)
+		}
+		rows, err := q.VisibleLists(ctx, store.VisibleListsParams{Viewer: profileID, ListID: &id})
+		if err != nil || len(rows) == 0 {
+			return l, cmp.Or(err, ErrNotFound)
+		}
+		editor, err := q.ProfileByID(ctx, profileID)
+		if err != nil {
+			return l, err
+		}
+		if !canEditItems(rows[0].Access, l.Privacy, editor.Kind) {
+			return l, ErrListReadOnly
+		}
+		return l, nil
+	}, change)
+}
+
+func editList(ctx context.Context, db *pgxpool.Pool, profileID int64, lock func(*store.Queries) (store.List, error), change func(*store.Queries, store.List) error) error {
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		l, err := q.OwnedList(ctx, store.OwnedListParams{ID: id, ProfileID: profileID})
+		l, err := lock(q)
 		if err != nil {
-			return notFound(err)
+			return err
 		}
 		if err := change(q, l); err != nil {
 			return err

@@ -218,6 +218,30 @@ func (q *Queries) ListSlugs(ctx context.Context, arg ListSlugsParams) ([]string,
 	return items, nil
 }
 
+const lockList = `-- name: LockList :one
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id FROM lists WHERE id = $1 AND kind = 'custom' FOR UPDATE
+`
+
+func (q *Queries) LockList(ctx context.Context, id int64) (List, error) {
+	row := q.db.QueryRow(ctx, lockList, id)
+	var i List
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.Kind,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Privacy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SortBy,
+		&i.SortHow,
+		&i.CoverItemID,
+	)
+	return i, err
+}
+
 const onList = `-- name: OnList :one
 SELECT EXISTS (SELECT 1 FROM list_items WHERE id = $1 AND list_id = $2)
 `
@@ -360,7 +384,10 @@ const titleLists = `-- name: TitleLists :many
 SELECT i.list_id, i.id
 FROM list_items i
 JOIN lists l ON l.id = i.list_id
-WHERE l.profile_id = $1 AND l.kind = 'custom' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
+JOIN profiles o ON o.id = l.profile_id
+JOIN profiles v ON v.id = $1
+WHERE l.kind = 'custom' AND o.household_id = v.household_id AND (l.profile_id = v.id OR l.privacy <> 'private')
+  AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
 ORDER BY i.list_id
 `
 

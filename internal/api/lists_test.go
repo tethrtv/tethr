@@ -38,8 +38,11 @@ func TestListEndpoints(t *testing.T) {
 		t.Errorf("changing someone else's list = %d %s", rec.Code, rec.Body)
 	}
 	rec = do(t, h, "GET", "/v1/lists"+asRuby, "", cookie)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"access":"household"`) {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"access":"household","can_edit_items":false`) {
 		t.Errorf("household lists = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", path+"/items"+asRuby, `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}}}]}`, cookie); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "read_only") {
+		t.Errorf("kids adding to a public list = %d %s", rec.Code, rec.Body)
 	}
 
 	rec = do(t, h, "POST", path+"/items", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"notes":"Twice"},{"item":{"type":"show","ids":{"tmdb":1396}}}]}`, cookie)

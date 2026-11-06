@@ -1471,6 +1471,8 @@ export interface components {
              * @enum {string}
              */
             access: "mine" | "household" | "public";
+            /** @description Whether the profile reading it can add, remove, reorder and note items. Other profiles in the household can on household lists, and on public ones unless they're kids or guest profiles. Only the owner changes the list's details. */
+            can_edit_items: boolean;
             /** Format: int64 */
             item_count: number;
             /**
@@ -1663,7 +1665,7 @@ export interface components {
             resume?: components["schemas"]["Resume"];
             rating?: components["schemas"]["TitleRating"];
             listing?: components["schemas"]["TitleListing"];
-            /** @description Your own lists the film or show itself is on. */
+            /** @description Lists in your household that you can see and that the film or show itself is on. */
             lists?: components["schemas"]["TitleInList"][];
             /** @description The TMDB episode group the show follows for this profile. Left out, it's aired order. */
             episode_order?: string;
@@ -2967,6 +2969,7 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
@@ -2994,6 +2997,7 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
@@ -3028,6 +3032,7 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
@@ -3064,6 +3069,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
@@ -3096,6 +3102,7 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

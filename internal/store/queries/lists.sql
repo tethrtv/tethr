@@ -13,6 +13,9 @@ WHERE profile_id = $1 AND id <> sqlc.arg(except_id) AND (slug = sqlc.arg(slug)::
 -- name: OwnedList :one
 SELECT * FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UPDATE;
 
+-- name: LockList :one
+SELECT * FROM lists WHERE id = $1 AND kind = 'custom' FOR UPDATE;
+
 -- name: UpdateList :one
 UPDATE lists
 SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, cover_item_id = $8, updated_at = now()
@@ -87,5 +90,8 @@ WHERE li.id = x.id AND li.list_id = sqlc.arg(list_id);
 SELECT i.list_id, i.id
 FROM list_items i
 JOIN lists l ON l.id = i.list_id
-WHERE l.profile_id = $1 AND l.kind = 'custom' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
+JOIN profiles o ON o.id = l.profile_id
+JOIN profiles v ON v.id = sqlc.arg(profile_id)
+WHERE l.kind = 'custom' AND o.household_id = v.household_id AND (l.profile_id = v.id OR l.privacy <> 'private')
+  AND i.title_id = sqlc.arg(title_id) AND i.season_number IS NULL AND i.episode_id IS NULL
 ORDER BY i.list_id;

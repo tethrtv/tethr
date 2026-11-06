@@ -244,6 +244,10 @@ func TestListPrivacy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	partner, err := AddProfile(ctx, db, accountID, NewProfile{Name: "Sam", Kind: "person"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	otherAccount, _ := signedUpOther(t, db)
 	_, others, err := Me(ctx, db, otherAccount)
 	if err != nil {
@@ -286,8 +290,35 @@ func TestListPrivacy(t *testing.T) {
 	if _, err := UpdateList(ctx, db, kid.ID, family.ID, ListChanges{Name: ptr("Taken over")}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("changing someone else's household list = %v", err)
 	}
-	if _, err := AddToList(ctx, db, kid.ID, family.ID, []Listing{{Ref: inception()}}); !errors.Is(err, ErrNotFound) {
-		t.Errorf("adding to someone else's household list = %v", err)
+	if err := DeleteList(ctx, db, partner.ID, family.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("deleting someone else's household list = %v", err)
+	}
+	added, err := AddToList(ctx, db, kid.ID, family.ID, []Listing{{Ref: inception()}})
+	if err != nil || added.Listed != 1 {
+		t.Errorf("the kids profile adding to a household list = %+v, %v", added, err)
+	}
+	_, entries, _, _ := ListEntries(ctx, db, partner.ID, family.ID, ListQuery{})
+	if err := SetListNotes(ctx, db, partner.ID, family.ID, entries[0].ID, "Ruby's pick"); err != nil {
+		t.Errorf("noting on a household list = %v", err)
+	}
+	if _, err := AddToList(ctx, db, stranger, public.ID, []Listing{{Ref: inception()}}); !errors.Is(err, ErrListReadOnly) {
+		t.Errorf("a stranger adding to a public list = %v", err)
+	}
+	if _, err := AddToList(ctx, db, kid.ID, public.ID, []Listing{{Ref: inception()}}); !errors.Is(err, ErrListReadOnly) {
+		t.Errorf("the kids profile adding to a public list = %v", err)
+	}
+	if _, err := AddToList(ctx, db, partner.ID, public.ID, []Listing{{Ref: episode(1, 2)}}); err != nil {
+		t.Errorf("an adult adding to a public household list = %v", err)
+	}
+	if err := RemoveFromList(ctx, db, kid.ID, private.ID, 1); !errors.Is(err, ErrNotFound) {
+		t.Errorf("changing someone else's private list = %v", err)
+	}
+	editable := map[string]bool{}
+	for _, l := range seen {
+		editable[l.Name] = l.CanEdit
+	}
+	if !editable["Ruby's"] || !editable["Family"] || editable["Everyone"] {
+		t.Errorf("which lists the kids profile can change = %v", editable)
 	}
 
 	if seen, _ := Lists(ctx, db, stranger); len(seen) != 0 {
@@ -297,12 +328,12 @@ func TestListPrivacy(t *testing.T) {
 		t.Errorf("a stranger reading a household list = %v", err)
 	}
 	got, err := GetList(ctx, db, stranger, public.ID)
-	if err != nil || got.Access != "public" || got.Owner.Username != profiles[0].Username || got.ItemCount != 1 {
+	if err != nil || got.Access != "public" || got.CanEdit || got.Owner.Username != profiles[0].Username || got.ItemCount != 2 {
 		t.Errorf("a stranger reading a public list = %+v, %v", got, err)
 	}
 
 	anyone, entries, _, err := ListEntries(ctx, db, 0, public.ID, ListQuery{})
-	if err != nil || anyone.Watched != nil || len(entries) != 1 || entries[0].Progress != nil {
+	if err != nil || anyone.Watched != nil || len(entries) != 2 || entries[0].Progress != nil {
 		t.Errorf("signed out = %+v, %+v, %v", anyone, entries, err)
 	}
 	if _, err := GetList(ctx, db, 0, family.ID); !errors.Is(err, ErrNotFound) {
