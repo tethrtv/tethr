@@ -464,6 +464,16 @@ func RemoveFromList(ctx context.Context, db *pgxpool.Pool, profileID, listID, it
 	})
 }
 
+func RemoveManyFromList(ctx context.Context, db *pgxpool.Pool, profileID, listID int64, itemIDs []int64) (int64, error) {
+	var removed int64
+	err := changeList(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+		var err error
+		removed, err = q.RemoveListEntries(ctx, store.RemoveListEntriesParams{ListID: l.ID, Ids: itemIDs})
+		return err
+	})
+	return removed, err
+}
+
 func SetListNotes(ctx context.Context, db *pgxpool.Pool, profileID, listID, itemID int64, notes string) error {
 	notes = strings.TrimSpace(notes)
 	if utf8.RuneCountInString(notes) > 500 {

@@ -1059,6 +1059,47 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/lists/{id}/items/remove:
+    post:
+      operationId: removeManyFromList
+      summary: Take several items off a list
+      description: IDs that aren't on the list are skipped.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  maxItems: 1000
+                  items:
+                    type: integer
+                    format: int64
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed:
+                    type: integer
+                    format: int64
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/lists/{id}/order:
     put:
       operationId: reorderList

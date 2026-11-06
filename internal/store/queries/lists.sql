@@ -69,6 +69,9 @@ UPDATE list_items SET notes = $3 WHERE id = $1 AND list_id = $2;
 -- name: RemoveListEntry :execrows
 DELETE FROM list_items WHERE id = $1 AND list_id = $2;
 
+-- name: RemoveListEntries :execrows
+DELETE FROM list_items WHERE list_id = $1 AND id = ANY(sqlc.arg(ids)::bigint[]);
+
 -- name: ListEntryIDs :many
 SELECT id FROM list_items WHERE list_id = $1;
 

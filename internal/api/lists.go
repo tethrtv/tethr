@@ -341,3 +341,21 @@ func (s *Server) ReorderList(ctx context.Context, req ReorderListRequestObject) 
 	}
 	return ReorderList204Response{}, nil
 }
+
+func (s *Server) RemoveManyFromList(ctx context.Context, req RemoveManyFromListRequestObject) (RemoveManyFromListResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return RemoveManyFromList404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return RemoveManyFromList401JSONResponse{notConnected}, err
+	}
+	removed, err := core.RemoveManyFromList(ctx, s.DB, c.ProfileID, req.Id, req.Body.Ids)
+	if errors.Is(err, core.ErrNotFound) {
+		return RemoveManyFromList404JSONResponse(noSuchList), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return RemoveManyFromList200JSONResponse{Removed: removed}, nil
+}

@@ -1469,6 +1469,17 @@ type AddToListParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// RemoveManyFromListJSONBody defines parameters for RemoveManyFromList.
+type RemoveManyFromListJSONBody struct {
+	Ids []int64 `json:"ids"`
+}
+
+// RemoveManyFromListParams defines parameters for RemoveManyFromList.
+type RemoveManyFromListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // RemoveFromListParams defines parameters for RemoveFromList.
 type RemoveFromListParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -1644,6 +1655,9 @@ type UpdateListJSONRequestBody = ListChanges
 // AddToListJSONRequestBody defines body for AddToList for application/json ContentType.
 type AddToListJSONRequestBody = NewListings
 
+// RemoveManyFromListJSONRequestBody defines body for RemoveManyFromList for application/json ContentType.
+type RemoveManyFromListJSONRequestBody RemoveManyFromListJSONBody
+
 // UpdateListItemJSONRequestBody defines body for UpdateListItem for application/json ContentType.
 type UpdateListItemJSONRequestBody UpdateListItemJSONBody
 
@@ -1790,6 +1804,9 @@ type ServerInterface interface {
 	// AddToList Add to a list
 	// (POST /v1/lists/{id}/items)
 	AddToList(w http.ResponseWriter, r *http.Request, id Id, params AddToListParams)
+	// RemoveManyFromList Take several items off a list
+	// (POST /v1/lists/{id}/items/remove)
+	RemoveManyFromList(w http.ResponseWriter, r *http.Request, id Id, params RemoveManyFromListParams)
 	// RemoveFromList Take an item off a list
 	// (DELETE /v1/lists/{id}/items/{item})
 	RemoveFromList(w http.ResponseWriter, r *http.Request, id Id, item ItemId, params RemoveFromListParams)
@@ -3114,6 +3131,48 @@ func (siw *ServerInterfaceWrapper) AddToList(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// RemoveManyFromList operation middleware
+func (siw *ServerInterfaceWrapper) RemoveManyFromList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveManyFromListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveManyFromList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveFromList operation middleware
 func (siw *ServerInterfaceWrapper) RemoveFromList(w http.ResponseWriter, r *http.Request) {
 
@@ -4409,6 +4468,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists/{id}/items", wrapper.AddToList)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/lists/{id}/items/{item}", wrapper.RemoveFromList)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/lists/{id}/items/{item}", wrapper.UpdateListItem)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists/{id}/items/remove", wrapper.RemoveManyFromList)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/lists/{id}/order", wrapper.ReorderList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.GetActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
@@ -6417,6 +6477,60 @@ func (response AddToList422JSONResponse) VisitAddToListResponse(w http.ResponseW
 	return err
 }
 
+type RemoveManyFromListRequestObject struct {
+	Id     Id `json:"id"`
+	Params RemoveManyFromListParams
+	Body   *RemoveManyFromListJSONRequestBody
+}
+
+type RemoveManyFromListResponseObject interface {
+	VisitRemoveManyFromListResponse(w http.ResponseWriter) error
+}
+
+type RemoveManyFromList200JSONResponse struct {
+	Removed int64 `json:"removed"`
+}
+
+func (response RemoveManyFromList200JSONResponse) VisitRemoveManyFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveManyFromList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response RemoveManyFromList401JSONResponse) VisitRemoveManyFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveManyFromList404JSONResponse Problem
+
+func (response RemoveManyFromList404JSONResponse) VisitRemoveManyFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemoveFromListRequestObject struct {
 	Id     Id     `json:"id"`
 	Item   ItemId `json:"item"`
@@ -8379,6 +8493,9 @@ type StrictServerInterface interface {
 	// AddToList Add to a list
 	// (POST /v1/lists/{id}/items)
 	AddToList(ctx context.Context, request AddToListRequestObject) (AddToListResponseObject, error)
+	// RemoveManyFromList Take several items off a list
+	// (POST /v1/lists/{id}/items/remove)
+	RemoveManyFromList(ctx context.Context, request RemoveManyFromListRequestObject) (RemoveManyFromListResponseObject, error)
 	// RemoveFromList Take an item off a list
 	// (DELETE /v1/lists/{id}/items/{item})
 	RemoveFromList(ctx context.Context, request RemoveFromListRequestObject) (RemoveFromListResponseObject, error)
@@ -9540,6 +9657,40 @@ func (sh *strictHandler) AddToList(w http.ResponseWriter, r *http.Request, id Id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AddToListResponseObject); ok {
 		if err := validResponse.VisitAddToListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveManyFromList operation middleware
+func (sh *strictHandler) RemoveManyFromList(w http.ResponseWriter, r *http.Request, id Id, params RemoveManyFromListParams) {
+	var request RemoveManyFromListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body RemoveManyFromListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveManyFromList(ctx, request.(RemoveManyFromListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveManyFromList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveManyFromListResponseObject); ok {
+		if err := validResponse.VisitRemoveManyFromListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

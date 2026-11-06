@@ -114,6 +114,9 @@ func TestListEndpoints(t *testing.T) {
 	if rec := do(t, h, "DELETE", path+"/items/"+strconv.FormatInt(film, 10), "", cookie); rec.Code != http.StatusNoContent {
 		t.Errorf("remove = %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(t, h, "POST", path+"/items/remove", `{"ids":[`+strconv.FormatInt(show, 10)+`,`+strconv.FormatInt(film, 10)+`]}`, cookie); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"removed":1`) {
+		t.Errorf("remove several = %d %s", rec.Code, rec.Body)
+	}
 	if rec := do(t, h, "GET", "/v1/activity", "", cookie); !strings.Contains(rec.Body.String(), `"lists":`) {
 		t.Errorf("activity = %s", rec.Body)
 	}
