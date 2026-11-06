@@ -54,7 +54,7 @@ func (s *Server) ExportData(ctx context.Context, _ ExportDataRequestObject) (Exp
 	if err != nil {
 		return nil, err
 	}
-	file, err := exportZip(household, start.At)
+	file, err := s.exportZip(household, start.At)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (s *Server) ExportData(ctx context.Context, _ ExportDataRequestObject) (Exp
 	return ExportData200ApplicationzipResponse{Body: bytes.NewReader(file), ContentLength: int64(len(file)), Headers: ExportData200ResponseHeaders{ContentDisposition: &name}}, nil
 }
 
-func exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
+func (s *Server) exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
 	doc := Export{
 		Format:       Tethr,
 		Version:      1,
@@ -96,6 +96,7 @@ func exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
 			Playback:  make([]ResumePoint, 0, len(p.Playback)),
 			Ratings:   make([]Rating, 0, len(p.Ratings)),
 			Watchlist: make([]Listing, 0, len(p.Watchlist)),
+			Lists:     make([]ListExport, 0, len(p.Lists)),
 			Hidden:    make([]HiddenItem, 0, len(p.Hidden)),
 			Imports:   make([]Import, 0, len(p.Imports)),
 		}
@@ -111,6 +112,13 @@ func exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
 		}
 		for _, e := range p.Watchlist {
 			out.Watchlist = append(out.Watchlist, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(e.Item)})
+		}
+		for _, l := range p.Lists {
+			items := make([]Listing, 0, len(l.Entries))
+			for _, e := range l.Entries {
+				items = append(items, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(e.Item)})
+			}
+			out.Lists = append(out.Lists, ListExport{List: s.toList(l.List), Items: items})
 		}
 		for _, e := range p.Hidden {
 			out.Hidden = append(out.Hidden, HiddenItem{Section: e.Section, HiddenAt: e.At, Item: toItem(e.Item)})
