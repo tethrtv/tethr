@@ -18,6 +18,8 @@ const names: Record<Kind, string> = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 
 
 const apiURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 
+const pluginRepository = 'https://tethrtv.github.io/jellyfin-plugin/manifest.json'
+
 export function MediaServers() {
   const me = useSignedIn()
   const queries = useQueryClient()
@@ -61,6 +63,24 @@ export function MediaServers() {
         </header>
 
         {address && <Setup kind={address.kind} address={address.url} onDone={() => setAddress(null)} />}
+
+        <section>
+          <h2 className={home.sectionTitle}>Tethr for Jellyfin</h2>
+          <p className={home.note}>
+            On Jellyfin, our plugin does more than a webhook. It brings in what each person has already watched, and
+            marks things they watch elsewhere as played. In Jellyfin’s dashboard, open Plugins, then Repositories, and
+            add{' '}
+            <button
+              type="button"
+              className={styles.clientID}
+              title="Copy the address"
+              onClick={() => navigator.clipboard?.writeText(pluginRepository).catch(() => {})}
+            >
+              {pluginRepository}
+            </button>
+            . Then install Tethr from the Catalogue, restart Jellyfin, and connect each person in the plugin’s settings.
+          </p>
+        </section>
 
         <section>
           <h2 className={home.sectionTitle}>Your servers</h2>
