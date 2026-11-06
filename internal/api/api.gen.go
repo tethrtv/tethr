@@ -575,12 +575,15 @@ type Export struct {
 	Apps []DeveloperApp `json:"apps"`
 
 	// Connections Apps connected to profiles in the household.
-	Connections []Connection    `json:"connections"`
-	ExportedAt  time.Time       `json:"exported_at"`
-	Format      ExportFormat    `json:"format"`
-	Passkeys    []Passkey       `json:"passkeys"`
-	Profiles    []ProfileExport `json:"profiles"`
-	Version     int             `json:"version"`
+	Connections []Connection `json:"connections"`
+	ExportedAt  time.Time    `json:"exported_at"`
+	Format      ExportFormat `json:"format"`
+
+	// MediaServers Media servers sending plays, with who on each is matched to which profile. Their addresses aren't included.
+	MediaServers []MediaServer   `json:"media_servers"`
+	Passkeys     []Passkey       `json:"passkeys"`
+	Profiles     []ProfileExport `json:"profiles"`
+	Version      int             `json:"version"`
 }
 
 // ExportFormat defines model for Export.Format.

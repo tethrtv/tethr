@@ -2391,7 +2391,7 @@ components:
                 description: Left out, it's now.
     Export:
       type: object
-      required: [format, version, exported_at, account, passkeys, apps, connections, profiles]
+      required: [format, version, exported_at, account, passkeys, apps, connections, media_servers, profiles]
       properties:
         format:
           type: string
@@ -2417,6 +2417,11 @@ components:
           description: Apps connected to profiles in the household.
           items:
             $ref: '#/components/schemas/Connection'
+        media_servers:
+          type: array
+          description: Media servers sending plays, with who on each is matched to which profile. Their addresses aren't included.
+          items:
+            $ref: '#/components/schemas/MediaServer'
         profiles:
           type: array
           items:
