@@ -2,7 +2,7 @@
 ALTER TABLE apps ADD COLUMN built_in boolean NOT NULL DEFAULT false;
 
 INSERT INTO apps (client_id, client_secret_hash, name, built_in)
-VALUES ('jellyfin', '\x', 'Jellyfin', true);
+VALUES ('jellyfin', '\x', 'Jellyfin', true), ('plex', '\x', 'Plex', true), ('emby', '\x', 'Emby', true);
 
 ALTER TABLE oauth_grants
     DROP CONSTRAINT oauth_grants_approved_via_check,
@@ -11,7 +11,7 @@ ALTER TABLE oauth_grants
 CREATE TABLE media_servers (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     account_id bigint NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
-    kind text NOT NULL CHECK (kind IN ('jellyfin')),
+    kind text NOT NULL CHECK (kind IN ('jellyfin', 'plex', 'emby')),
     secret_hash bytea NOT NULL UNIQUE,
     name text,
     created_at timestamptz NOT NULL DEFAULT now(),
