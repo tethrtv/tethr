@@ -49,6 +49,7 @@ type title struct {
 	Genres      []string     `json:"genres,omitempty"`
 	Runtime     int          `json:"runtime,omitempty"`
 	Certificate *certificate `json:"certificate,omitempty"`
+	Score       *float64     `json:"score,omitempty"`
 	Creators    []string     `json:"creators,omitempty"`
 	Cast        []string     `json:"cast,omitempty"`
 	Networks    []string     `json:"networks,omitempty"`
@@ -154,6 +155,10 @@ func (s *Server) title(fetch func(context.Context, int32) (tmdb.Title, error), c
 		}
 		if c := t.Certificate; c.Rating != "" {
 			out.Certificate = &certificate{Country: c.Country, Rating: c.Rating}
+		}
+		if t.Votes >= 10 {
+			score := math.Round(t.Score*10) / 10
+			out.Score = &score
 		}
 		for _, c := range t.Seasons {
 			out.Seasons = append(out.Seasons, season{Number: c.Number, Episodes: c.Episodes})

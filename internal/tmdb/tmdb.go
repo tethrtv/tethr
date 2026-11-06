@@ -82,6 +82,8 @@ type Title struct {
 	Genres      []string
 	Runtime     int
 	Certificate Certificate
+	Score       float64
+	Votes       int
 	Creators    []string
 	Cast        []string
 	Networks    []string
@@ -144,13 +146,15 @@ var certificateCountries = []string{"GB", "US"}
 
 func (c *Client) Movie(ctx context.Context, id int32) (Title, error) {
 	var m struct {
-		Title    string `json:"title"`
-		Release  string `json:"release_date"`
-		Poster   string `json:"poster_path"`
-		Overview string `json:"overview"`
-		Tagline  string `json:"tagline"`
-		Genres   named  `json:"genres"`
-		Runtime  int    `json:"runtime"`
+		Title    string  `json:"title"`
+		Release  string  `json:"release_date"`
+		Poster   string  `json:"poster_path"`
+		Overview string  `json:"overview"`
+		Tagline  string  `json:"tagline"`
+		Genres   named   `json:"genres"`
+		Runtime  int     `json:"runtime"`
+		Score    float64 `json:"vote_average"`
+		Votes    int     `json:"vote_count"`
 		Credits  struct {
 			Cast named `json:"cast"`
 			Crew []struct {
@@ -170,7 +174,7 @@ func (c *Client) Movie(ctx context.Context, id int32) (Title, error) {
 	if err := c.get(ctx, fmt.Sprintf("/3/movie/%d?language=en-GB&append_to_response=credits,release_dates", id), &m); err != nil {
 		return Title{}, err
 	}
-	t := Title{Name: m.Title, Year: year(m.Release), Poster: m.Poster, Overview: m.Overview, Tagline: m.Tagline, Genres: m.Genres.names(), Runtime: m.Runtime, Cast: m.Credits.Cast[:min(5, len(m.Credits.Cast))].names()}
+	t := Title{Name: m.Title, Year: year(m.Release), Poster: m.Poster, Overview: m.Overview, Tagline: m.Tagline, Genres: m.Genres.names(), Runtime: m.Runtime, Score: m.Score, Votes: m.Votes, Cast: m.Credits.Cast[:min(5, len(m.Credits.Cast))].names()}
 	for _, p := range m.Credits.Crew {
 		if p.Job == "Director" {
 			t.Creators = append(t.Creators, p.Name)
@@ -190,16 +194,18 @@ func (c *Client) Movie(ctx context.Context, id int32) (Title, error) {
 
 func (c *Client) Show(ctx context.Context, id int32) (Title, error) {
 	var s struct {
-		Name      string `json:"name"`
-		FirstAir  string `json:"first_air_date"`
-		Poster    string `json:"poster_path"`
-		Overview  string `json:"overview"`
-		Tagline   string `json:"tagline"`
-		Genres    named  `json:"genres"`
-		RunTimes  []int  `json:"episode_run_time"`
-		CreatedBy named  `json:"created_by"`
-		Networks  named  `json:"networks"`
-		Status    string `json:"status"`
+		Name      string  `json:"name"`
+		FirstAir  string  `json:"first_air_date"`
+		Poster    string  `json:"poster_path"`
+		Overview  string  `json:"overview"`
+		Tagline   string  `json:"tagline"`
+		Genres    named   `json:"genres"`
+		RunTimes  []int   `json:"episode_run_time"`
+		CreatedBy named   `json:"created_by"`
+		Networks  named   `json:"networks"`
+		Status    string  `json:"status"`
+		Score     float64 `json:"vote_average"`
+		Votes     int     `json:"vote_count"`
 		Seasons   []struct {
 			Number   int32 `json:"season_number"`
 			Episodes int   `json:"episode_count"`
@@ -226,7 +232,7 @@ func (c *Client) Show(ctx context.Context, id int32) (Title, error) {
 	if err := c.get(ctx, fmt.Sprintf("/3/tv/%d?language=en-GB&append_to_response=aggregate_credits,content_ratings", id), &s); err != nil {
 		return Title{}, err
 	}
-	t := Title{Name: s.Name, Year: year(s.FirstAir), Poster: s.Poster, Overview: s.Overview, Tagline: s.Tagline, Genres: s.Genres.names(), Creators: s.CreatedBy.names(), Cast: s.Credits.Cast[:min(5, len(s.Credits.Cast))].names(), Networks: s.Networks.names(), Status: s.Status}
+	t := Title{Name: s.Name, Year: year(s.FirstAir), Poster: s.Poster, Overview: s.Overview, Tagline: s.Tagline, Genres: s.Genres.names(), Creators: s.CreatedBy.names(), Cast: s.Credits.Cast[:min(5, len(s.Credits.Cast))].names(), Networks: s.Networks.names(), Status: s.Status, Score: s.Score, Votes: s.Votes}
 	switch {
 	case len(s.RunTimes) > 0:
 		t.Runtime = s.RunTimes[0]

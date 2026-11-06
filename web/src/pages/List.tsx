@@ -542,7 +542,15 @@ function Row({
   })
   const progress = progressWords(i)
   const done = progress === 'Watched'
-  const facts = [what(i), title?.year ?? i.item.title.year, title?.certificate?.rating].filter(Boolean).join(', ')
+  const facts = [
+    what(i),
+    title?.year ?? i.item.title.year,
+    title?.certificate?.rating,
+    title?.score && `TMDB ${title.score.toFixed(1)}`,
+  ]
+    .filter(Boolean)
+    .join(', ')
+  const synopsis = (i.item.type === 'movie' || i.item.type === 'show') && title?.overview
 
   return (
     <li
@@ -558,6 +566,7 @@ function Row({
           {name}
         </TitleLink>
         <p className={styles.quiet}>{facts}</p>
+        {synopsis && <p className={`${styles.small} ${own.synopsis}`}>{synopsis}</p>}
         {noting ? (
           <form
             className={own.note}
@@ -582,7 +591,7 @@ function Row({
             </button>
           </form>
         ) : (
-          i.notes && <p className={styles.small}>{i.notes}</p>
+          i.notes && <p className={`${styles.small} ${own.noteText}`}>{i.notes}</p>
         )}
         {(note.isError || remove.isError) && (
           <p className={styles.error}>{problemMessage(note.error ?? remove.error)}</p>
