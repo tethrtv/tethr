@@ -74,13 +74,18 @@ func (s *Server) receive(kind string, read func(*http.Request) (event, error)) h
 			return
 		}
 		ctx := r.Context()
-		c, matched, err := core.ServerCaller(ctx, s.DB, core.ServerEvent{Kind: kind, Secret: secret, ServerName: e.server, UserID: e.userID, UserName: e.userName})
+		c, hold, err := core.ServerCaller(ctx, s.DB, core.ServerEvent{Kind: kind, Secret: secret, ServerName: e.server, UserID: e.userID, UserName: e.userName})
 		if errors.Is(err, core.ErrNotFound) {
 			http.Error(w, "there's no media server with this address", http.StatusNotFound)
 			return
 		}
-		if err == nil && matched && e.ref.Kind != "" {
-			err = s.log(ctx, c, e)
+		if err == nil && e.ref.Kind != "" {
+			switch {
+			case c.ProfileID != 0:
+				err = s.log(ctx, c, e)
+			case hold != 0:
+				err = s.hold(ctx, hold, e)
+			}
 		}
 		var already core.AlreadyScrobbled
 		switch {
@@ -97,7 +102,7 @@ func (s *Server) receive(kind string, read func(*http.Request) (event, error)) h
 }
 
 func (s *Server) log(ctx context.Context, c core.Caller, e event) error {
-	send := func(ref core.Ref) error {
+	return s.withShow(ctx, e, func(ref core.Ref) error {
 		scrobble := core.Scrobble{Ref: ref, Progress: e.progress, Duration: e.duration}
 		var err error
 		switch e.action {
@@ -116,7 +121,25 @@ func (s *Server) log(ctx context.Context, c core.Caller, e event) error {
 			}
 		}
 		return err
+	})
+}
+
+func (s *Server) hold(ctx context.Context, serverUserID int64, e event) error {
+	var action string
+	switch e.action {
+	case finished:
+		action = "scrobble"
+	case marked:
+		action = "watch"
+	default:
+		return nil
 	}
+	return s.withShow(ctx, e, func(ref core.Ref) error {
+		return core.HoldPlay(ctx, s.DB, serverUserID, core.HeldPlay{Ref: ref, Action: action, At: time.Now(), Duration: e.duration})
+	})
+}
+
+func (s *Server) withShow(ctx context.Context, e event, send func(core.Ref) error) error {
 	err := send(e.ref)
 	if errors.Is(err, core.ErrNotFound) && e.ref.Kind == "episode" {
 		if found, ok := s.findShow(ctx, e); ok {

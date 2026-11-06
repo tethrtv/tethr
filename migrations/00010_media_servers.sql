@@ -27,11 +27,25 @@ CREATE TABLE media_server_users (
     external_id text NOT NULL,
     name text NOT NULL,
     grant_id bigint REFERENCES oauth_grants (id) ON DELETE SET NULL,
+    ignored boolean NOT NULL DEFAULT false,
     last_event_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (server_id, external_id)
 );
 
+CREATE TABLE held_plays (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    server_user_id bigint NOT NULL REFERENCES media_server_users (id) ON DELETE CASCADE,
+    title_id bigint NOT NULL REFERENCES titles (id),
+    episode_id bigint REFERENCES episodes (id),
+    action text NOT NULL CHECK (action IN ('scrobble', 'watch')),
+    watched_at timestamptz NOT NULL,
+    duration_seconds numeric(9, 3)
+);
+
+CREATE INDEX held_plays_user ON held_plays (server_user_id, watched_at);
+
 -- +goose Down
+DROP TABLE held_plays;
 DROP TABLE media_server_users;
 DROP TABLE media_servers;
 DELETE FROM oauth_grants WHERE approved_via = 'server';

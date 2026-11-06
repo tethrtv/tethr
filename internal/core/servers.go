@@ -23,7 +23,16 @@ type ServerUser struct {
 	ID          int64
 	Name        string
 	ProfileID   *int64
+	Ignored     bool
+	Held        int64
 	LastEventAt time.Time
+}
+
+type HeldPlay struct {
+	Ref      Ref
+	Action   string
+	At       time.Time
+	Duration *float64
 }
 
 type ServerEvent struct {
@@ -61,7 +70,7 @@ func MediaServers(ctx context.Context, db *pgxpool.Pool, accountID int64) ([]Med
 		server := MediaServer{ID: s.ID, Kind: s.Kind, Name: s.Name, CreatedAt: s.CreatedAt, LastEventAt: s.LastEventAt, Users: []ServerUser{}}
 		for _, u := range users {
 			if u.ServerID == s.ID {
-				server.Users = append(server.Users, ServerUser{ID: u.ID, Name: u.Name, ProfileID: u.ProfileID, LastEventAt: u.LastEventAt})
+				server.Users = append(server.Users, ServerUser{ID: u.ID, Name: u.Name, ProfileID: u.ProfileID, Ignored: u.Ignored, Held: u.Held, LastEventAt: u.LastEventAt})
 			}
 		}
 		out = append(out, server)
@@ -111,7 +120,10 @@ func MatchServerUser(ctx context.Context, db *pgxpool.Pool, accountID, serverID,
 			}
 		}
 		if profileID == nil {
-			return q.MatchMediaServerUser(ctx, store.MatchMediaServerUserParams{ID: u.ID})
+			if err := q.DropHeldPlays(ctx, u.ID); err != nil {
+				return err
+			}
+			return q.MatchMediaServerUser(ctx, store.MatchMediaServerUserParams{ID: u.ID, Ignored: true})
 		}
 		if _, err := q.HouseholdProfile(ctx, store.HouseholdProfileParams{ID: *profileID, OwnerAccountID: accountID}); err != nil {
 			return notFound(err)
@@ -128,40 +140,102 @@ func MatchServerUser(ctx context.Context, db *pgxpool.Pool, accountID, serverID,
 		if err != nil {
 			return err
 		}
-		return q.MatchMediaServerUser(ctx, store.MatchMediaServerUserParams{ID: u.ID, GrantID: &grant.ID})
+		if err := q.MatchMediaServerUser(ctx, store.MatchMediaServerUserParams{ID: u.ID, GrantID: &grant.ID}); err != nil {
+			return err
+		}
+		return logHeldPlays(ctx, q, u.ID, *profileID, grant.ID)
 	})
 }
 
-// Users nobody has matched to a profile log nothing.
-func ServerCaller(ctx context.Context, db *pgxpool.Pool, e ServerEvent) (Caller, bool, error) {
+func logHeldPlays(ctx context.Context, q *store.Queries, serverUserID, profileID, grantID int64) error {
+	held, err := q.HeldPlays(ctx, serverUserID)
+	if err != nil {
+		return err
+	}
+	for _, h := range held {
+		near, err := q.WatchEventNear(ctx, store.WatchEventNearParams{ProfileID: profileID, TitleID: h.TitleID, EpisodeID: h.EpisodeID, At: h.WatchedAt})
+		if err != nil {
+			return err
+		}
+		if near {
+			continue
+		}
+		r := resolved{}
+		if h.EpisodeID == nil {
+			r.title, err = q.TitleByID(ctx, store.TitleByIDParams{ID: h.TitleID, Kind: "movie"})
+		} else {
+			var e store.Episode
+			if e, err = q.EpisodeByID(ctx, *h.EpisodeID); err == nil {
+				r.episode = &e
+				r.title, err = q.TitleByID(ctx, store.TitleByIDParams{ID: h.TitleID, Kind: "show"})
+			}
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := watched(ctx, q, profileID, &grantID, r, h.WatchedAt, h.Action, h.DurationSeconds); err != nil {
+			return err
+		}
+	}
+	return q.DropHeldPlays(ctx, serverUserID)
+}
+
+// Plays from someone not matched yet are kept for a week, so the play that makes them show up isn't lost.
+func HoldPlay(ctx context.Context, db *pgxpool.Pool, serverUserID int64, h HeldPlay) error {
+	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		r, err := resolve(ctx, q, h.Ref, true)
+		if err != nil {
+			return err
+		}
+		near, err := q.HeldPlayNear(ctx, store.HeldPlayNearParams{ServerUserID: serverUserID, TitleID: r.title.ID, EpisodeID: r.episodeID(), At: h.At})
+		if err != nil || near {
+			return err
+		}
+		return q.HoldPlay(ctx, store.HoldPlayParams{ServerUserID: serverUserID, TitleID: r.title.ID, EpisodeID: r.episodeID(), Action: h.Action, WatchedAt: h.At, DurationSeconds: h.Duration})
+	})
+}
+
+func PruneHeldPlays(ctx context.Context, db *pgxpool.Pool) error {
+	return store.New(db).PruneHeldPlays(ctx)
+}
+
+// Someone not matched yet comes back as an ID to hold their plays under, and someone set not to log as neither.
+func ServerCaller(ctx context.Context, db *pgxpool.Pool, e ServerEvent) (Caller, int64, error) {
 	q := store.New(db)
 	s, err := q.MediaServerBySecret(ctx, store.MediaServerBySecretParams{SecretHash: hash(e.Secret), Kind: e.Kind})
 	if err != nil {
-		return Caller{}, false, notFound(err)
+		return Caller{}, 0, notFound(err)
 	}
 	var name *string
 	if e.ServerName != "" {
 		name = &e.ServerName
 	}
 	if err := q.TouchMediaServer(ctx, store.TouchMediaServerParams{ID: s.ID, Name: name}); err != nil {
-		return Caller{}, false, err
+		return Caller{}, 0, err
 	}
 	if e.UserID == "" {
-		return Caller{}, false, nil
+		return Caller{}, 0, nil
 	}
 	u, err := q.SeeMediaServerUser(ctx, store.SeeMediaServerUserParams{ServerID: s.ID, ExternalID: e.UserID, Name: e.UserName})
-	if err != nil || u.GrantID == nil {
-		return Caller{}, false, err
+	if err != nil {
+		return Caller{}, 0, err
+	}
+	if u.GrantID == nil {
+		if u.Ignored {
+			return Caller{}, 0, nil
+		}
+		return Caller{}, u.ID, nil
 	}
 	g, err := q.ServerUserGrant(ctx, *u.GrantID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Caller{}, false, nil
+		return Caller{}, 0, nil
 	}
 	if err != nil {
-		return Caller{}, false, err
+		return Caller{}, 0, err
 	}
 	if err := q.TouchGrant(ctx, g.ID); err != nil {
-		return Caller{}, false, err
+		return Caller{}, 0, err
 	}
-	return Caller{AccountID: s.AccountID, ProfileID: g.ProfileID, GrantID: g.ID}, true, nil
+	return Caller{AccountID: s.AccountID, ProfileID: g.ProfileID, GrantID: g.ID}, 0, nil
 }

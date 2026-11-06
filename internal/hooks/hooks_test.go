@@ -75,6 +75,55 @@ func (h household) matchEveryone(t *testing.T) {
 	}
 }
 
+func TestHeldPlays(t *testing.T) {
+	h := newHousehold(t)
+	ctx := context.Background()
+	server, secret, err := core.AddMediaServer(ctx, h.db, h.account, "jellyfin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := `{"NotificationType":"PlaybackStop","UserId":"u2","NotificationUsername":"Guest","ItemType":"Movie","Provider_tmdb":"27205","PlayedToCompletion":true}`
+	start := strings.Replace(film, "PlaybackStop", "PlaybackStart", 1)
+	h.post("/hooks/jellyfin/"+secret, "text/plain", start)
+	h.post("/hooks/jellyfin/"+secret, "text/plain", film)
+	servers, _ := core.MediaServers(ctx, h.db, h.account)
+	if u := servers[0].Users[0]; u.Held != 1 {
+		t.Fatalf("only finished plays are held: %+v", u)
+	}
+
+	if err := core.MatchServerUser(ctx, h.db, h.account, server.ID, servers[0].Users[0].ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	h.post("/hooks/jellyfin/"+secret, "text/plain", film)
+	servers, _ = core.MediaServers(ctx, h.db, h.account)
+	if u := servers[0].Users[0]; u.Held != 0 || !u.Ignored {
+		t.Errorf("someone set not to log keeps nothing: %+v", u)
+	}
+
+	if err := core.MatchServerUser(ctx, h.db, h.account, server.ID, servers[0].Users[0].ID, &h.profile); err != nil {
+		t.Fatal(err)
+	}
+	if err := core.MatchServerUser(ctx, h.db, h.account, server.ID, servers[0].Users[0].ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	h.post("/hooks/jellyfin/"+secret, "text/plain", strings.Replace(film, "u2", "u3", 1))
+	if _, err := h.db.Exec(ctx, "UPDATE held_plays SET watched_at = now() - interval '8 days'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := core.PruneHeldPlays(ctx, h.db); err != nil {
+		t.Fatal(err)
+	}
+	servers, _ = core.MediaServers(ctx, h.db, h.account)
+	for _, u := range servers[0].Users {
+		if u.Held != 0 {
+			t.Errorf("plays older than a week should go: %+v", u)
+		}
+	}
+	if len(h.history(t)) != 0 {
+		t.Errorf("nothing here was matched while it played: %+v", h.history(t))
+	}
+}
+
 func TestJellyfin(t *testing.T) {
 	h := newHousehold(t)
 	db, ctx := h.db, context.Background()
@@ -90,13 +139,20 @@ func TestJellyfin(t *testing.T) {
 	if code := send(episode); code != http.StatusNoContent || len(history()) != 0 {
 		t.Fatalf("unmatched user = %d, history %v", code, history())
 	}
+	send(episode)
 	servers, err := core.MediaServers(ctx, db, h.account)
 	if err != nil || len(servers) != 1 || *servers[0].Name != "Home" || len(servers[0].Users) != 1 || servers[0].Users[0].ProfileID != nil {
 		t.Fatalf("servers = %+v, %v", servers, err)
 	}
+	if held := servers[0].Users[0].Held; held != 1 {
+		t.Errorf("held plays = %d, want the first play kept once", held)
+	}
 	user := servers[0].Users[0].ID
 	if err := core.MatchServerUser(ctx, db, h.account, server.ID, user, &h.profile); err != nil {
 		t.Fatal(err)
+	}
+	if got := history(); len(got) != 1 || got[0].Action != "scrobble" {
+		t.Fatalf("matching should log the held play: %+v", got)
 	}
 
 	if code := send(episode); code != http.StatusNoContent {

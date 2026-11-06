@@ -566,6 +566,20 @@ func (q *Queries) MergeEpisodeEvents(ctx context.Context, arg MergeEpisodeEvents
 	return err
 }
 
+const mergeEpisodeHeldPlays = `-- name: MergeEpisodeHeldPlays :exec
+UPDATE held_plays SET episode_id = $1 WHERE episode_id = $2
+`
+
+type MergeEpisodeHeldPlaysParams struct {
+	IntoID *int64
+	FromID *int64
+}
+
+func (q *Queries) MergeEpisodeHeldPlays(ctx context.Context, arg MergeEpisodeHeldPlaysParams) error {
+	_, err := q.db.Exec(ctx, mergeEpisodeHeldPlays, arg.IntoID, arg.FromID)
+	return err
+}
+
 const mergeEpisodeListItems = `-- name: MergeEpisodeListItems :exec
 UPDATE list_items SET episode_id = $1 WHERE episode_id = $2
 `
@@ -647,6 +661,20 @@ type MergeTitleExternalIDsParams struct {
 
 func (q *Queries) MergeTitleExternalIDs(ctx context.Context, arg MergeTitleExternalIDsParams) error {
 	_, err := q.db.Exec(ctx, mergeTitleExternalIDs, arg.IntoID, arg.FromID)
+	return err
+}
+
+const mergeTitleHeldPlays = `-- name: MergeTitleHeldPlays :exec
+UPDATE held_plays SET title_id = $1 WHERE title_id = $2
+`
+
+type MergeTitleHeldPlaysParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MergeTitleHeldPlays(ctx context.Context, arg MergeTitleHeldPlaysParams) error {
+	_, err := q.db.Exec(ctx, mergeTitleHeldPlays, arg.IntoID, arg.FromID)
 	return err
 }
 

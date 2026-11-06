@@ -107,5 +107,8 @@ func mergeEpisode(ctx context.Context, q *store.Queries, from, into int64) error
 	if err := q.MergeEpisodeWatching(ctx, store.MergeEpisodeWatchingParams{FromID: &from, IntoID: &into}); err != nil {
 		return err
 	}
+	if err := q.MergeEpisodeHeldPlays(ctx, store.MergeEpisodeHeldPlaysParams{FromID: &from, IntoID: &into}); err != nil {
+		return err
+	}
 	return q.DeleteEpisode(ctx, from)
 }
