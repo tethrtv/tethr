@@ -180,7 +180,7 @@ func (q *Queries) CreateWatchEvent(ctx context.Context, arg CreateWatchEventPara
 const deleteListItem = `-- name: DeleteListItem :one
 DELETE FROM list_items li
 USING lists l
-WHERE li.id = $1 AND l.id = li.list_id AND l.profile_id = $2
+WHERE li.id = $1 AND l.id = li.list_id AND l.profile_id = $2 AND l.kind = 'watchlist'
 RETURNING li.list_id, li.season_number, li.episode_id, (SELECT kind FROM titles WHERE id = li.title_id)::text AS kind
 `
 
@@ -972,7 +972,7 @@ const watchlist = `-- name: Watchlist :one
 INSERT INTO lists (profile_id, kind, name, slug)
 VALUES ($1, 'watchlist', 'Watchlist', 'watchlist')
 ON CONFLICT (profile_id) WHERE kind = 'watchlist' DO UPDATE SET kind = lists.kind
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, import_id
 `
 
 func (q *Queries) Watchlist(ctx context.Context, profileID int64) (List, error) {
@@ -988,6 +988,9 @@ func (q *Queries) Watchlist(ctx context.Context, profileID int64) (List, error) 
 		&i.Privacy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SortBy,
+		&i.SortHow,
+		&i.ImportID,
 	)
 	return i, err
 }
