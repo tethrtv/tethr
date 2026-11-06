@@ -1196,7 +1196,7 @@ paths:
     get:
       operationId: listMediaServers
       summary: Media servers that send your household's plays
-      description: Each server lists the users it has sent plays for. A user's plays are logged to the profile they're matched to, and ignored until they're matched.
+      description: Each server lists the users it has sent plays for. A user's plays are logged to the profile they're matched to. Until then their finished plays are kept for a week, and logged once they're matched.
       security:
         - session: []
       responses:
@@ -1272,7 +1272,7 @@ paths:
     put:
       operationId: matchServerUser
       summary: Choose which profile a media server user's plays go to
-      description: Send a `profile_id` of null to stop logging their plays.
+      description: Plays kept while the user wasn't matched are logged to the profile. Send a `profile_id` of null to stop logging their plays.
       security:
         - session: []
       parameters:
@@ -2128,7 +2128,7 @@ components:
             $ref: '#/components/schemas/MediaServerUser'
     MediaServerUser:
       type: object
-      required: [id, name, last_event_at]
+      required: [id, name, ignored, held_plays, last_event_at]
       properties:
         id:
           type: integer
@@ -2139,6 +2139,12 @@ components:
           type: integer
           format: int64
           description: Left out until the user is matched to a profile.
+        ignored:
+          type: boolean
+          description: Set not to log their plays.
+        held_plays:
+          type: integer
+          description: Plays finished before the user was matched. They're logged when the user is matched, and dropped after a week or when the user is set not to log.
         last_event_at:
           type: string
           format: date-time

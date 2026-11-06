@@ -1,0 +1,31 @@
+.server {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 8px 20px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.users {
+  display: grid;
+  gap: 8px;
+}
+
+.user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 0.9375rem;
+}
+
+.waiting {
+  color: var(--ink-3);
+}
+
+@media (max-width: 760px) {
+  .server {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

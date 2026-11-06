@@ -99,7 +99,7 @@ func hookPath(kind, secret string) string {
 func toMediaServer(m core.MediaServer) MediaServer {
 	out := MediaServer{Id: m.ID, Kind: MediaServerKind(m.Kind), Name: m.Name, CreatedAt: m.CreatedAt, LastEventAt: m.LastEventAt, Users: make([]MediaServerUser, 0, len(m.Users))}
 	for _, u := range m.Users {
-		out.Users = append(out.Users, MediaServerUser{Id: u.ID, Name: u.Name, ProfileId: u.ProfileID, LastEventAt: u.LastEventAt})
+		out.Users = append(out.Users, MediaServerUser{Id: u.ID, Name: u.Name, ProfileId: u.ProfileID, Ignored: u.Ignored, HeldPlays: int(u.Held), LastEventAt: u.LastEventAt})
 	}
 	return out
 }

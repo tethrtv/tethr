@@ -788,7 +788,7 @@ export interface paths {
         };
         /**
          * Media servers that send your household's plays
-         * @description Each server lists the users it has sent plays for. A user's plays are logged to the profile they're matched to, and ignored until they're matched.
+         * @description Each server lists the users it has sent plays for. A user's plays are logged to the profile they're matched to. Until then their finished plays are kept for a week, and logged once they're matched.
          */
         get: operations["listMediaServers"];
         put?: never;
@@ -850,7 +850,7 @@ export interface paths {
         get?: never;
         /**
          * Choose which profile a media server user's plays go to
-         * @description Send a `profile_id` of null to stop logging their plays.
+         * @description Plays kept while the user wasn't matched are logged to the profile. Send a `profile_id` of null to stop logging their plays.
          */
         put: operations["matchServerUser"];
         post?: never;
@@ -1345,6 +1345,10 @@ export interface components {
              * @description Left out until the user is matched to a profile.
              */
             profile_id?: number;
+            /** @description Set not to log their plays. */
+            ignored: boolean;
+            /** @description Plays finished before the user was matched. They're logged when the user is matched, and dropped after a week or when the user is set not to log. */
+            held_plays: number;
             /** Format: date-time */
             last_event_at: string;
         };

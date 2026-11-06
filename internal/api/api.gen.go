@@ -721,7 +721,12 @@ type MediaServerAddress struct {
 
 // MediaServerUser defines model for MediaServerUser.
 type MediaServerUser struct {
-	Id          int64     `json:"id"`
+	// HeldPlays Plays finished before the user was matched. They're logged when the user is matched, and dropped after a week or when the user is set not to log.
+	HeldPlays int   `json:"held_plays"`
+	Id        int64 `json:"id"`
+
+	// Ignored Set not to log their plays.
+	Ignored     bool      `json:"ignored"`
 	LastEventAt time.Time `json:"last_event_at"`
 	Name        string    `json:"name"`
 
