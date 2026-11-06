@@ -1192,6 +1192,110 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/media-servers:
+    get:
+      operationId: listMediaServers
+      summary: Media servers that send your household's plays
+      description: Each server lists the users it has sent plays for. A user's plays are logged to the profile they're matched to, and ignored until they're matched.
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Your media servers, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaServer'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: addMediaServer
+      summary: Get a webhook address for a media server
+      description: The address comes back once, as a path to add to the API's own address. On Jellyfin, add it as a Generic destination in the Webhook plugin with Send All Properties ticked, for Playback Start, Playback Stop and User Data Saved. Webhooks are limited to 600 a minute per server.
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewMediaServer'
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddedMediaServer'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/media-servers/{id}:
+    delete:
+      operationId: removeMediaServer
+      summary: Stop taking plays from a media server
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/media-servers/{id}/address:
+    post:
+      operationId: newMediaServerAddress
+      summary: Replace a media server's webhook address
+      description: The old address stops working straight away.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: The new address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaServerAddress'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/media-servers/{id}/users/{user}:
+    put:
+      operationId: matchServerUser
+      summary: Choose which profile a media server user's plays go to
+      description: Send a `profile_id` of null to stop logging their plays.
+      security:
+        - session: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServerUserMatch'
+      responses:
+        '204':
+          description: Matched
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/apps:
     get:
       operationId: listApps
@@ -1999,6 +2103,75 @@ components:
         ratings:
           type: string
           format: date-time
+    MediaServer:
+      type: object
+      required: [id, kind, created_at, users]
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [jellyfin]
+        name:
+          type: string
+          description: The name the server gives itself, once it has sent something.
+        created_at:
+          type: string
+          format: date-time
+        last_event_at:
+          type: string
+          format: date-time
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaServerUser'
+    MediaServerUser:
+      type: object
+      required: [id, name, last_event_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        profile_id:
+          type: integer
+          format: int64
+          description: Left out until the user is matched to a profile.
+        last_event_at:
+          type: string
+          format: date-time
+    NewMediaServer:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [jellyfin]
+    AddedMediaServer:
+      type: object
+      required: [server, path]
+      properties:
+        server:
+          $ref: '#/components/schemas/MediaServer'
+        path:
+          type: string
+          description: Add it to the API's address, like `https://api.tethr.tv/hooks/jellyfin/...`.
+    MediaServerAddress:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+    ServerUserMatch:
+      type: object
+      required: [profile_id]
+      properties:
+        profile_id:
+          type: integer
+          format: int64
+          nullable: true
     DeveloperApp:
       type: object
       required: [id, name, client_id, redirect_uris, connections, created_at]

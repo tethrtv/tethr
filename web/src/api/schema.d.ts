@@ -779,6 +779,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/media-servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Media servers that send your household's plays
+         * @description Each server lists the users it has sent plays for. A user's plays are logged to the profile they're matched to, and ignored until they're matched.
+         */
+        get: operations["listMediaServers"];
+        put?: never;
+        /**
+         * Get a webhook address for a media server
+         * @description The address comes back once, as a path to add to the API's own address. On Jellyfin, add it as a Generic destination in the Webhook plugin with Send All Properties ticked, for Playback Start, Playback Stop and User Data Saved. Webhooks are limited to 600 a minute per server.
+         */
+        post: operations["addMediaServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media-servers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop taking plays from a media server */
+        delete: operations["removeMediaServer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media-servers/{id}/address": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a media server's webhook address
+         * @description The old address stops working straight away.
+         */
+        post: operations["newMediaServerAddress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media-servers/{id}/users/{user}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose which profile a media server user's plays go to
+         * @description Send a `profile_id` of null to stop logging their plays.
+         */
+        put: operations["matchServerUser"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/apps": {
         parameters: {
             query?: never;
@@ -1241,6 +1322,47 @@ export interface components {
             watchlist: string;
             /** Format: date-time */
             ratings: string;
+        };
+        MediaServer: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "jellyfin";
+            /** @description The name the server gives itself, once it has sent something. */
+            name?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_event_at?: string;
+            users: components["schemas"]["MediaServerUser"][];
+        };
+        MediaServerUser: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Left out until the user is matched to a profile.
+             */
+            profile_id?: number;
+            /** Format: date-time */
+            last_event_at: string;
+        };
+        NewMediaServer: {
+            /** @enum {string} */
+            kind: "jellyfin";
+        };
+        AddedMediaServer: {
+            server: components["schemas"]["MediaServer"];
+            /** @description Add it to the API's address, like `https://api.tethr.tv/hooks/jellyfin/...`. */
+            path: string;
+        };
+        MediaServerAddress: {
+            path: string;
+        };
+        ServerUserMatch: {
+            /** Format: int64 */
+            profile_id: number | null;
         };
         DeveloperApp: {
             /** Format: int64 */
@@ -2782,6 +2904,126 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Import"];
                 };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listMediaServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Your media servers, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServer"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    addMediaServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewMediaServer"];
+            };
+        };
+        responses: {
+            /** @description Added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedMediaServer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    removeMediaServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    newMediaServerAddress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new address */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaServerAddress"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    matchServerUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                user: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerUserMatch"];
+            };
+        };
+        responses: {
+            /** @description Matched */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

@@ -124,6 +124,36 @@ func (e ItemRefType) Valid() bool {
 	}
 }
 
+// Defines values for MediaServerKind.
+const (
+	MediaServerKindJellyfin MediaServerKind = "jellyfin"
+)
+
+// Valid indicates whether the value is a known member of the MediaServerKind enum.
+func (e MediaServerKind) Valid() bool {
+	switch e {
+	case MediaServerKindJellyfin:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewMediaServerKind.
+const (
+	NewMediaServerKindJellyfin NewMediaServerKind = "jellyfin"
+)
+
+// Valid indicates whether the value is a known member of the NewMediaServerKind enum.
+func (e NewMediaServerKind) Valid() bool {
+	switch e {
+	case NewMediaServerKindJellyfin:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NewProfileKind.
 const (
 	NewProfileKindGuest  NewProfileKind = "guest"
@@ -408,6 +438,13 @@ type Activity struct {
 	Watchlist time.Time `json:"watchlist"`
 }
 
+// AddedMediaServer defines model for AddedMediaServer.
+type AddedMediaServer struct {
+	// Path Add it to the API's address, like `https://api.tethr.tv/hooks/jellyfin/...`.
+	Path   string      `json:"path"`
+	Server MediaServer `json:"server"`
+}
+
 // AppChanges defines model for AppChanges.
 type AppChanges struct {
 	Name         *string   `json:"name,omitempty"`
@@ -650,6 +687,36 @@ type Me struct {
 	Profiles []Profile `json:"profiles"`
 }
 
+// MediaServer defines model for MediaServer.
+type MediaServer struct {
+	CreatedAt   time.Time       `json:"created_at"`
+	Id          int64           `json:"id"`
+	Kind        MediaServerKind `json:"kind"`
+	LastEventAt *time.Time      `json:"last_event_at,omitempty"`
+
+	// Name The name the server gives itself, once it has sent something.
+	Name  *string           `json:"name,omitempty"`
+	Users []MediaServerUser `json:"users"`
+}
+
+// MediaServerKind defines model for MediaServer.Kind.
+type MediaServerKind string
+
+// MediaServerAddress defines model for MediaServerAddress.
+type MediaServerAddress struct {
+	Path string `json:"path"`
+}
+
+// MediaServerUser defines model for MediaServerUser.
+type MediaServerUser struct {
+	Id          int64     `json:"id"`
+	LastEventAt time.Time `json:"last_event_at"`
+	Name        string    `json:"name"`
+
+	// ProfileId Left out until the user is matched to a profile.
+	ProfileId *int64 `json:"profile_id,omitempty"`
+}
+
 // NewApp defines model for NewApp.
 type NewApp struct {
 	// Name Shown to people when they connect it. Up to 60 characters.
@@ -667,6 +734,14 @@ type NewListings struct {
 		Notes *string `json:"notes,omitempty"`
 	} `json:"items"`
 }
+
+// NewMediaServer defines model for NewMediaServer.
+type NewMediaServer struct {
+	Kind NewMediaServerKind `json:"kind"`
+}
+
+// NewMediaServerKind defines model for NewMediaServer.Kind.
+type NewMediaServerKind string
 
 // NewProfile defines model for NewProfile.
 type NewProfile struct {
@@ -849,6 +924,11 @@ type ScrobbleResultResult string
 type SeasonDetail struct {
 	Episodes []EpisodeDetail `json:"episodes"`
 	Number   int             `json:"number"`
+}
+
+// ServerUserMatch defines model for ServerUserMatch.
+type ServerUserMatch struct {
+	ProfileId *int64 `json:"profile_id"`
 }
 
 // Session defines model for Session.
@@ -1211,6 +1291,12 @@ type AddHistoryJSONRequestBody = NewWatches
 // DeleteAccountJSONRequestBody defines body for DeleteAccount for application/json ContentType.
 type DeleteAccountJSONRequestBody DeleteAccountJSONBody
 
+// AddMediaServerJSONRequestBody defines body for AddMediaServer for application/json ContentType.
+type AddMediaServerJSONRequestBody = NewMediaServer
+
+// MatchServerUserJSONRequestBody defines body for MatchServerUser for application/json ContentType.
+type MatchServerUserJSONRequestBody = ServerUserMatch
+
 // AddPasskeyJSONRequestBody defines body for AddPasskey for application/json ContentType.
 type AddPasskeyJSONRequestBody = PasskeyResponse
 
@@ -1327,6 +1413,21 @@ type ServerInterface interface {
 	// GetMe The signed-in account and its household's profiles
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// ListMediaServers Media servers that send your household's plays
+	// (GET /v1/media-servers)
+	ListMediaServers(w http.ResponseWriter, r *http.Request)
+	// AddMediaServer Get a webhook address for a media server
+	// (POST /v1/media-servers)
+	AddMediaServer(w http.ResponseWriter, r *http.Request)
+	// RemoveMediaServer Stop taking plays from a media server
+	// (DELETE /v1/media-servers/{id})
+	RemoveMediaServer(w http.ResponseWriter, r *http.Request, id Id)
+	// NewMediaServerAddress Replace a media server's webhook address
+	// (POST /v1/media-servers/{id}/address)
+	NewMediaServerAddress(w http.ResponseWriter, r *http.Request, id Id)
+	// MatchServerUser Choose which profile a media server user's plays go to
+	// (PUT /v1/media-servers/{id}/users/{user})
+	MatchServerUser(w http.ResponseWriter, r *http.Request, id Id, user int64)
 	// ListPasskeys The signed-in account's passkeys
 	// (GET /v1/passkeys)
 	ListPasskeys(w http.ResponseWriter, r *http.Request)
@@ -2244,6 +2345,121 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMediaServers operation middleware
+func (siw *ServerInterfaceWrapper) ListMediaServers(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMediaServers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddMediaServer operation middleware
+func (siw *ServerInterfaceWrapper) AddMediaServer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddMediaServer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveMediaServer operation middleware
+func (siw *ServerInterfaceWrapper) RemoveMediaServer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveMediaServer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// NewMediaServerAddress operation middleware
+func (siw *ServerInterfaceWrapper) NewMediaServerAddress(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.NewMediaServerAddress(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MatchServerUser operation middleware
+func (siw *ServerInterfaceWrapper) MatchServerUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MatchServerUser(w, r, id, user)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3268,6 +3484,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/imports/{id}", wrapper.GetImport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports/{id}/apply", wrapper.ApplyImport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports/{id}/undo", wrapper.UndoImport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/media-servers", wrapper.ListMediaServers)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/media-servers", wrapper.AddMediaServer)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/media-servers/{id}", wrapper.RemoveMediaServer)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/media-servers/{id}/address", wrapper.NewMediaServerAddress)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/media-servers/{id}/users/{user}", wrapper.MatchServerUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/apps", wrapper.ListApps)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/apps", wrapper.RegisterApp)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/apps/{id}", wrapper.RevokeApp)
@@ -4855,6 +5076,231 @@ func (response GetMe401JSONResponse) VisitGetMeResponse(w http.ResponseWriter) e
 	return err
 }
 
+type ListMediaServersRequestObject struct {
+}
+
+type ListMediaServersResponseObject interface {
+	VisitListMediaServersResponse(w http.ResponseWriter) error
+}
+
+type ListMediaServers200JSONResponse []MediaServer
+
+func (response ListMediaServers200JSONResponse) VisitListMediaServersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMediaServers401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListMediaServers401JSONResponse) VisitListMediaServersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMediaServerRequestObject struct {
+	Body *AddMediaServerJSONRequestBody
+}
+
+type AddMediaServerResponseObject interface {
+	VisitAddMediaServerResponse(w http.ResponseWriter) error
+}
+
+type AddMediaServer201JSONResponse AddedMediaServer
+
+func (response AddMediaServer201JSONResponse) VisitAddMediaServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMediaServer400JSONResponse struct{ ProblemJSONResponse }
+
+func (response AddMediaServer400JSONResponse) VisitAddMediaServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMediaServer401JSONResponse Problem
+
+func (response AddMediaServer401JSONResponse) VisitAddMediaServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveMediaServerRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type RemoveMediaServerResponseObject interface {
+	VisitRemoveMediaServerResponse(w http.ResponseWriter) error
+}
+
+type RemoveMediaServer204Response struct {
+}
+
+func (response RemoveMediaServer204Response) VisitRemoveMediaServerResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveMediaServer401JSONResponse struct{ ProblemJSONResponse }
+
+func (response RemoveMediaServer401JSONResponse) VisitRemoveMediaServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveMediaServer404JSONResponse Problem
+
+func (response RemoveMediaServer404JSONResponse) VisitRemoveMediaServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type NewMediaServerAddressRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type NewMediaServerAddressResponseObject interface {
+	VisitNewMediaServerAddressResponse(w http.ResponseWriter) error
+}
+
+type NewMediaServerAddress200JSONResponse MediaServerAddress
+
+func (response NewMediaServerAddress200JSONResponse) VisitNewMediaServerAddressResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type NewMediaServerAddress401JSONResponse struct{ ProblemJSONResponse }
+
+func (response NewMediaServerAddress401JSONResponse) VisitNewMediaServerAddressResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type NewMediaServerAddress404JSONResponse Problem
+
+func (response NewMediaServerAddress404JSONResponse) VisitNewMediaServerAddressResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MatchServerUserRequestObject struct {
+	Id   Id    `json:"id"`
+	User int64 `json:"user"`
+	Body *MatchServerUserJSONRequestBody
+}
+
+type MatchServerUserResponseObject interface {
+	VisitMatchServerUserResponse(w http.ResponseWriter) error
+}
+
+type MatchServerUser204Response struct {
+}
+
+func (response MatchServerUser204Response) VisitMatchServerUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type MatchServerUser401JSONResponse struct{ ProblemJSONResponse }
+
+func (response MatchServerUser401JSONResponse) VisitMatchServerUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MatchServerUser404JSONResponse Problem
+
+func (response MatchServerUser404JSONResponse) VisitMatchServerUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListPasskeysRequestObject struct {
 }
 
@@ -6323,6 +6769,21 @@ type StrictServerInterface interface {
 	// GetMe The signed-in account and its household's profiles
 	// (GET /v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// ListMediaServers Media servers that send your household's plays
+	// (GET /v1/media-servers)
+	ListMediaServers(ctx context.Context, request ListMediaServersRequestObject) (ListMediaServersResponseObject, error)
+	// AddMediaServer Get a webhook address for a media server
+	// (POST /v1/media-servers)
+	AddMediaServer(ctx context.Context, request AddMediaServerRequestObject) (AddMediaServerResponseObject, error)
+	// RemoveMediaServer Stop taking plays from a media server
+	// (DELETE /v1/media-servers/{id})
+	RemoveMediaServer(ctx context.Context, request RemoveMediaServerRequestObject) (RemoveMediaServerResponseObject, error)
+	// NewMediaServerAddress Replace a media server's webhook address
+	// (POST /v1/media-servers/{id}/address)
+	NewMediaServerAddress(ctx context.Context, request NewMediaServerAddressRequestObject) (NewMediaServerAddressResponseObject, error)
+	// MatchServerUser Choose which profile a media server user's plays go to
+	// (PUT /v1/media-servers/{id}/users/{user})
+	MatchServerUser(ctx context.Context, request MatchServerUserRequestObject) (MatchServerUserResponseObject, error)
 	// ListPasskeys The signed-in account's passkeys
 	// (GET /v1/passkeys)
 	ListPasskeys(ctx context.Context, request ListPasskeysRequestObject) (ListPasskeysResponseObject, error)
@@ -7301,6 +7762,147 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMeResponseObject); ok {
 		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMediaServers operation middleware
+func (sh *strictHandler) ListMediaServers(w http.ResponseWriter, r *http.Request) {
+	var request ListMediaServersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMediaServers(ctx, request.(ListMediaServersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMediaServers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMediaServersResponseObject); ok {
+		if err := validResponse.VisitListMediaServersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddMediaServer operation middleware
+func (sh *strictHandler) AddMediaServer(w http.ResponseWriter, r *http.Request) {
+	var request AddMediaServerRequestObject
+
+	var body AddMediaServerJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddMediaServer(ctx, request.(AddMediaServerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddMediaServer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddMediaServerResponseObject); ok {
+		if err := validResponse.VisitAddMediaServerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveMediaServer operation middleware
+func (sh *strictHandler) RemoveMediaServer(w http.ResponseWriter, r *http.Request, id Id) {
+	var request RemoveMediaServerRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveMediaServer(ctx, request.(RemoveMediaServerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveMediaServer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveMediaServerResponseObject); ok {
+		if err := validResponse.VisitRemoveMediaServerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// NewMediaServerAddress operation middleware
+func (sh *strictHandler) NewMediaServerAddress(w http.ResponseWriter, r *http.Request, id Id) {
+	var request NewMediaServerAddressRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.NewMediaServerAddress(ctx, request.(NewMediaServerAddressRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "NewMediaServerAddress")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(NewMediaServerAddressResponseObject); ok {
+		if err := validResponse.VisitNewMediaServerAddressResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MatchServerUser operation middleware
+func (sh *strictHandler) MatchServerUser(w http.ResponseWriter, r *http.Request, id Id, user int64) {
+	var request MatchServerUserRequestObject
+
+	request.Id = id
+	request.User = user
+
+	var body MatchServerUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MatchServerUser(ctx, request.(MatchServerUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MatchServerUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MatchServerUserResponseObject); ok {
+		if err := validResponse.VisitMatchServerUserResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
