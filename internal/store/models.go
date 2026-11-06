@@ -34,6 +34,7 @@ type App struct {
 	RedirectUris     []string
 	CreatedAt        time.Time
 	RevokedAt        *time.Time
+	BuiltIn          bool
 }
 
 type AuditLog struct {
@@ -173,6 +174,26 @@ type ListItem struct {
 	Notes        *string
 	ListedAt     time.Time
 	ImportID     *int64
+}
+
+type MediaServer struct {
+	ID          int64
+	AccountID   int64
+	Kind        string
+	SecretHash  []byte
+	Name        *string
+	CreatedAt   time.Time
+	LastEventAt *time.Time
+	RevokedAt   *time.Time
+}
+
+type MediaServerUser struct {
+	ID          int64
+	ServerID    int64
+	ExternalID  string
+	Name        string
+	GrantID     *int64
+	LastEventAt time.Time
 }
 
 type OauthCode struct {

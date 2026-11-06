@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/api"
 	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/internal/hooks"
 	"github.com/tethrtv/tethr/internal/jobs"
 	"github.com/tethrtv/tethr/internal/limit"
 	"github.com/tethrtv/tethr/internal/mail"
@@ -140,12 +141,14 @@ func serve(log *slog.Logger) error {
 	go jobs.Imports{DB: db, Log: log}.Run(ctx)
 	go jobs.Cleanup{DB: db, Log: log}.Run(ctx)
 	go jobs.Titles{DB: db, Wikidata: &wikidata.Client{UserAgent: "Tethr/" + version + " (https://github.com/tethrtv/tethr)"}, Log: log}.Run(ctx)
+	media := &hooks.Server{DB: db, Log: log}
 	var details *meta.Server
 	if token := os.Getenv("TMDB_TOKEN"); token != "" {
 		client := &tmdb.Client{Token: token}
 		outlines := jobs.Outlines{DB: db, TMDB: client, Log: log}
 		go outlines.Run(ctx)
 		v1.FetchOrder = outlines.Order
+		media.TMDB = client
 		details = &meta.Server{TMDB: client, Log: log, SignedIn: v1.SignedIn}
 	} else {
 		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in and the website shows no names or posters")
@@ -154,7 +157,7 @@ func serve(log *slog.Logger) error {
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           routes(v1.Handler(), &traktcompat.Server{DB: db, AppURL: appURL, Log: log, Limits: limits}, details),
+		Handler:           routes(v1.Handler(), &traktcompat.Server{DB: db, AppURL: appURL, Log: log, Limits: limits}, media, details),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -179,10 +182,11 @@ func serve(log *slog.Logger) error {
 	return nil
 }
 
-func routes(v1 http.Handler, trakt *traktcompat.Server, details *meta.Server) http.Handler {
+func routes(v1 http.Handler, trakt *traktcompat.Server, media *hooks.Server, details *meta.Server) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", v1)
 	trakt.Routes(mux)
+	media.Routes(mux)
 	if details != nil {
 		details.Routes(mux)
 	}

@@ -25,7 +25,7 @@ UPDATE apps SET revoked_at = now() WHERE id = $1 AND owner_account_id = $2 AND r
 UPDATE apps SET client_secret_hash = $3 WHERE id = $1 AND owner_account_id = $2 AND revoked_at IS NULL;
 
 -- name: AppByClientID :one
-SELECT * FROM apps WHERE client_id = $1 AND revoked_at IS NULL;
+SELECT * FROM apps WHERE client_id = $1 AND revoked_at IS NULL AND NOT built_in;
 
 -- name: CreateDeviceCode :one
 INSERT INTO device_codes (app_id, device_code_hash, user_code, expires_at, interval_seconds)

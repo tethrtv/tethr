@@ -406,6 +406,32 @@ func (c *Client) EpisodeGroup(ctx context.Context, id string) (EpisodeGroup, err
 	return out, nil
 }
 
+type FoundEpisode struct {
+	ID     int32
+	ShowID int32
+	Season int32
+	Number int32
+}
+
+// source is TMDB's name for the other ID, like tvdb_id or imdb_id.
+func (c *Client) FindEpisode(ctx context.Context, source, id string) (FoundEpisode, error) {
+	var found struct {
+		Episodes []struct {
+			ID     int32 `json:"id"`
+			ShowID int32 `json:"show_id"`
+			Season int32 `json:"season_number"`
+			Number int32 `json:"episode_number"`
+		} `json:"tv_episode_results"`
+	}
+	if err := c.get(ctx, "/3/find/"+url.PathEscape(id)+"?external_source="+url.QueryEscape(source), &found); err != nil {
+		return FoundEpisode{}, err
+	}
+	if len(found.Episodes) == 0 {
+		return FoundEpisode{}, ErrNotFound
+	}
+	return FoundEpisode(found.Episodes[0]), nil
+}
+
 func year(date string) int {
 	t, err := time.Parse(time.DateOnly, date)
 	if err != nil {
