@@ -286,6 +286,23 @@ func (q *Queries) RankListItems(ctx context.Context, arg RankListItemsParams) er
 	return err
 }
 
+const removeListEntries = `-- name: RemoveListEntries :execrows
+DELETE FROM list_items WHERE list_id = $1 AND id = ANY($2::bigint[])
+`
+
+type RemoveListEntriesParams struct {
+	ListID int64
+	Ids    []int64
+}
+
+func (q *Queries) RemoveListEntries(ctx context.Context, arg RemoveListEntriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeListEntries, arg.ListID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const removeListEntry = `-- name: RemoveListEntry :execrows
 DELETE FROM list_items WHERE id = $1 AND list_id = $2
 `

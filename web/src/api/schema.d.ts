@@ -633,6 +633,26 @@ export interface paths {
         patch: operations["updateListItem"];
         trace?: never;
     };
+    "/v1/lists/{id}/items/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take several items off a list
+         * @description IDs that aren't on the list are skipped.
+         */
+        post: operations["removeManyFromList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/lists/{id}/order": {
         parameters: {
             query?: never;
@@ -2995,6 +3015,42 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    removeManyFromList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description Removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        removed: number;
+                    };
+                };
+            };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

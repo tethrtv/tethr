@@ -203,6 +203,12 @@ func TestListItems(t *testing.T) {
 	if got, _ := GetList(ctx, db, owner, list.ID); got.ItemCount != 2 {
 		t.Errorf("item count = %d", got.ItemCount)
 	}
+	if n, err := RemoveManyFromList(ctx, db, owner, list.ID, []int64{ep.ID, movie.ID, series.ID}); err != nil || n != 2 {
+		t.Errorf("removing several = %d, %v", n, err)
+	}
+	if got, _ := GetList(ctx, db, owner, list.ID); got.ItemCount != 0 {
+		t.Errorf("item count after removing several = %d", got.ItemCount)
+	}
 }
 
 func TestListPrivacy(t *testing.T) {
