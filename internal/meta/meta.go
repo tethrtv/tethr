@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,8 @@ const (
 
 	searchResults = 10
 )
+
+var groupID = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
 var searchLimit = limit.Rule{Name: "SEARCH_LIMIT", Limit: 30, Period: time.Minute, Burst: 30}
 
@@ -59,6 +62,34 @@ type season struct {
 	Episodes int   `json:"episodes"`
 }
 
+type order struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     int16  `json:"type"`
+	Seasons  int    `json:"seasons"`
+	Episodes int    `json:"episodes"`
+}
+
+type orderSeason struct {
+	Number   int32          `json:"number"`
+	Name     string         `json:"name"`
+	Episodes []orderEpisode `json:"episodes"`
+}
+
+type orderEpisode struct {
+	Number   int32   `json:"number"`
+	Aired    aired   `json:"aired"`
+	Name     string  `json:"name"`
+	AirDate  *string `json:"air_date"`
+	Overview string  `json:"overview,omitempty"`
+	Runtime  int     `json:"runtime,omitempty"`
+}
+
+type aired struct {
+	Season int32 `json:"season"`
+	Number int32 `json:"number"`
+}
+
 type result struct {
 	Type   string  `json:"type"`
 	TMDB   int32   `json:"tmdb"`
@@ -85,6 +116,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /meta/movie/{id}", s.ownSite(s.title(s.TMDB.Movie, movieCache)))
 	mux.HandleFunc("GET /meta/tv/{id}", s.ownSite(s.title(s.TMDB.Show, showCache)))
 	mux.HandleFunc("GET /meta/tv/{id}/season/{season}", s.ownSite(s.season))
+	mux.HandleFunc("GET /meta/tv/{id}/orders", s.ownSite(s.orders))
+	mux.HandleFunc("GET /meta/tv/{id}/order/{group}", s.ownSite(s.order))
 	mux.Handle("GET /meta/search", s.SignedIn(s.search))
 }
 
@@ -150,6 +183,53 @@ func (s *Server) season(w http.ResponseWriter, r *http.Request) {
 		out = append(out, episode{Number: e.Number, Name: e.Name, AirDate: optional(e.AirDate), Overview: e.Overview, Runtime: e.Runtime})
 	}
 	write(w, seasonCache, map[string]any{"overview": season.Overview, "episodes": out})
+}
+
+func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	groups, err := s.TMDB.Groups(r.Context(), id)
+	if !s.found(w, r, err) {
+		return
+	}
+	out := make([]order, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, order(g))
+	}
+	write(w, showCache, map[string]any{"orders": out})
+}
+
+func (s *Server) order(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	group := r.PathValue("group")
+	if !groupID.MatchString(group) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.NotFound(w, r)
+		return
+	}
+	g, err := s.TMDB.EpisodeGroup(r.Context(), group)
+	if !s.found(w, r, err) {
+		return
+	}
+	seasons := make([]orderSeason, 0, len(g.Seasons))
+	for _, season := range g.Seasons {
+		out := orderSeason{Number: season.Number, Name: season.Name, Episodes: []orderEpisode{}}
+		for _, e := range season.Episodes {
+			if e.ShowID != id {
+				w.Header().Set("Cache-Control", "public, max-age=86400")
+				http.NotFound(w, r)
+				return
+			}
+			out.Episodes = append(out.Episodes, orderEpisode{Number: e.Place, Aired: aired{e.Season, e.Number}, Name: e.Name, AirDate: optional(e.AirDate), Overview: e.Overview, Runtime: e.Runtime})
+		}
+		seasons = append(seasons, out)
+	}
+	write(w, seasonCache, map[string]any{"name": g.Name, "type": g.Type, "seasons": seasons})
 }
 
 func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64) {
