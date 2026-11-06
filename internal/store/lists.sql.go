@@ -371,7 +371,7 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 }
 
 const visibleLists = `-- name: VisibleLists :many
-SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, l.import_id, o.username AS owner_username, o.name AS owner_name,
+SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, l.import_id, o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
     CASE WHEN l.profile_id = $1::bigint THEN 'mine'
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
@@ -398,6 +398,7 @@ type VisibleListsRow struct {
 	List            List
 	OwnerUsername   string
 	OwnerName       string
+	OwnerPrivate    bool
 	Access          string
 	ItemCount       int64
 	TitlesCheckedAt time.Time
@@ -427,6 +428,7 @@ func (q *Queries) VisibleLists(ctx context.Context, arg VisibleListsParams) ([]V
 			&i.List.ImportID,
 			&i.OwnerUsername,
 			&i.OwnerName,
+			&i.OwnerPrivate,
 			&i.Access,
 			&i.ItemCount,
 			&i.TitlesCheckedAt,

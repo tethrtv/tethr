@@ -39,6 +39,7 @@ type ListOwner struct {
 	ID       int64
 	Username string
 	Name     string
+	Private  bool
 }
 
 type List struct {
@@ -136,7 +137,7 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 		version := sha256.Sum256(fmt.Appendf(nil, "%d %d %d", l.UpdatedAt.UnixMicro(), row.TitlesCheckedAt.UnixMicro(), latest.UnixMicro()))
 		lists = append(lists, List{
 			ID:          l.ID,
-			Owner:       ListOwner{ID: l.ProfileID, Username: row.OwnerUsername, Name: row.OwnerName},
+			Owner:       ListOwner{ID: l.ProfileID, Username: row.OwnerUsername, Name: row.OwnerName, Private: row.OwnerPrivate},
 			Name:        l.Name,
 			Slug:        l.Slug,
 			Description: l.Description,

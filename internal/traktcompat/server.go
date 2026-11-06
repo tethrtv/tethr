@@ -30,6 +30,9 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	visitor := func(pattern string, h http.HandlerFunc) { handle(pattern, s.limited(h)) }
 	app := func(pattern string, h http.HandlerFunc) { visitor(pattern, s.withApp(h)) }
 	user := func(pattern string, h http.HandlerFunc) { handle(pattern, s.withApp(s.withCaller(s.limited(h)))) }
+	anyone := func(pattern string, h http.HandlerFunc) {
+		handle(pattern, s.withApp(s.withOptionalCaller(s.limited(h))))
+	}
 
 	handle("OPTIONS /oauth/", preflight)
 	visitor("POST /oauth/device/code", s.deviceCode)
@@ -76,13 +79,16 @@ func (s *Server) Routes(mux *http.ServeMux) {
 		user("POST /users/hidden/"+section+"/remove", s.hide(section, true))
 	}
 	user("GET /users/settings", s.settings)
-	app("GET /users/{id}/lists", empty)
+	anyone("GET /users/{id}/lists", s.userLists)
+	anyone("GET /users/{id}/lists/{list_id}", s.userList)
+	anyone("GET /users/{id}/lists/{list_id}/items", s.listItems)
+	anyone("GET /users/{id}/lists/{list_id}/items/{type}", s.listItems)
+	anyone("GET /lists/{id}", s.userList)
+	anyone("GET /lists/{id}/items", s.listItems)
+	anyone("GET /lists/{id}/items/{type}", s.listItems)
 	app("GET /users/{id}/lists/collaborations", empty)
 	app("GET /users/{id}/likes", empty)
 	app("GET /users/{id}/likes/{type}", empty)
-	app("GET /lists/{id}/items", func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusNotFound, "not_found", "Lists aren't shared on Tethr yet.")
-	})
 	app("GET /search/{id_type}/{id}", s.lookUp)
 }
 
