@@ -132,7 +132,7 @@ func (s *Server) origins(next http.Handler) http.Handler {
 		}
 		if r.Method == http.MethodOptions {
 			if allowed {
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 				w.Header().Set("Access-Control-Max-Age", "600")
 			}
