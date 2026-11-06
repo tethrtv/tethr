@@ -16,21 +16,28 @@ func TestShowProgress(t *testing.T) {
 		d := time.Date(2026, 11, 5-n, 0, 0, 0, 0, time.UTC)
 		return &d
 	}
-	outline := []store.Episode{
-		{ID: 1, SeasonNumber: 0, EpisodeNumber: 1, FirstAired: day(400)},
-		{ID: 2, SeasonNumber: 1, EpisodeNumber: 1, FirstAired: day(300)},
-		{ID: 3, SeasonNumber: 1, EpisodeNumber: 2, FirstAired: day(293)},
-		{ID: 4, SeasonNumber: 1, EpisodeNumber: 3, FirstAired: day(286)},
-		{ID: 5, SeasonNumber: 2, EpisodeNumber: 1, FirstAired: day(20)},
-		{ID: 6, SeasonNumber: 2, EpisodeNumber: 2, FirstAired: day(0)},
-		{ID: 7, SeasonNumber: 2, EpisodeNumber: 3, FirstAired: day(-7)},
-		{ID: 8, SeasonNumber: 2, EpisodeNumber: 4},
+	outline := []OrderedEpisode{
+		{Episode: store.Episode{ID: 1, SeasonNumber: 0, EpisodeNumber: 1, FirstAired: day(400)}, Season: 0, Number: 1},
+		{Episode: store.Episode{ID: 2, SeasonNumber: 1, EpisodeNumber: 1, FirstAired: day(300)}, Season: 1, Number: 1},
+		{Episode: store.Episode{ID: 3, SeasonNumber: 1, EpisodeNumber: 2, FirstAired: day(293)}, Season: 1, Number: 2},
+		{Episode: store.Episode{ID: 4, SeasonNumber: 1, EpisodeNumber: 3, FirstAired: day(286)}, Season: 1, Number: 3},
+		{Episode: store.Episode{ID: 5, SeasonNumber: 2, EpisodeNumber: 1, FirstAired: day(20)}, Season: 2, Number: 1},
+		{Episode: store.Episode{ID: 6, SeasonNumber: 2, EpisodeNumber: 2, FirstAired: day(0)}, Season: 2, Number: 2},
+		{Episode: store.Episode{ID: 7, SeasonNumber: 2, EpisodeNumber: 3, FirstAired: day(-7)}, Season: 2, Number: 3},
+		{Episode: store.Episode{ID: 8, SeasonNumber: 2, EpisodeNumber: 4}, Season: 2, Number: 4},
+	}
+	dvd := []OrderedEpisode{
+		{Episode: outline[1].Episode, Season: 1, Number: 1},
+		{Episode: outline[2].Episode, Season: 1, Number: 2},
+		{Episode: outline[3].Episode, Season: 1, Number: 3},
+		{Episode: outline[0].Episode, Season: 1, Number: 4},
+		{Episode: outline[4].Episode, Season: 2, Number: 1},
 	}
 	at := func(hour int) time.Time { return now.Add(time.Duration(hour-100) * time.Hour) }
 
 	tests := []struct {
 		name     string
-		episodes []store.Episode
+		episodes []OrderedEpisode
 		watched  map[int64]time.Time
 		hidden   []int32
 		specials bool
@@ -49,13 +56,15 @@ func TestShowProgress(t *testing.T) {
 		{name: "a special is never next", watched: map[int64]time.Time{1: at(1)}, aired: 5, next: "1x1", last: "0x1"},
 		{name: "specials count when asked for", watched: map[int64]time.Time{1: at(1), 2: at(2)}, specials: true, aired: 6, done: 2, next: "1x2", last: "1x1"},
 		{name: "hidden seasons don't count", watched: map[int64]time.Time{2: at(1), 3: at(2), 4: at(3)}, hidden: []int32{1}, aired: 2, next: "2x1", last: "1x3"},
-		{name: "next follows the order given", episodes: []store.Episode{outline[3], outline[1], outline[2]}, watched: map[int64]time.Time{4: at(1)}, aired: 3, done: 1, next: "1x1", last: "1x3"},
+		{name: "next follows the order given", episodes: []OrderedEpisode{outline[3], outline[1], outline[2]}, watched: map[int64]time.Time{4: at(1)}, aired: 3, done: 1, next: "1x1", last: "1x3"},
+		{name: "seasons are the order's", episodes: dvd, watched: map[int64]time.Time{2: at(1), 3: at(1), 4: at(1)}, hidden: []int32{2}, aired: 4, done: 3, next: "1x4", last: "1x3"},
+		{name: "a special the order places in a season counts", episodes: dvd, watched: map[int64]time.Time{2: at(1)}, aired: 5, done: 1, next: "1x2", last: "1x1"},
 	}
-	name := func(e *store.Episode) string {
+	name := func(e *OrderedEpisode) string {
 		if e == nil {
 			return ""
 		}
-		return fmt.Sprintf("%dx%d", e.SeasonNumber, e.EpisodeNumber)
+		return fmt.Sprintf("%dx%d", e.Season, e.Number)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

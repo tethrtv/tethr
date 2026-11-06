@@ -34,18 +34,74 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 		out.Listing = &TitleListing{Id: l.ID, ListedAt: l.At}
 	}
 	if t.Item.Kind() == "show" {
+		if t.Order != "" {
+			out.EpisodeOrder = &t.Order
+		}
 		seasons := make([]SeasonDetail, 0, len(t.Seasons))
 		for _, season := range t.Seasons {
 			episodes := make([]EpisodeDetail, 0, len(season.Episodes))
 			for _, e := range season.Episodes {
-				episode := toItem(core.Item{Title: t.Item.Title, Episode: &e.Episode}).Episode
-				episodes = append(episodes, EpisodeDetail{Episode: *episode, Watches: toPlays(e.Watches), Resume: toResume(e.Resume)})
+				episodes = append(episodes, EpisodeDetail{Episode: toEpisode(e.Episode), Watches: toPlays(e.Watches), Resume: toResume(e.Resume)})
 			}
 			seasons = append(seasons, SeasonDetail{Number: int(season.Number), Episodes: episodes})
 		}
 		out.Seasons = &seasons
 	}
 	return GetTitle200JSONResponse(out), nil
+}
+
+func (s *Server) PickEpisodeOrder(ctx context.Context, req PickEpisodeOrderRequestObject) (PickEpisodeOrderResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return PickEpisodeOrder404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return PickEpisodeOrder401JSONResponse{notConnected}, err
+	}
+	if s.FetchOrder == nil {
+		return PickEpisodeOrder503JSONResponse(problem("no_tmdb", "This server can’t reach TMDB, so shows stay in aired order.")), nil
+	}
+	order, err := s.FetchOrder(ctx, req.Body.TmdbGroup)
+	if err == nil {
+		err = core.PickEpisodeOrder(ctx, s.DB, c.ProfileID, req.Id, &order)
+	}
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+		return PickEpisodeOrder404JSONResponse(noSuchShow), nil
+	case errors.Is(err, core.ErrWrongShow):
+		return PickEpisodeOrder422JSONResponse(problem("wrong_episode_group", "That isn’t one of this show’s episode groups on TMDB.")), nil
+	case err != nil:
+		return nil, err
+	}
+	return PickEpisodeOrder204Response{}, nil
+}
+
+func (s *Server) UseAiredOrder(ctx context.Context, req UseAiredOrderRequestObject) (UseAiredOrderResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return UseAiredOrder404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return UseAiredOrder401JSONResponse{notConnected}, err
+	}
+	err = core.PickEpisodeOrder(ctx, s.DB, c.ProfileID, req.Id, nil)
+	if errors.Is(err, core.ErrNotFound) {
+		return UseAiredOrder404JSONResponse(noSuchShow), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return UseAiredOrder204Response{}, nil
+}
+
+var noSuchShow = problem("not_found", "There’s no show with that ID or slug.")
+
+func toEpisode(e core.OrderedEpisode) Episode {
+	out := *toItem(core.Item{Episode: &e.Episode}).Episode
+	if e.Season != e.SeasonNumber || e.Number != e.EpisodeNumber {
+		out.Order = &OrderNumber{Season: int(e.Season), Number: int(e.Number)}
+	}
+	return out
 }
 
 func (s *Server) Search(ctx context.Context, req SearchRequestObject) (SearchResponseObject, error) {

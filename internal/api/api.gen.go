@@ -495,7 +495,10 @@ type Episode struct {
 	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
 	Ids    Ids `json:"ids"`
 	Number int `json:"number"`
-	Season int `json:"season"`
+
+	// Order Where the episode sits in the episode order picked for the show, when that isn't aired order. Given in Up next and title details.
+	Order  *OrderNumber `json:"order,omitempty"`
+	Season int          `json:"season"`
 }
 
 // EpisodeDetail defines model for EpisodeDetail.
@@ -507,6 +510,12 @@ type EpisodeDetail struct {
 
 	// Watches Newest first.
 	Watches []Play `json:"watches"`
+}
+
+// EpisodeOrderChoice defines model for EpisodeOrderChoice.
+type EpisodeOrderChoice struct {
+	// TmdbGroup The TMDB episode group ID.
+	TmdbGroup string `json:"tmdb_group"`
 }
 
 // Export defines model for Export.
@@ -692,6 +701,12 @@ type NewWatches struct {
 		// WatchedAt Left out, it's now.
 		WatchedAt *time.Time `json:"watched_at,omitempty"`
 	} `json:"items"`
+}
+
+// OrderNumber Where the episode sits in the episode order picked for the show, when that isn't aired order. Given in Up next and title details.
+type OrderNumber struct {
+	Number int `json:"number"`
+	Season int `json:"season"`
 }
 
 // Passkey defines model for Passkey.
@@ -887,6 +902,9 @@ type Title struct {
 
 // TitleDetail defines model for TitleDetail.
 type TitleDetail struct {
+	// EpisodeOrder The TMDB episode group the show follows for this profile. Left out, it's aired order.
+	EpisodeOrder *string `json:"episode_order,omitempty"`
+
 	// Listing Set when the film or show itself is on your watchlist.
 	Listing *TitleListing `json:"listing,omitempty"`
 
@@ -894,7 +912,9 @@ type TitleDetail struct {
 	Rating *TitleRating `json:"rating,omitempty"`
 
 	// Resume Where it was paused, if it was started.
-	Resume  *Resume         `json:"resume,omitempty"`
+	Resume *Resume `json:"resume,omitempty"`
+
+	// Seasons Numbered in the show's episode order, with specials last. Episodes the order leaves out aren't listed.
 	Seasons *[]SeasonDetail `json:"seasons,omitempty"`
 	Title   Title           `json:"title"`
 	Type    TitleDetailType `json:"type"`
@@ -1118,6 +1138,18 @@ type GetTitleParams struct {
 // GetTitleParamsType defines parameters for GetTitle.
 type GetTitleParamsType string
 
+// UseAiredOrderParams defines parameters for UseAiredOrder.
+type UseAiredOrderParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// PickEpisodeOrderParams defines parameters for PickEpisodeOrder.
+type PickEpisodeOrderParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // GetUpNextParams defines parameters for GetUpNext.
 type GetUpNextParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -1193,6 +1225,9 @@ type RateJSONRequestBody = NewRatings
 
 // ScrobbleJSONRequestBody defines body for Scrobble for application/json ContentType.
 type ScrobbleJSONRequestBody = ScrobbleRequest
+
+// PickEpisodeOrderJSONRequestBody defines body for PickEpisodeOrder for application/json ContentType.
+type PickEpisodeOrderJSONRequestBody = EpisodeOrderChoice
 
 // AddToWatchlistJSONRequestBody defines body for AddToWatchlist for application/json ContentType.
 type AddToWatchlistJSONRequestBody = NewListings
@@ -1349,6 +1384,12 @@ type ServerInterface interface {
 	// GetTitle A film or show, with what you've watched, rated and listed
 	// (GET /v1/titles/{id})
 	GetTitle(w http.ResponseWriter, r *http.Request, id string, params GetTitleParams)
+	// UseAiredOrder Go back to aired order for a show
+	// (DELETE /v1/titles/{id}/episode-order)
+	UseAiredOrder(w http.ResponseWriter, r *http.Request, id string, params UseAiredOrderParams)
+	// PickEpisodeOrder Follow one of the show's TMDB episode groups instead of aired order
+	// (PUT /v1/titles/{id}/episode-order)
+	PickEpisodeOrder(w http.ResponseWriter, r *http.Request, id string, params PickEpisodeOrderParams)
 	// GetUpNext The next episode of every show you're partway through
 	// (GET /v1/up-next)
 	GetUpNext(w http.ResponseWriter, r *http.Request, params GetUpNextParams)
@@ -2764,6 +2805,90 @@ func (siw *ServerInterfaceWrapper) GetTitle(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// UseAiredOrder operation middleware
+func (siw *ServerInterfaceWrapper) UseAiredOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UseAiredOrderParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UseAiredOrder(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PickEpisodeOrder operation middleware
+func (siw *ServerInterfaceWrapper) PickEpisodeOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PickEpisodeOrderParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PickEpisodeOrder(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetUpNext operation middleware
 func (siw *ServerInterfaceWrapper) GetUpNext(w http.ResponseWriter, r *http.Request) {
 
@@ -3132,6 +3257,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.HideFromUpNext)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/titles/{id}", wrapper.GetTitle)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.UseAiredOrder)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.PickEpisodeOrder)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/search", wrapper.Search)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/ratings", wrapper.ListRatings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/ratings", wrapper.Rate)
@@ -5684,6 +5811,125 @@ func (response GetTitle404JSONResponse) VisitGetTitleResponse(w http.ResponseWri
 	return err
 }
 
+type UseAiredOrderRequestObject struct {
+	Id     string `json:"id"`
+	Params UseAiredOrderParams
+}
+
+type UseAiredOrderResponseObject interface {
+	VisitUseAiredOrderResponse(w http.ResponseWriter) error
+}
+
+type UseAiredOrder204Response struct {
+}
+
+func (response UseAiredOrder204Response) VisitUseAiredOrderResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UseAiredOrder401JSONResponse struct{ ProblemJSONResponse }
+
+func (response UseAiredOrder401JSONResponse) VisitUseAiredOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UseAiredOrder404JSONResponse Problem
+
+func (response UseAiredOrder404JSONResponse) VisitUseAiredOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PickEpisodeOrderRequestObject struct {
+	Id     string `json:"id"`
+	Params PickEpisodeOrderParams
+	Body   *PickEpisodeOrderJSONRequestBody
+}
+
+type PickEpisodeOrderResponseObject interface {
+	VisitPickEpisodeOrderResponse(w http.ResponseWriter) error
+}
+
+type PickEpisodeOrder204Response struct {
+}
+
+func (response PickEpisodeOrder204Response) VisitPickEpisodeOrderResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PickEpisodeOrder401JSONResponse struct{ ProblemJSONResponse }
+
+func (response PickEpisodeOrder401JSONResponse) VisitPickEpisodeOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PickEpisodeOrder404JSONResponse Problem
+
+func (response PickEpisodeOrder404JSONResponse) VisitPickEpisodeOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PickEpisodeOrder422JSONResponse Problem
+
+func (response PickEpisodeOrder422JSONResponse) VisitPickEpisodeOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PickEpisodeOrder503JSONResponse Problem
+
+func (response PickEpisodeOrder503JSONResponse) VisitPickEpisodeOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetUpNextRequestObject struct {
 	Params GetUpNextParams
 }
@@ -6134,6 +6380,12 @@ type StrictServerInterface interface {
 	// GetTitle A film or show, with what you've watched, rated and listed
 	// (GET /v1/titles/{id})
 	GetTitle(ctx context.Context, request GetTitleRequestObject) (GetTitleResponseObject, error)
+	// UseAiredOrder Go back to aired order for a show
+	// (DELETE /v1/titles/{id}/episode-order)
+	UseAiredOrder(ctx context.Context, request UseAiredOrderRequestObject) (UseAiredOrderResponseObject, error)
+	// PickEpisodeOrder Follow one of the show's TMDB episode groups instead of aired order
+	// (PUT /v1/titles/{id}/episode-order)
+	PickEpisodeOrder(ctx context.Context, request PickEpisodeOrderRequestObject) (PickEpisodeOrderResponseObject, error)
 	// GetUpNext The next episode of every show you're partway through
 	// (GET /v1/up-next)
 	GetUpNext(ctx context.Context, request GetUpNextRequestObject) (GetUpNextResponseObject, error)
@@ -7565,6 +7817,67 @@ func (sh *strictHandler) GetTitle(w http.ResponseWriter, r *http.Request, id str
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetTitleResponseObject); ok {
 		if err := validResponse.VisitGetTitleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UseAiredOrder operation middleware
+func (sh *strictHandler) UseAiredOrder(w http.ResponseWriter, r *http.Request, id string, params UseAiredOrderParams) {
+	var request UseAiredOrderRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UseAiredOrder(ctx, request.(UseAiredOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UseAiredOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UseAiredOrderResponseObject); ok {
+		if err := validResponse.VisitUseAiredOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PickEpisodeOrder operation middleware
+func (sh *strictHandler) PickEpisodeOrder(w http.ResponseWriter, r *http.Request, id string, params PickEpisodeOrderParams) {
+	var request PickEpisodeOrderRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body PickEpisodeOrderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PickEpisodeOrder(ctx, request.(PickEpisodeOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PickEpisodeOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PickEpisodeOrderResponseObject); ok {
+		if err := validResponse.VisitPickEpisodeOrderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -816,7 +816,7 @@ paths:
     get:
       operationId: getUpNext
       summary: The next episode of every show you're partway through
-      description: The first aired, unwatched episode after the latest one watched, or the earliest gap if there's nothing later. Specials and episodes that haven't aired are skipped, and so are hidden shows. Most recently watched shows come first. Shows appear once Tethr has their episode list, usually within a minute of the first watch.
+      description: The first aired, unwatched episode after the latest one watched, or the earliest gap if there's nothing later, in the episode order picked for the show. Specials and episodes that haven't aired are skipped, and so are hidden shows. Most recently watched shows come first. Shows appear once Tethr has their episode list, usually within a minute of the first watch.
       security:
         - session: []
         - bearer: []
@@ -870,7 +870,7 @@ paths:
     get:
       operationId: getTitle
       summary: A film or show, with what you've watched, rated and listed
-      description: '`id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a TMDB ID, since films and shows share numbers there. A show lists every episode Tethr knows of, aired or not, season by season with specials last.'
+      description: '`id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a TMDB ID, since films and shows share numbers there. A show lists every episode Tethr knows of, aired or not, season by season in its episode order with specials last.'
       security:
         - session: []
         - bearer: []
@@ -893,6 +893,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TitleDetail'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/titles/{id}/episode-order:
+    put:
+      operationId: pickEpisodeOrder
+      summary: Follow one of the show's TMDB episode groups instead of aired order
+      description: Up next, progress and the show's seasons then follow the group, for this profile only. Episodes the group leaves out don't count towards progress, but stay in history. List a show's groups with TMDB's `/tv/{id}/episode_groups`.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EpisodeOrderChoice'
+      responses:
+        '204':
+          description: The show follows the group
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: useAiredOrder
+      summary: Go back to aired order for a show
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: The show is in aired order
         '401':
           $ref: '#/components/responses/Problem'
         '404':
@@ -1760,6 +1812,24 @@ components:
         first_aired:
           type: string
           format: date
+        order:
+          $ref: '#/components/schemas/OrderNumber'
+    OrderNumber:
+      type: object
+      description: The episode's season and number in the episode order picked for the show, when they differ from aired order. Given in Up next and title details.
+      required: [season, number]
+      properties:
+        season:
+          type: integer
+        number:
+          type: integer
+    EpisodeOrderChoice:
+      type: object
+      required: [tmdb_group]
+      properties:
+        tmdb_group:
+          type: string
+          description: The TMDB episode group ID.
     Item:
       type: object
       required: [type, title]
@@ -2036,8 +2106,12 @@ components:
           $ref: '#/components/schemas/TitleRating'
         listing:
           $ref: '#/components/schemas/TitleListing'
+        episode_order:
+          type: string
+          description: The TMDB episode group the show follows for this profile. Left out, it's aired order.
         seasons:
           type: array
+          description: Numbered in the show's episode order, with specials last. Episodes the order leaves out aren't listed.
           items:
             $ref: '#/components/schemas/SeasonDetail'
     TitleRating:

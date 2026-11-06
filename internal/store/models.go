@@ -92,6 +92,22 @@ type Episode struct {
 	RemovedAt     *time.Time
 }
 
+type EpisodeOrder struct {
+	ID          int64
+	ShowID      int64
+	TmdbGroupID string
+	TmdbType    int16
+	RefreshedAt time.Time
+}
+
+type EpisodeOrderEntry struct {
+	OrderID       int64
+	TmdbEpisodeID int32
+	SeasonNumber  int32
+	EpisodeNumber int32
+	Position      int32
+}
+
 type ExternalID struct {
 	TitleID  int64
 	Provider string
@@ -232,6 +248,13 @@ type Profile struct {
 	Position    int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type ProfileShowSetting struct {
+	ProfileID      int64
+	ShowID         int64
+	EpisodeOrderID *int64
+	UpdatedAt      time.Time
 }
 
 type Rating struct {

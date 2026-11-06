@@ -153,6 +153,12 @@ func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into i
 	if err := q.MergeTitleExternalIDs(ctx, store.MergeTitleExternalIDsParams{FromID: from, IntoID: into}); err != nil {
 		return err
 	}
+	if err := q.DropTitleShowSettings(ctx, from); err != nil {
+		return err
+	}
+	if err := q.DropTitleEpisodeOrders(ctx, from); err != nil {
+		return err
+	}
 	return q.MarkTitleMerged(ctx, store.MarkTitleMergedParams{FromID: from, IntoID: &into})
 }
 

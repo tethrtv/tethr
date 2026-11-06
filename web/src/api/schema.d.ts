@@ -571,7 +571,7 @@ export interface paths {
         };
         /**
          * The next episode of every show you're partway through
-         * @description The first aired, unwatched episode after the latest one watched, or the earliest gap if there's nothing later. Specials and episodes that haven't aired are skipped, and so are hidden shows. Most recently watched shows come first. Shows appear once Tethr has their episode list, usually within a minute of the first watch.
+         * @description The first aired, unwatched episode after the latest one watched, or the earliest gap if there's nothing later, in the episode order picked for the show. Specials and episodes that haven't aired are skipped, and so are hidden shows. Most recently watched shows come first. Shows appear once Tethr has their episode list, usually within a minute of the first watch.
          */
         get: operations["getUpNext"];
         put?: never;
@@ -609,12 +609,33 @@ export interface paths {
         };
         /**
          * A film or show, with what you've watched, rated and listed
-         * @description `id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a TMDB ID, since films and shows share numbers there. A show lists every episode Tethr knows of, aired or not, season by season with specials last.
+         * @description `id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a TMDB ID, since films and shows share numbers there. A show lists every episode Tethr knows of, aired or not, season by season in its episode order with specials last.
          */
         get: operations["getTitle"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/titles/{id}/episode-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Follow one of the show's TMDB episode groups instead of aired order
+         * @description Up next, progress and the show's seasons then follow the group, for this profile only. Episodes the group leaves out don't count towards progress, but stay in history. List a show's groups with TMDB's `/tv/{id}/episode_groups`.
+         */
+        put: operations["pickEpisodeOrder"];
+        post?: never;
+        /** Go back to aired order for a show */
+        delete: operations["useAiredOrder"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1108,6 +1129,16 @@ export interface components {
             number: number;
             /** Format: date */
             first_aired?: string;
+            order?: components["schemas"]["OrderNumber"];
+        };
+        /** @description The episode's season and number in the episode order picked for the show, when they differ from aired order. Given in Up next and title details. */
+        OrderNumber: {
+            season: number;
+            number: number;
+        };
+        EpisodeOrderChoice: {
+            /** @description The TMDB episode group ID. */
+            tmdb_group: string;
         };
         Item: {
             /** @enum {string} */
@@ -1269,6 +1300,9 @@ export interface components {
             resume?: components["schemas"]["Resume"];
             rating?: components["schemas"]["TitleRating"];
             listing?: components["schemas"]["TitleListing"];
+            /** @description The TMDB episode group the show follows for this profile. Left out, it's aired order. */
+            episode_order?: string;
+            /** @description Numbered in the show's episode order, with specials last. Episodes the order leaves out aren't listed. */
             seasons?: components["schemas"]["SeasonDetail"][];
         };
         /** @description Your rating of the film or show itself. */
@@ -2443,6 +2477,62 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TitleDetail"];
                 };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    pickEpisodeOrder: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EpisodeOrderChoice"];
+            };
+        };
+        responses: {
+            /** @description The show follows the group */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    useAiredOrder: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The show is in aired order */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

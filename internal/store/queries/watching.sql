@@ -179,8 +179,3 @@ SELECT i.id, i.listed_at
 FROM list_items i
 JOIN lists l ON l.id = i.list_id
 WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL;
-
--- name: ShowOutline :many
-SELECT * FROM episodes
-WHERE show_id = $1 AND removed_at IS NULL
-ORDER BY season_number = 0, season_number, episode_number;

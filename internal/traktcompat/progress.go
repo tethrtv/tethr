@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/tethrtv/tethr/internal/core"
-	"github.com/tethrtv/tethr/internal/store"
 )
 
 func stampOrNil(t *time.Time) *string {
@@ -19,11 +18,11 @@ func stampOrNil(t *time.Time) *string {
 	return &s
 }
 
-func episodeOrNil(e *store.Episode) any {
+func episodeOrNil(e *core.OrderedEpisode) any {
 	if e == nil {
 		return nil
 	}
-	return episodeJSON(core.Item{Episode: e})
+	return episode{Season: e.Season, Number: e.Number, IDs: ids{Trakt: e.ID, TMDB: e.TmdbEpisodeID}}
 }
 
 func (s *Server) ratings(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +196,7 @@ func (s *Server) showProgress(w http.ResponseWriter, r *http.Request) {
 	for _, season := range p.Seasons {
 		sp := seasonProgress{Number: season.Number, Aired: season.Aired, Completed: season.Completed, Episodes: []episodeProgress{}}
 		for _, e := range season.Episodes {
-			sp.Episodes = append(sp.Episodes, episodeProgress{Number: e.Episode.EpisodeNumber, Completed: e.LastWatchedAt != nil, LastWatchedAt: stampOrNil(e.LastWatchedAt)})
+			sp.Episodes = append(sp.Episodes, episodeProgress{Number: e.Episode.Number, Completed: e.LastWatchedAt != nil, LastWatchedAt: stampOrNil(e.LastWatchedAt)})
 		}
 		seasons = append(seasons, sp)
 	}

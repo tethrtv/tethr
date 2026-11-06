@@ -1,12 +1,14 @@
 package tmdb
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -298,6 +300,108 @@ func (c *Client) Search(ctx context.Context, query string) ([]Result, error) {
 		case "tv":
 			out = append(out, Result{Kind: "show", ID: r.ID, Name: r.Name, Year: year(r.FirstAir), Poster: r.Poster})
 		}
+	}
+	return out, nil
+}
+
+type Group struct {
+	ID       string
+	Name     string
+	Type     int16
+	Seasons  int
+	Episodes int
+}
+
+func (c *Client) Groups(ctx context.Context, showID int32) ([]Group, error) {
+	var found struct {
+		Results []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Type     int16  `json:"type"`
+			Seasons  int    `json:"group_count"`
+			Episodes int    `json:"episode_count"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, fmt.Sprintf("/3/tv/%d/episode_groups", showID), &found); err != nil {
+		return nil, err
+	}
+	out := make([]Group, 0, len(found.Results))
+	for _, g := range found.Results {
+		out = append(out, Group(g))
+	}
+	return out, nil
+}
+
+type EpisodeGroup struct {
+	ID          string
+	Name        string
+	Description string
+	Type        int16
+	Seasons     []GroupSeason
+}
+
+type GroupSeason struct {
+	Number   int32
+	Name     string
+	Episodes []GroupEpisode
+}
+
+type GroupEpisode struct {
+	ID       int32
+	ShowID   int32
+	Season   int32
+	Number   int32
+	Place    int32
+	Name     string
+	AirDate  string
+	Overview string
+	Runtime  int
+	Still    string
+}
+
+type groupEpisode struct {
+	ID       int32  `json:"id"`
+	ShowID   int32  `json:"show_id"`
+	Season   int32  `json:"season_number"`
+	Number   int32  `json:"episode_number"`
+	Order    int32  `json:"order"`
+	Name     string `json:"name"`
+	AirDate  string `json:"air_date"`
+	Overview string `json:"overview"`
+	Runtime  int    `json:"runtime"`
+	Still    string `json:"still_path"`
+}
+
+type groupSeason struct {
+	Order    int32          `json:"order"`
+	Name     string         `json:"name"`
+	Episodes []groupEpisode `json:"episodes"`
+}
+
+// A group's order is its season number and an episode's place in it is its number, which is how TMDB shows them.
+func (c *Client) EpisodeGroup(ctx context.Context, id string) (EpisodeGroup, error) {
+	var group struct {
+		ID          string        `json:"id"`
+		Name        string        `json:"name"`
+		Description string        `json:"description"`
+		Type        int16         `json:"type"`
+		Groups      []groupSeason `json:"groups"`
+	}
+	if err := c.get(ctx, "/3/tv/episode_group/"+url.PathEscape(id), &group); err != nil {
+		return EpisodeGroup{}, err
+	}
+	out := EpisodeGroup{ID: group.ID, Name: group.Name, Description: group.Description, Type: group.Type}
+	slices.SortStableFunc(group.Groups, func(a, b groupSeason) int { return cmp.Compare(a.Order, b.Order) })
+	for _, g := range group.Groups {
+		slices.SortStableFunc(g.Episodes, func(a, b groupEpisode) int { return cmp.Compare(a.Order, b.Order) })
+		season := GroupSeason{Number: g.Order, Name: g.Name}
+		for i, e := range g.Episodes {
+			season.Episodes = append(season.Episodes, GroupEpisode{
+				ID: e.ID, ShowID: e.ShowID, Season: e.Season, Number: e.Number, Place: int32(i + 1),
+				Name: e.Name, AirDate: e.AirDate, Overview: e.Overview, Runtime: e.Runtime, Still: e.Still,
+			})
+		}
+		out.Seasons = append(out.Seasons, season)
 	}
 	return out, nil
 }

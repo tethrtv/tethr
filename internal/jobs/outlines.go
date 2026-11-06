@@ -48,7 +48,40 @@ func (o Outlines) Refresh(ctx context.Context) error {
 			return err
 		}
 	}
+
+	groups, err := core.DueEpisodeOrders(ctx, o.DB, 20)
+	if err != nil {
+		return err
+	}
+	for _, id := range groups {
+		order, err := o.Order(ctx, id)
+		if errors.Is(err, core.ErrWrongShow) {
+			err = core.EpisodeOrderMissing(ctx, o.DB, id)
+		} else if err == nil {
+			err = core.RefreshEpisodeOrder(ctx, o.DB, order)
+		}
+		if err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (o Outlines) Order(ctx context.Context, groupID string) (core.EpisodeOrder, error) {
+	g, err := o.TMDB.EpisodeGroup(ctx, groupID)
+	if errors.Is(err, tmdb.ErrNotFound) {
+		return core.EpisodeOrder{}, core.ErrWrongShow
+	}
+	if err != nil {
+		return core.EpisodeOrder{}, err
+	}
+	order := core.EpisodeOrder{TMDBGroupID: g.ID, TMDBType: g.Type}
+	for _, season := range g.Seasons {
+		for _, e := range season.Episodes {
+			order.Episodes = append(order.Episodes, core.OrderEntry{TMDBID: e.ID, ShowTMDBID: e.ShowID, Season: season.Number, Number: e.Place})
+		}
+	}
+	return order, nil
 }
 
 func outline(episodes []tmdb.Episode) []core.OutlineEpisode {
