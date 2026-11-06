@@ -9,6 +9,7 @@ import { ago } from '../format'
 import { useSignedIn } from './connect'
 import styles from './Developers.module.css'
 import home from './Home.module.css'
+import own from './MediaServers.module.css'
 
 type MediaServer = components['schemas']['MediaServer']
 type Kind = MediaServer['kind']
@@ -54,7 +55,8 @@ export function MediaServers() {
           <h1 className={home.title}>Media servers</h1>
           <p className={home.lead}>
             Log what everyone watches on your Jellyfin, Plex or Emby server, whichever app they use. Match each person
-            on the server to a profile below. Plays from people you haven’t matched aren’t logged.
+            on the server to a profile below. Anything they finish before you match them waits here for a week, then
+            logs once you do.
           </p>
         </header>
 
@@ -182,29 +184,41 @@ function ServerRow({
   })
 
   return (
-    <li className={styles.app}>
+    <li className={own.server}>
       <div className={styles.appMain}>
         <span className={home.name}>{s.name ?? names[s.kind]}</span>
         <span className={home.kind}>
           {s.last_event_at ? `${names[s.kind]}, last heard from ${ago(s.last_event_at)}` : 'Waiting for its first play'}
         </span>
       </div>
-      <span>
+      <span className={own.users}>
         {s.users.map((u) => (
-          <label key={u.id} className={home.kind}>
+          <label key={u.id} className={own.user}>
             {u.name}{' '}
             <select
-              value={u.profile_id ?? ''}
+              value={u.profile_id ?? (u.ignored ? 'none' : '')}
               disabled={match.isPending}
-              onChange={(e) => match.mutate({ user: u.id, profile: e.target.value ? Number(e.target.value) : null })}
+              onChange={(e) =>
+                match.mutate({ user: u.id, profile: e.target.value === 'none' ? null : Number(e.target.value) })
+              }
             >
-              <option value="">Don’t log</option>
+              {!u.profile_id && !u.ignored && (
+                <option value="" disabled>
+                  Choose a profile
+                </option>
+              )}
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
+              <option value="none">Don’t log</option>
             </select>
+            {u.held_plays > 0 && (
+              <span className={own.waiting}>
+                {u.held_plays === 1 ? '1 play waiting' : `${u.held_plays} plays waiting`}
+              </span>
+            )}
           </label>
         ))}
         {match.isError && <span className={home.error}>{problemMessage(match.error)}</span>}
