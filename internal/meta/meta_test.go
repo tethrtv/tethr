@@ -47,6 +47,14 @@ func server(t *testing.T) (http.Handler, *[]string) {
 			_, _ = fmt.Fprintf(w, `{"results":[{"media_type":"person","id":9,"name":"Someone"},{"media_type":"movie","id":27205,"title":"Inception","release_date":""},%s]}`, strings.Join(results, ","))
 		case "/3/tv/1396/season/1":
 			_, _ = w.Write([]byte(`{"overview":"Season one","episodes":[{"episode_number":1,"name":"Pilot","air_date":"2008-01-20","overview":"x","runtime":58,"still_path":"/s.jpg"},{"episode_number":2,"name":"Cat's in the Bag...","air_date":""}]}`))
+		case "/3/tv/1396/episode_groups":
+			_, _ = w.Write([]byte(`{"results":[{"id":"69f50757054263b7bc87e32a","name":"DVD / PVOD","type":3,"group_count":6,"episode_count":62,"description":"x"}]}`))
+		case "/3/tv/episode_group/69f50757054263b7bc87e32a":
+			_, _ = w.Write([]byte(`{"id":"69f50757054263b7bc87e32a","name":"DVD / PVOD","type":3,"groups":[
+				{"order":6,"name":"Season 6","episodes":[{"id":5,"show_id":1396,"season_number":5,"episode_number":10,"order":1,"name":"Buried","air_date":""},{"id":4,"show_id":1396,"season_number":5,"episode_number":9,"order":0,"name":"Blood Money","air_date":"2013-08-11","runtime":47}]},
+				{"order":0,"name":"Specials","episodes":[]}]}`))
+		case "/3/tv/episode_group/aaaaaaaaaaaaaaaaaaaaaaaa":
+			_, _ = w.Write([]byte(`{"id":"aaaaaaaaaaaaaaaaaaaaaaaa","groups":[{"order":1,"episodes":[{"id":9,"show_id":1399,"season_number":1,"episode_number":1,"order":0}]}]}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -111,6 +119,26 @@ func TestDetails(t *testing.T) {
 	}
 	if !strings.Contains(rec.Header().Get("Cache-Control"), "s-maxage=604800") {
 		t.Errorf("season cache = %s", rec.Header().Get("Cache-Control"))
+	}
+}
+
+func TestOrders(t *testing.T) {
+	h, _ := server(t)
+	rec := get(h, "/meta/tv/1396/orders", "same-site")
+	if want := `{"orders":[{"id":"69f50757054263b7bc87e32a","name":"DVD / PVOD","type":3,"seasons":6,"episodes":62}]}` + "\n"; rec.Code != http.StatusOK || rec.Body.String() != want {
+		t.Errorf("orders = %d %s", rec.Code, rec.Body)
+	}
+	rec = get(h, "/meta/tv/1396/order/69f50757054263b7bc87e32a", "same-site")
+	want := `{"name":"DVD / PVOD","seasons":[{"number":0,"name":"Specials","episodes":[]},{"number":6,"name":"Season 6","episodes":[` +
+		`{"number":1,"aired":{"season":5,"number":9},"name":"Blood Money","air_date":"2013-08-11","runtime":47},` +
+		`{"number":2,"aired":{"season":5,"number":10},"name":"Buried","air_date":null}]}],"type":3}` + "\n"
+	if rec.Code != http.StatusOK || rec.Body.String() != want {
+		t.Errorf("order = %d %s", rec.Code, rec.Body)
+	}
+	for _, path := range []string{"/meta/tv/1396/order/aaaaaaaaaaaaaaaaaaaaaaaa", "/meta/tv/1396/order/..%2Fsecret"} {
+		if rec := get(h, path, "same-site"); rec.Code != http.StatusNotFound {
+			t.Errorf("%s = %d", path, rec.Code)
+		}
 	}
 }
 
