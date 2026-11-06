@@ -221,7 +221,11 @@ function ConnectedApps() {
         <Link to="/activate" className={styles.inline}>
           Enter the code here
         </Link>
-        . Disconnecting an app stops it logging, and never touches your history. Building a player?{' '}
+        . Disconnecting an app stops it logging, and never touches your history. Run Jellyfin?{' '}
+        <Link to="/media-servers" className={styles.inline}>
+          Log plays from the server
+        </Link>
+        . Building a player?{' '}
         <Link to="/developers" className={styles.inline}>
           Register it here
         </Link>
