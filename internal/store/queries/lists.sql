@@ -1,6 +1,6 @@
 -- name: CreateList :one
-INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how, import_id)
-VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how)
+VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: CountLists :one

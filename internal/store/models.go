@@ -175,7 +175,6 @@ type List struct {
 	UpdatedAt   time.Time
 	SortBy      string
 	SortHow     string
-	ImportID    *int64
 }
 
 type ListItem struct {
