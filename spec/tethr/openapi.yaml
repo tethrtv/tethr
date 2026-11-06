@@ -1748,12 +1748,15 @@ components:
           description: A name for a new passkey, such as "iCloud Keychain".
     Device:
       type: object
-      required: [code, app_name]
+      required: [code, app_name, official]
       properties:
         code:
           type: string
         app_name:
           type: string
+        official:
+          type: boolean
+          description: Made by Tethr, like the plugins for media servers.
     ProfileChoice:
       type: object
       required: [profile_id]
@@ -1792,13 +1795,16 @@ components:
           type: string
     Connection:
       type: object
-      required: [id, app_name, profile_id, profile_name, created_at]
+      required: [id, app_name, official, profile_id, profile_name, created_at]
       properties:
         id:
           type: integer
           format: int64
         app_name:
           type: string
+        official:
+          type: boolean
+          description: Made by Tethr, like the plugins for media servers.
         profile_id:
           type: integer
           format: int64

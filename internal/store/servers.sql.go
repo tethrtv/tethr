@@ -46,7 +46,7 @@ func (q *Queries) AccountMediaServers(ctx context.Context, accountID int64) ([]M
 }
 
 const builtInApp = `-- name: BuiltInApp :one
-SELECT id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in FROM apps WHERE client_id = $1 AND built_in
+SELECT id, owner_account_id, client_id, client_secret_hash, name, redirect_uris, created_at, revoked_at, built_in, official FROM apps WHERE client_id = $1 AND built_in
 `
 
 func (q *Queries) BuiltInApp(ctx context.Context, clientID string) (App, error) {
@@ -62,6 +62,7 @@ func (q *Queries) BuiltInApp(ctx context.Context, clientID string) (App, error) 
 		&i.CreatedAt,
 		&i.RevokedAt,
 		&i.BuiltIn,
+		&i.Official,
 	)
 	return i, err
 }
