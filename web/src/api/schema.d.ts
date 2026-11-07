@@ -740,7 +740,7 @@ export interface paths {
         };
         /**
          * The next item on every list you watch in order
-         * @description For each list added to Up next, the first item in the list's own order that you haven't finished, as a film or an episode. A season or show points at its first unwatched episode, in the episode order picked for the show. Items with nothing aired yet are skipped. Finished lists, and lists you can no longer see, are left out until that changes. Lists you watched something from most recently come first. These rows aren't part of `/v1/up-next`, so a show can be in both; compare `next.title` to merge them.
+         * @description For each list added to Up next, the first item in the list's own order that you haven't finished, as a film or an episode. A season or show on the list picks its episode the way `/v1/up-next` does, so it's the first unwatched one after the latest you watched, or the earliest gap if there's nothing later. Items with nothing aired yet are skipped. Finished lists, and lists you can no longer see, are left out until that changes. Lists you watched something from most recently come first. These rows aren't part of `/v1/up-next`, so a show can be in both; compare `next.title` to merge them.
          */
         get: operations["getUpNextLists"];
         put?: never;
