@@ -6,6 +6,7 @@ import { Shell, useWatching } from './components/Shell'
 import { Broken, LostSignal, NotFound } from './components/Trouble'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
+import { AutoListPage } from './pages/AutoList'
 import { CheckEmail } from './pages/CheckEmail'
 import { useMe } from './pages/connect'
 import { Developers } from './pages/Developers'
@@ -106,6 +107,18 @@ const routes = [
     ),
   }),
   createRoute({ getParentRoute: () => root, path: '/lists/$list', component: OneList }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/lists/auto/$kind',
+    component: function Auto() {
+      const { kind = '' } = useParams({ strict: false })
+      return (
+        <Shell>
+          <AutoListPage key={kind} kind={kind} />
+        </Shell>
+      )
+    },
+  }),
   createRoute({
     getParentRoute: () => root,
     path: '/shows/$slug',
