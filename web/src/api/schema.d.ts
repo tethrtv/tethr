@@ -196,6 +196,50 @@ export interface paths {
         patch: operations["updateProfile"];
         trace?: never;
     };
+    "/v1/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your invites
+         * @description While sign-ups are invite-only, each account can make three invites to share. `open` is true when anyone can sign up, so there's nothing to share.
+         */
+        get: operations["listInvites"];
+        put?: never;
+        /**
+         * Make an invite to share
+         * @description Each code works once. The person who uses it sees your username when they sign up.
+         */
+        post: operations["makeInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check an invite code
+         * @description Whether a code can still be used, and the username of the person who made it. Anyone can ask.
+         */
+        get: operations["checkInvite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -1448,6 +1492,32 @@ export interface components {
             username?: string;
             private?: boolean;
         };
+        Invites: {
+            /** @description Anyone can sign up, so invites aren't needed. */
+            open: boolean;
+            /** @description New invites can't be made for now. Ones already made still work. */
+            paused: boolean;
+            /** @description How many more invites the account can make. */
+            left: number;
+            /** @description Invites the account has made, oldest first. */
+            invites: components["schemas"]["Invite"][];
+        };
+        Invite: {
+            code: string;
+            /** @description The sign-up page with the code filled in. */
+            url: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            used_at?: string;
+            /** @description The username of the account that used it. */
+            used_by?: string;
+        };
+        InviteCheck: {
+            valid: boolean;
+            /** @description The username of the person who made the invite. Left out for invites from Tethr itself. */
+            invited_by?: string;
+        };
         Session: {
             /** Format: int64 */
             id: number;
@@ -2475,6 +2545,71 @@ export interface operations {
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invites */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invites"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    makeInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Made */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invite"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    checkInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The code */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteCheck"];
+                };
+            };
         };
     };
     listSessions: {

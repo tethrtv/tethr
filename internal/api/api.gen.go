@@ -914,6 +914,41 @@ type ImportSummary struct {
 	Watchlist ImportCount `json:"watchlist"`
 }
 
+// Invite defines model for Invite.
+type Invite struct {
+	Code      string    `json:"code"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Url The sign-up page with the code filled in.
+	Url    string     `json:"url"`
+	UsedAt *time.Time `json:"used_at,omitempty"`
+
+	// UsedBy The username of the account that used it.
+	UsedBy *string `json:"used_by,omitempty"`
+}
+
+// InviteCheck defines model for InviteCheck.
+type InviteCheck struct {
+	// InvitedBy The username of the person who made the invite. Left out for invites from Tethr itself.
+	InvitedBy *string `json:"invited_by,omitempty"`
+	Valid     bool    `json:"valid"`
+}
+
+// Invites defines model for Invites.
+type Invites struct {
+	// Invites Invites the account has made, oldest first.
+	Invites []Invite `json:"invites"`
+
+	// Left How many more invites the account can make.
+	Left int `json:"left"`
+
+	// Open Anyone can sign up, so invites aren't needed.
+	Open bool `json:"open"`
+
+	// Paused New invites can't be made for now. Ones already made still work.
+	Paused bool `json:"paused"`
+}
+
 // Item defines model for Item.
 type Item struct {
 	Episode *Episode `json:"episode,omitempty"`
@@ -2122,6 +2157,15 @@ type ServerInterface interface {
 	// UndoImport Take out everything an import added
 	// (POST /v1/imports/{id}/undo)
 	UndoImport(w http.ResponseWriter, r *http.Request, id Id, params UndoImportParams)
+	// ListInvites Your invites
+	// (GET /v1/invites)
+	ListInvites(w http.ResponseWriter, r *http.Request)
+	// MakeInvite Make an invite to share
+	// (POST /v1/invites)
+	MakeInvite(w http.ResponseWriter, r *http.Request)
+	// CheckInvite Check an invite code
+	// (GET /v1/invites/{code})
+	CheckInvite(w http.ResponseWriter, r *http.Request, code string)
 	// ListLists Your lists, and the household's
 	// (GET /v1/lists)
 	ListLists(w http.ResponseWriter, r *http.Request, params ListListsParams)
@@ -3401,6 +3445,60 @@ func (siw *ServerInterfaceWrapper) UndoImport(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UndoImport(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInvites operation middleware
+func (siw *ServerInterfaceWrapper) ListInvites(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvites(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MakeInvite operation middleware
+func (siw *ServerInterfaceWrapper) MakeInvite(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MakeInvite(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CheckInvite operation middleware
+func (siw *ServerInterfaceWrapper) CheckInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "code" -------------
+	var code string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "code", r.PathValue("code"), &code, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckInvite(w, r, code)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5489,6 +5587,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/profiles", wrapper.AddProfile)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/profiles/{id}", wrapper.RemoveProfile)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/profiles/{id}", wrapper.UpdateProfile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/invites", wrapper.ListInvites)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/invites", wrapper.MakeInvite)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/invites/{code}", wrapper.CheckInvite)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sessions", wrapper.ListSessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/sessions/{id}", wrapper.EndSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sessions/sign-out-others", wrapper.SignOutOthers)
@@ -7395,6 +7496,112 @@ func (response UndoImport404JSONResponse) VisitUndoImportResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListInvitesRequestObject struct {
+}
+
+type ListInvitesResponseObject interface {
+	VisitListInvitesResponse(w http.ResponseWriter) error
+}
+
+type ListInvites200JSONResponse Invites
+
+func (response ListInvites200JSONResponse) VisitListInvitesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListInvites401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListInvites401JSONResponse) VisitListInvitesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeInviteRequestObject struct {
+}
+
+type MakeInviteResponseObject interface {
+	VisitMakeInviteResponse(w http.ResponseWriter) error
+}
+
+type MakeInvite201JSONResponse Invite
+
+func (response MakeInvite201JSONResponse) VisitMakeInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeInvite401JSONResponse struct{ ProblemJSONResponse }
+
+func (response MakeInvite401JSONResponse) VisitMakeInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MakeInvite409JSONResponse Problem
+
+func (response MakeInvite409JSONResponse) VisitMakeInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CheckInviteRequestObject struct {
+	Code string `json:"code"`
+}
+
+type CheckInviteResponseObject interface {
+	VisitCheckInviteResponse(w http.ResponseWriter) error
+}
+
+type CheckInvite200JSONResponse InviteCheck
+
+func (response CheckInvite200JSONResponse) VisitCheckInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10442,6 +10649,15 @@ type StrictServerInterface interface {
 	// UndoImport Take out everything an import added
 	// (POST /v1/imports/{id}/undo)
 	UndoImport(ctx context.Context, request UndoImportRequestObject) (UndoImportResponseObject, error)
+	// ListInvites Your invites
+	// (GET /v1/invites)
+	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
+	// MakeInvite Make an invite to share
+	// (POST /v1/invites)
+	MakeInvite(ctx context.Context, request MakeInviteRequestObject) (MakeInviteResponseObject, error)
+	// CheckInvite Check an invite code
+	// (GET /v1/invites/{code})
+	CheckInvite(ctx context.Context, request CheckInviteRequestObject) (CheckInviteResponseObject, error)
 	// ListLists Your lists, and the household's
 	// (GET /v1/lists)
 	ListLists(ctx context.Context, request ListListsRequestObject) (ListListsResponseObject, error)
@@ -11603,6 +11819,80 @@ func (sh *strictHandler) UndoImport(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UndoImportResponseObject); ok {
 		if err := validResponse.VisitUndoImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListInvites operation middleware
+func (sh *strictHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
+	var request ListInvitesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListInvites(ctx, request.(ListInvitesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListInvites")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListInvitesResponseObject); ok {
+		if err := validResponse.VisitListInvitesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MakeInvite operation middleware
+func (sh *strictHandler) MakeInvite(w http.ResponseWriter, r *http.Request) {
+	var request MakeInviteRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MakeInvite(ctx, request.(MakeInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MakeInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MakeInviteResponseObject); ok {
+		if err := validResponse.VisitMakeInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CheckInvite operation middleware
+func (sh *strictHandler) CheckInvite(w http.ResponseWriter, r *http.Request, code string) {
+	var request CheckInviteRequestObject
+
+	request.Code = code
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CheckInvite(ctx, request.(CheckInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CheckInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CheckInviteResponseObject); ok {
+		if err := validResponse.VisitCheckInviteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

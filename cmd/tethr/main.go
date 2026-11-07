@@ -73,7 +73,27 @@ func invite(*slog.Logger) error {
 		return err
 	}
 	defer db.Close()
-	code, err := core.CreateInvite(ctx, db, strings.Join(os.Args[2:], " "))
+	args := os.Args[2:]
+	switch {
+	case len(args) == 1 && (args[0] == "pause" || args[0] == "resume"):
+		if err := core.PauseInvites(ctx, db, args[0] == "pause"); err != nil {
+			return err
+		}
+		fmt.Printf("Invites %sd. Codes already made still work.\n", args[0])
+		return nil
+	case len(args) > 0 && args[0] == "grant":
+		n, err := strconv.Atoi(strings.Join(args[2:], ""))
+		if len(args) != 3 || err != nil || n < 1 {
+			return errors.New("usage: tethr invite grant <username> <how many>")
+		}
+		left, err := core.GrantInvites(ctx, db, args[1], n)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s can make %d more invites.\n", args[1], left)
+		return nil
+	}
+	code, err := core.CreateInvite(ctx, db, strings.Join(args, " "))
 	if err != nil {
 		return err
 	}

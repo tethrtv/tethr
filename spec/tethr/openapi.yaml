@@ -269,6 +269,57 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/invites:
+    get:
+      operationId: listInvites
+      summary: Your invites
+      description: While sign-ups are invite-only, each account can make three invites to share. `open` is true when anyone can sign up, so there's nothing to share.
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Invites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invites'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: makeInvite
+      summary: Make an invite to share
+      description: Each code works once. The person who uses it sees your username when they sign up.
+      security:
+        - session: []
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/invites/{code}:
+    get:
+      operationId: checkInvite
+      summary: Check an invite code
+      description: Whether a code can still be used, and the username of the person who made it. Anyone can ask.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteCheck'
   /v1/sessions:
     get:
       operationId: listSessions
@@ -2439,6 +2490,51 @@ components:
           type: string
         private:
           type: boolean
+    Invites:
+      type: object
+      required: [open, paused, left, invites]
+      properties:
+        open:
+          type: boolean
+          description: Anyone can sign up, so invites aren't needed.
+        paused:
+          type: boolean
+          description: New invites can't be made for now. Ones already made still work.
+        left:
+          type: integer
+          description: How many more invites the account can make.
+        invites:
+          type: array
+          description: Invites the account has made, oldest first.
+          items:
+            $ref: '#/components/schemas/Invite'
+    Invite:
+      type: object
+      required: [code, url, created_at]
+      properties:
+        code:
+          type: string
+        url:
+          type: string
+          description: The sign-up page with the code filled in.
+        created_at:
+          type: string
+          format: date-time
+        used_at:
+          type: string
+          format: date-time
+        used_by:
+          type: string
+          description: The username of the account that used it.
+    InviteCheck:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        invited_by:
+          type: string
+          description: The username of the person who made the invite. Left out for invites from Tethr itself.
     Session:
       type: object
       required: [id, created_at, last_seen_at, current]
