@@ -1218,6 +1218,65 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/up-next/lists:
+    get:
+      operationId: getUpNextLists
+      summary: The next item on every list you watch in order
+      description: For each list added to Up next, the first item in the list's own order that you haven't finished, as a film or an episode. A season or show points at its first unwatched episode, in the episode order picked for the show. Items with nothing aired yet are skipped. Finished lists, and lists you can no longer see, are left out until that changes. Lists you watched something from most recently come first. These rows aren't part of `/v1/up-next`, so a show can be in both; compare `next.title` to merge them.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: One entry per list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UpNextListEntry'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/up-next/lists/{id}:
+    put:
+      operationId: addListToUpNext
+      summary: Watch a list in order in Up next
+      description: Any list you can see, up to 50 at a time. Adding one that's already there does nothing.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '204':
+          description: In Up next
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: removeListFromUpNext
+      summary: Take a list out of Up next
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '204':
+          description: Out of Up next
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/titles/{id}:
     get:
       operationId: getTitle
@@ -2466,7 +2525,7 @@ components:
       enum: [private, household, public]
     List:
       type: object
-      required: [id, name, slug, privacy, sort_by, sort_how, owner, access, can_edit_items, item_count, cover, url, created_at, updated_at]
+      required: [id, name, slug, privacy, sort_by, sort_how, owner, access, can_edit_items, in_up_next, item_count, cover, url, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -2493,6 +2552,9 @@ components:
         can_edit_items:
           type: boolean
           description: Whether the profile reading it can add, remove, reorder and note items. Other profiles in the household can on household lists, and on public ones unless they're kids or guest profiles. Only the owner changes the list's details.
+        in_up_next:
+          type: boolean
+          description: Whether the profile reading it watches the list in order in Up next.
         item_count:
           type: integer
           format: int64
@@ -2779,6 +2841,27 @@ components:
         watched:
           type: integer
           description: How many of those have been watched.
+        resume:
+          $ref: '#/components/schemas/Resume'
+    UpNextListEntry:
+      type: object
+      required: [list, item_id, position, next]
+      properties:
+        list:
+          $ref: '#/components/schemas/List'
+        item_id:
+          type: integer
+          format: int64
+          description: The list item that's next. For an episode of a season or show on the list, the item holding it.
+        position:
+          type: integer
+          description: Where that item is in the list's order, counting from 1.
+        next:
+          $ref: '#/components/schemas/Item'
+        last_watched_at:
+          type: string
+          format: date-time
+          description: When you last watched anything on the list. Left out if you haven't yet.
         resume:
           $ref: '#/components/schemas/Resume'
     Resume:

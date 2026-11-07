@@ -466,3 +466,70 @@ func (s *Server) ShowInUpNext(ctx context.Context, req ShowInUpNextRequestObject
 	}
 	return ShowInUpNext204Response{}, nil
 }
+
+func (s *Server) GetUpNextLists(ctx context.Context, req GetUpNextListsRequestObject) (GetUpNextListsResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return GetUpNextLists404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return GetUpNextLists401JSONResponse{notConnected}, err
+	}
+	entries, err := core.UpNextLists(ctx, s.DB, c.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(GetUpNextLists200JSONResponse, 0, len(entries))
+	for _, e := range entries {
+		entry := UpNextListEntry{
+			List:          s.toList(e.List),
+			ItemId:        e.ItemID,
+			Position:      e.Position,
+			Next:          toItem(e.Next),
+			LastWatchedAt: e.LastWatchedAt,
+		}
+		if e.Resume != nil {
+			entry.Resume = &Resume{Id: e.Resume.ID, Progress: e.Resume.Progress}
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func (s *Server) AddListToUpNext(ctx context.Context, req AddListToUpNextRequestObject) (AddListToUpNextResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return AddListToUpNext404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return AddListToUpNext401JSONResponse{notConnected}, err
+	}
+	err = core.AddListToUpNext(ctx, s.DB, c.ProfileID, req.Id)
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+		return AddListToUpNext404JSONResponse(noSuchList), nil
+	case errors.Is(err, core.ErrUpNextFull):
+		return AddListToUpNext422JSONResponse(problem("up_next_full", "Up to 50 lists can be in Up next.")), nil
+	case err != nil:
+		return nil, err
+	}
+	return AddListToUpNext204Response{}, nil
+}
+
+func (s *Server) RemoveListFromUpNext(ctx context.Context, req RemoveListFromUpNextRequestObject) (RemoveListFromUpNextResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return RemoveListFromUpNext404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return RemoveListFromUpNext401JSONResponse{notConnected}, err
+	}
+	err = core.RemoveListFromUpNext(ctx, s.DB, c.ProfileID, req.Id)
+	if errors.Is(err, core.ErrNotFound) {
+		return RemoveListFromUpNext404JSONResponse(problem("not_found", "That list isn’t in Up next.")), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return RemoveListFromUpNext204Response{}, nil
+}

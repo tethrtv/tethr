@@ -827,9 +827,12 @@ type List struct {
 	CreatedAt   time.Time `json:"created_at"`
 	Description *string   `json:"description,omitempty"`
 	Id          int64     `json:"id"`
-	ItemCount   int64     `json:"item_count"`
-	Name        string    `json:"name"`
-	Owner       ListOwner `json:"owner"`
+
+	// InUpNext Whether the profile reading it watches the list in order in Up next.
+	InUpNext  bool      `json:"in_up_next"`
+	ItemCount int64     `json:"item_count"`
+	Name      string    `json:"name"`
+	Owner     ListOwner `json:"owner"`
 
 	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
 	Privacy ListPrivacy `json:"privacy"`
@@ -1315,6 +1318,23 @@ type UpNextEntry struct {
 	Watched int `json:"watched"`
 }
 
+// UpNextListEntry defines model for UpNextListEntry.
+type UpNextListEntry struct {
+	// ItemId The list item that's next. For an episode of a season or show on the list, the item holding it.
+	ItemId int64 `json:"item_id"`
+
+	// LastWatchedAt When you last watched anything on the list. Left out if you haven't yet.
+	LastWatchedAt *time.Time `json:"last_watched_at,omitempty"`
+	List          List       `json:"list"`
+	Next          Item       `json:"next"`
+
+	// Position Where that item is in the list's order, counting from 1.
+	Position int `json:"position"`
+
+	// Resume Where it was paused, if it was started.
+	Resume *Resume `json:"resume,omitempty"`
+}
+
 // Verification Either `token` from the link, or `email` and `code` from the email.
 type Verification struct {
 	Code  *string `json:"code,omitempty"`
@@ -1602,6 +1622,24 @@ type PickEpisodeOrderParams struct {
 
 // GetUpNextParams defines parameters for GetUpNext.
 type GetUpNextParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// GetUpNextListsParams defines parameters for GetUpNextLists.
+type GetUpNextListsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// RemoveListFromUpNextParams defines parameters for RemoveListFromUpNext.
+type RemoveListFromUpNextParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// AddListToUpNextParams defines parameters for AddListToUpNext.
+type AddListToUpNextParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
@@ -1921,6 +1959,15 @@ type ServerInterface interface {
 	// HideFromUpNext Hide a show from Up next
 	// (PUT /v1/up-next/hidden/{id})
 	HideFromUpNext(w http.ResponseWriter, r *http.Request, id Id)
+	// GetUpNextLists The next item on every list you watch in order
+	// (GET /v1/up-next/lists)
+	GetUpNextLists(w http.ResponseWriter, r *http.Request, params GetUpNextListsParams)
+	// RemoveListFromUpNext Take a list out of Up next
+	// (DELETE /v1/up-next/lists/{id})
+	RemoveListFromUpNext(w http.ResponseWriter, r *http.Request, id Id, params RemoveListFromUpNextParams)
+	// AddListToUpNext Watch a list in order in Up next
+	// (PUT /v1/up-next/lists/{id})
+	AddListToUpNext(w http.ResponseWriter, r *http.Request, id Id, params AddListToUpNextParams)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(w http.ResponseWriter, r *http.Request, params ListWatchlistParams)
@@ -4193,6 +4240,123 @@ func (siw *ServerInterfaceWrapper) HideFromUpNext(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetUpNextLists operation middleware
+func (siw *ServerInterfaceWrapper) GetUpNextLists(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUpNextListsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUpNextLists(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveListFromUpNext operation middleware
+func (siw *ServerInterfaceWrapper) RemoveListFromUpNext(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveListFromUpNextParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveListFromUpNext(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddListToUpNext operation middleware
+func (siw *ServerInterfaceWrapper) AddListToUpNext(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddListToUpNextParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddListToUpNext(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWatchlist operation middleware
 func (siw *ServerInterfaceWrapper) ListWatchlist(w http.ResponseWriter, r *http.Request) {
 
@@ -4486,6 +4650,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.HideFromUpNext)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next/lists", wrapper.GetUpNextLists)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.RemoveListFromUpNext)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.AddListToUpNext)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/titles/{id}", wrapper.GetTitle)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.UseAiredOrder)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.PickEpisodeOrder)
@@ -8305,6 +8472,160 @@ func (response HideFromUpNext404JSONResponse) VisitHideFromUpNextResponse(w http
 	return err
 }
 
+type GetUpNextListsRequestObject struct {
+	Params GetUpNextListsParams
+}
+
+type GetUpNextListsResponseObject interface {
+	VisitGetUpNextListsResponse(w http.ResponseWriter) error
+}
+
+type GetUpNextLists200JSONResponse []UpNextListEntry
+
+func (response GetUpNextLists200JSONResponse) VisitGetUpNextListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUpNextLists401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetUpNextLists401JSONResponse) VisitGetUpNextListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUpNextLists404JSONResponse Problem
+
+func (response GetUpNextLists404JSONResponse) VisitGetUpNextListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveListFromUpNextRequestObject struct {
+	Id     Id `json:"id"`
+	Params RemoveListFromUpNextParams
+}
+
+type RemoveListFromUpNextResponseObject interface {
+	VisitRemoveListFromUpNextResponse(w http.ResponseWriter) error
+}
+
+type RemoveListFromUpNext204Response struct {
+}
+
+func (response RemoveListFromUpNext204Response) VisitRemoveListFromUpNextResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveListFromUpNext401JSONResponse struct{ ProblemJSONResponse }
+
+func (response RemoveListFromUpNext401JSONResponse) VisitRemoveListFromUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveListFromUpNext404JSONResponse Problem
+
+func (response RemoveListFromUpNext404JSONResponse) VisitRemoveListFromUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddListToUpNextRequestObject struct {
+	Id     Id `json:"id"`
+	Params AddListToUpNextParams
+}
+
+type AddListToUpNextResponseObject interface {
+	VisitAddListToUpNextResponse(w http.ResponseWriter) error
+}
+
+type AddListToUpNext204Response struct {
+}
+
+func (response AddListToUpNext204Response) VisitAddListToUpNextResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AddListToUpNext401JSONResponse struct{ ProblemJSONResponse }
+
+func (response AddListToUpNext401JSONResponse) VisitAddListToUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddListToUpNext404JSONResponse Problem
+
+func (response AddListToUpNext404JSONResponse) VisitAddListToUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddListToUpNext422JSONResponse Problem
+
+func (response AddListToUpNext422JSONResponse) VisitAddListToUpNextResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListWatchlistRequestObject struct {
 	Params ListWatchlistParams
 }
@@ -8680,6 +9001,15 @@ type StrictServerInterface interface {
 	// HideFromUpNext Hide a show from Up next
 	// (PUT /v1/up-next/hidden/{id})
 	HideFromUpNext(ctx context.Context, request HideFromUpNextRequestObject) (HideFromUpNextResponseObject, error)
+	// GetUpNextLists The next item on every list you watch in order
+	// (GET /v1/up-next/lists)
+	GetUpNextLists(ctx context.Context, request GetUpNextListsRequestObject) (GetUpNextListsResponseObject, error)
+	// RemoveListFromUpNext Take a list out of Up next
+	// (DELETE /v1/up-next/lists/{id})
+	RemoveListFromUpNext(ctx context.Context, request RemoveListFromUpNextRequestObject) (RemoveListFromUpNextResponseObject, error)
+	// AddListToUpNext Watch a list in order in Up next
+	// (PUT /v1/up-next/lists/{id})
+	AddListToUpNext(ctx context.Context, request AddListToUpNextRequestObject) (AddListToUpNextResponseObject, error)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(ctx context.Context, request ListWatchlistRequestObject) (ListWatchlistResponseObject, error)
@@ -10721,6 +11051,86 @@ func (sh *strictHandler) HideFromUpNext(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(HideFromUpNextResponseObject); ok {
 		if err := validResponse.VisitHideFromUpNextResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUpNextLists operation middleware
+func (sh *strictHandler) GetUpNextLists(w http.ResponseWriter, r *http.Request, params GetUpNextListsParams) {
+	var request GetUpNextListsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUpNextLists(ctx, request.(GetUpNextListsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUpNextLists")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUpNextListsResponseObject); ok {
+		if err := validResponse.VisitGetUpNextListsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveListFromUpNext operation middleware
+func (sh *strictHandler) RemoveListFromUpNext(w http.ResponseWriter, r *http.Request, id Id, params RemoveListFromUpNextParams) {
+	var request RemoveListFromUpNextRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveListFromUpNext(ctx, request.(RemoveListFromUpNextRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveListFromUpNext")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveListFromUpNextResponseObject); ok {
+		if err := validResponse.VisitRemoveListFromUpNextResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddListToUpNext operation middleware
+func (sh *strictHandler) AddListToUpNext(w http.ResponseWriter, r *http.Request, id Id, params AddListToUpNextParams) {
+	var request AddListToUpNextRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddListToUpNext(ctx, request.(AddListToUpNextRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddListToUpNext")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddListToUpNextResponseObject); ok {
+		if err := validResponse.VisitAddListToUpNextResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -73,6 +73,7 @@ func (s *Server) toList(l core.List) List {
 		Owner:        ListOwner{Username: l.Owner.Username, Name: l.Owner.Name},
 		Access:       ListAccess(l.Access),
 		CanEditItems: l.CanEdit,
+		InUpNext:     l.InUpNext,
 		ItemCount:    l.ItemCount,
 		WatchedCount: l.Watched,
 		CoverItemId:  l.CoverItemID,
