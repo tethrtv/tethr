@@ -141,3 +141,67 @@ func TestListEndpoints(t *testing.T) {
 		t.Errorf("after deleting = %d", rec.Code)
 	}
 }
+
+func TestUpNextListEndpoints(t *testing.T) {
+	h, mail := newTestServer(t)
+	cookie := signIn(t, h, mail)
+
+	rec := do(t, h, "POST", "/v1/lists", `{"name":"In order"}`, cookie)
+	var list List
+	_ = json.Unmarshal(rec.Body.Bytes(), &list)
+	id := strconv.FormatInt(list.Id, 10)
+	if list.InUpNext {
+		t.Errorf("new list in up next = %+v", list)
+	}
+	if rec := do(t, h, "POST", "/v1/lists/"+id+"/items", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}}},{"item":{"type":"movie","ids":{"tmdb":155}}}]}`, cookie); rec.Code != http.StatusOK {
+		t.Fatalf("add = %d %s", rec.Code, rec.Body)
+	}
+
+	if rec := do(t, h, "PUT", "/v1/up-next/lists/"+id, "", cookie); rec.Code != http.StatusNoContent {
+		t.Fatalf("add to up next = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "PUT", "/v1/up-next/lists/1", "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("adding a missing list = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "GET", "/v1/lists/"+id, "", cookie); !strings.Contains(rec.Body.String(), `"in_up_next":true`) {
+		t.Errorf("list after adding = %s", rec.Body)
+	}
+
+	next := func() []UpNextListEntry {
+		t.Helper()
+		rec := do(t, h, "GET", "/v1/up-next/lists", "", cookie)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("up next lists = %d %s", rec.Code, rec.Body)
+		}
+		var entries []UpNextListEntry
+		_ = json.Unmarshal(rec.Body.Bytes(), &entries)
+		return entries
+	}
+	got := next()
+	if len(got) != 1 || got[0].List.Id != list.Id || got[0].Position != 1 || got[0].Next.Type != ItemTypeMovie || got[0].LastWatchedAt != nil {
+		t.Fatalf("up next lists = %+v", got)
+	}
+	if rec := do(t, h, "POST", "/v1/history", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}}}]}`, cookie); rec.Code != http.StatusOK {
+		t.Fatalf("watch = %d %s", rec.Code, rec.Body)
+	}
+	if got := next(); got[0].Position != 2 || got[0].LastWatchedAt == nil {
+		t.Errorf("after watching the first = %+v", got[0])
+	}
+
+	rec = do(t, h, "POST", "/v1/profiles", `{"name":"Ruby","kind":"kids"}`, cookie)
+	var ruby Profile
+	_ = json.Unmarshal(rec.Body.Bytes(), &ruby)
+	if rec := do(t, h, "PUT", "/v1/up-next/lists/"+id+"?profile_id="+strconv.FormatInt(ruby.Id, 10), "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("adding someone else's private list = %d %s", rec.Code, rec.Body)
+	}
+
+	if rec := do(t, h, "DELETE", "/v1/up-next/lists/"+id, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("remove = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "DELETE", "/v1/up-next/lists/"+id, "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("remove twice = %d %s", rec.Code, rec.Body)
+	}
+	if got := next(); len(got) != 0 {
+		t.Errorf("after removing = %+v", got)
+	}
+}
