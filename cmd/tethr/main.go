@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -43,6 +44,8 @@ func main() {
 			run = invite
 		case "app":
 			run = app
+		case "report":
+			run = report
 		}
 	}
 	if err := run(log); err != nil {
@@ -96,6 +99,76 @@ func app(*slog.Logger) error {
 	return nil
 }
 
+func report(*slog.Logger) error {
+	usage := errors.New("usage: tethr report [keep <list-id> | remove <list-id> <reason the owner will read>]")
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	args := os.Args[2:]
+	if len(args) == 0 {
+		reports, err := core.OpenReports(ctx, db)
+		if err != nil {
+			return err
+		}
+		if len(reports) == 0 {
+			fmt.Println("No reports waiting.")
+		}
+		for _, r := range reports {
+			from := "a deleted profile"
+			if r.ReporterUsername != nil {
+				from = *r.ReporterUsername
+			}
+			fmt.Printf("%d  %q by %s: %s, from %s on %s\n", r.ListID, r.ListName, r.OwnerUsername, r.Reason, from, r.CreatedAt.Format("2 Jan 15:04"))
+			if r.Note != nil {
+				fmt.Printf("    %s\n", *r.Note)
+			}
+		}
+		return nil
+	}
+	if len(args) < 2 {
+		return usage
+	}
+	id, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return usage
+	}
+	switch {
+	case args[0] == "keep":
+		if err := core.KeepList(ctx, db, id); err != nil {
+			return err
+		}
+		fmt.Printf("Kept %d. It's back in browsing.\n", id)
+	case args[0] == "remove" && len(args) > 2:
+		removed, err := core.RemoveList(ctx, db, id)
+		if err != nil {
+			return err
+		}
+		m, err := api.RemovedListEmail(envOr("APP_URL", "http://localhost:5173"), removed, strings.Join(args[2:], " "))
+		if err != nil {
+			return err
+		}
+		if err := mailer().Send(ctx, m); err != nil {
+			return fmt.Errorf("made %d private, but couldn't email its owner at %s: %w", id, removed.Email, err)
+		}
+		fmt.Printf("Made %d private and emailed %s.\n", id, removed.Email)
+	default:
+		return usage
+	}
+	return nil
+}
+
+func mailer() mail.SMTP {
+	return mail.SMTP{
+		Addr:     envOr("SMTP_ADDR", "localhost:1025"),
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     envOr("MAIL_FROM", "Tethr <sign-in@mail.tethr.tv>"),
+	}
+}
+
 func serve(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -131,12 +204,8 @@ func serve(log *slog.Logger) error {
 			Domain: os.Getenv("COOKIE_DOMAIN"),
 			Secure: strings.HasPrefix(appURL, "https://"),
 		},
-		Mail: mail.SMTP{
-			Addr:     envOr("SMTP_ADDR", "localhost:1025"),
-			Username: os.Getenv("SMTP_USERNAME"),
-			Password: os.Getenv("SMTP_PASSWORD"),
-			From:     envOr("MAIL_FROM", "Tethr <sign-in@mail.tethr.tv>"),
-		},
+		ReportsTo: envOr("REPORTS_EMAIL", "reports@tethr.tv"),
+		Mail:      mailer(),
 	}
 
 	go jobs.Imports{DB: db, Log: log}.Run(ctx)

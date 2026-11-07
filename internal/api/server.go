@@ -41,6 +41,7 @@ type Server struct {
 	Limits         *limit.Limits
 	FetchOrder     func(context.Context, string) (core.EpisodeOrder, error)
 	Version        string
+	ReportsTo      string
 	exporting      sync.Map
 }
 
@@ -323,4 +324,11 @@ func value[T any](p *T) T {
 		return zero
 	}
 	return *p
+}
+
+func optionalString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
