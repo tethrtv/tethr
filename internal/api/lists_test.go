@@ -7,7 +7,17 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/tethrtv/tethr/internal/core"
 )
+
+func TestListETagChangesWithServer(t *testing.T) {
+	l := core.List{Version: "abc"}
+	tag := (&Server{Version: "v0.4.0"}).etag(l)
+	if !(&Server{Version: "v0.4.0"}).unchanged(l, &tag) || (&Server{Version: "v0.5.0"}).unchanged(l, &tag) {
+		t.Errorf("a cached list from an older server still counts as unchanged")
+	}
+}
 
 func TestListEndpoints(t *testing.T) {
 	h, mail := newTestServer(t)

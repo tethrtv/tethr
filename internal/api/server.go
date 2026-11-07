@@ -40,6 +40,7 @@ type Server struct {
 	Cookie         CookieConfig
 	Limits         *limit.Limits
 	FetchOrder     func(context.Context, string) (core.EpisodeOrder, error)
+	Version        string
 	exporting      sync.Map
 }
 
