@@ -151,7 +151,7 @@
     padding-top: 12px;
   }
 
-  .foot > * {
+  .foot > :first-child {
     flex: 1;
   }
 }
