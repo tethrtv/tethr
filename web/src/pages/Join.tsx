@@ -123,6 +123,10 @@ export function Join() {
               {create.isPending ? 'Creating…' : 'Continue'}
             </Button>
           </div>
+          <p className={`${styles.quiet} ${styles.small}`}>
+            By continuing, you agree to the <Link to="/terms">terms</Link> and have read the{' '}
+            <Link to="/privacy">privacy notice</Link>.
+          </p>
         </div>
       </form>
     </Plain>

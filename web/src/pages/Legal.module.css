@@ -1,0 +1,134 @@
+.legal {
+  display: grid;
+  gap: 48px;
+  max-width: 920px;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+  gap: 24px 48px;
+  align-items: center;
+}
+
+.drawing {
+  order: 1;
+}
+
+.updated {
+  margin: 0;
+  color: var(--ink-3);
+  font-stretch: var(--narrow);
+  font-weight: 650;
+  font-size: 0.9375rem;
+}
+
+.company {
+  margin: 0;
+  max-width: 40em;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-3);
+  font-size: 0.875rem;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+  max-width: 40em;
+}
+
+.section p,
+.section h2 {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.25em;
+  display: grid;
+  gap: 6px;
+}
+
+.kept {
+  margin: 0 0 6px;
+  border-top: 2px solid var(--ink);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr) 11rem;
+  gap: 4px 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.row dt {
+  font-weight: 700;
+}
+
+.row dd {
+  margin: 0;
+}
+
+.until {
+  color: var(--ink-2);
+  font-stretch: var(--narrow);
+  font-weight: 650;
+}
+
+.print {
+  stroke: var(--ink-3);
+  stroke-width: 2.5;
+}
+
+.highlight {
+  fill: none;
+  stroke: var(--hl);
+  stroke-width: 15;
+  stroke-linecap: round;
+  mix-blend-mode: var(--hl-blend);
+}
+
+.handle {
+  stroke-width: 10;
+}
+
+.fold {
+  stroke: var(--ink-3);
+  stroke-width: 2;
+}
+
+.lensText {
+  fill: var(--ink);
+  font-family: var(--font);
+  font-stretch: 74%;
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: 0.04em;
+}
+
+.tagText {
+  fill: #141412;
+  font-family: var(--font);
+  font-stretch: 74%;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 720px) {
+  .head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drawing {
+    order: 0;
+    width: min(240px, 70%);
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

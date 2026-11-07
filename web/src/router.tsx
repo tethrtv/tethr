@@ -14,6 +14,7 @@ import { History } from './pages/History'
 import { Home } from './pages/Home'
 import { Import } from './pages/Import'
 import { Join } from './pages/Join'
+import { Privacy, Terms } from './pages/Legal'
 import { ListPage } from './pages/List'
 import { MediaServers } from './pages/MediaServers'
 import { MyLists } from './pages/MyLists'
@@ -140,6 +141,8 @@ const routes = [
   }),
   createRoute({ getParentRoute: () => root, path: '/check-email', component: CheckEmail }),
   createRoute({ getParentRoute: () => root, path: '/developers', component: Developers }),
+  createRoute({ getParentRoute: () => root, path: '/terms', component: Terms }),
+  createRoute({ getParentRoute: () => root, path: '/privacy', component: Privacy }),
   createRoute({ getParentRoute: () => root, path: '/import', component: Import }),
   createRoute({ getParentRoute: () => root, path: '/media-servers', component: MediaServers }),
   createRoute({
