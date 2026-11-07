@@ -404,39 +404,44 @@ func CreateList(ctx context.Context, db *pgxpool.Pool, profileID int64, c ListCh
 	var out List
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		if err := checkPrivacy(ctx, q, profileID, l.Privacy); err != nil {
-			return err
-		}
-		n, err := q.CountLists(ctx, profileID)
+		id, err := createList(ctx, q, profileID, l)
 		if err != nil {
 			return err
 		}
-		if n >= maxLists {
-			return ErrTooManyLists
-		}
-		slug, err := listSlug(ctx, q, profileID, 0, l.Name)
-		if err != nil {
-			return err
-		}
-		created, err := q.CreateList(ctx, store.CreateListParams{
-			ProfileID:   profileID,
-			Name:        l.Name,
-			Slug:        slug,
-			Description: l.Description,
-			Privacy:     l.Privacy,
-			SortBy:      l.SortBy,
-			SortHow:     l.SortHow,
-		})
-		if err != nil {
-			return err
-		}
-		if err := markLists(ctx, q, profileID); err != nil {
-			return err
-		}
-		out, err = getList(ctx, q, profileID, created.ID)
+		out, err = getList(ctx, q, profileID, id)
 		return err
 	})
 	return out, err
+}
+
+func createList(ctx context.Context, q *store.Queries, profileID int64, l store.List) (int64, error) {
+	if err := checkPrivacy(ctx, q, profileID, l.Privacy); err != nil {
+		return 0, err
+	}
+	n, err := q.CountLists(ctx, profileID)
+	if err != nil {
+		return 0, err
+	}
+	if n >= maxLists {
+		return 0, ErrTooManyLists
+	}
+	slug, err := listSlug(ctx, q, profileID, 0, l.Name)
+	if err != nil {
+		return 0, err
+	}
+	created, err := q.CreateList(ctx, store.CreateListParams{
+		ProfileID:   profileID,
+		Name:        l.Name,
+		Slug:        slug,
+		Description: l.Description,
+		Privacy:     l.Privacy,
+		SortBy:      l.SortBy,
+		SortHow:     l.SortHow,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return created.ID, markLists(ctx, q, profileID)
 }
 
 func UpdateList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, c ListChanges) (List, error) {

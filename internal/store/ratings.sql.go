@@ -64,6 +64,58 @@ func (q *Queries) HiddenSeasons(ctx context.Context, arg HiddenSeasonsParams) ([
 	return items, nil
 }
 
+const householdRaters = `-- name: HouseholdRaters :one
+SELECT count(*)
+FROM profiles p
+JOIN profiles me ON me.household_id = p.household_id
+WHERE me.id = $1
+  AND p.kind <> 'guest' AND (me.kind <> 'kids' OR p.kind = 'kids')
+`
+
+func (q *Queries) HouseholdRaters(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, householdRaters, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const householdTopRatings = `-- name: HouseholdTopRatings :many
+SELECT r.title_id, r.rating, r.rated_at
+FROM ratings r
+JOIN profiles p ON p.id = r.profile_id
+JOIN profiles me ON me.household_id = p.household_id
+WHERE me.id = $1
+  AND r.season_number IS NULL AND r.episode_id IS NULL AND r.rating >= 9
+  AND p.kind <> 'guest' AND (me.kind <> 'kids' OR p.kind = 'kids')
+ORDER BY r.rated_at DESC, r.id DESC
+`
+
+type HouseholdTopRatingsRow struct {
+	TitleID int64
+	Rating  int16
+	RatedAt time.Time
+}
+
+func (q *Queries) HouseholdTopRatings(ctx context.Context, id int64) ([]HouseholdTopRatingsRow, error) {
+	rows, err := q.db.Query(ctx, householdTopRatings, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HouseholdTopRatingsRow
+	for rows.Next() {
+		var i HouseholdTopRatingsRow
+		if err := rows.Scan(&i.TitleID, &i.Rating, &i.RatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const outlineEpisodes = `-- name: OutlineEpisodes :many
 SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes
 WHERE show_id = ANY($1::bigint[]) AND removed_at IS NULL

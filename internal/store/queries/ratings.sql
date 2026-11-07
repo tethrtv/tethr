@@ -53,3 +53,20 @@ ORDER BY show_id, season_number, episode_number;
 SELECT season_number::integer FROM hidden_items
 WHERE profile_id = $1 AND section = 'progress_watched' AND title_id = $2 AND season_number IS NOT NULL
 ORDER BY season_number;
+
+-- name: HouseholdTopRatings :many
+SELECT r.title_id, r.rating, r.rated_at
+FROM ratings r
+JOIN profiles p ON p.id = r.profile_id
+JOIN profiles me ON me.household_id = p.household_id
+WHERE me.id = $1
+  AND r.season_number IS NULL AND r.episode_id IS NULL AND r.rating >= 9
+  AND p.kind <> 'guest' AND (me.kind <> 'kids' OR p.kind = 'kids')
+ORDER BY r.rated_at DESC, r.id DESC;
+
+-- name: HouseholdRaters :one
+SELECT count(*)
+FROM profiles p
+JOIN profiles me ON me.household_id = p.household_id
+WHERE me.id = $1
+  AND p.kind <> 'guest' AND (me.kind <> 'kids' OR p.kind = 'kids');
