@@ -190,15 +190,17 @@ func safeCell(s string) string {
 func exportEmail(appURL string, start core.ExportStart) (mail.Message, error) {
 	device := describeDevice(start.Device)
 	when := start.At.UTC().Format("2 January 2006 at 15:04 UTC")
-	data := struct{ Title, Preview, Lead, Button, Link, Note, Footer, AppURL string }{
-		Title:   "Your Tethr data was downloaded",
-		Preview: "A copy of everything in your household was downloaded.",
-		Lead:    fmt.Sprintf("A copy of everything in your household was downloaded from %s on %s.", device, when),
-		Button:  "Check your sessions",
-		Link:    appURL + "/account",
-		Note:    "If this wasn’t you, sign out everywhere from your account page, then check that nobody else can get into your email.",
-		Footer:  "We send this every time your data is downloaded.",
-		AppURL:  appURL,
+	data := struct{ Title, Preview, Lead, Button, Link, Note, Footer, AppURL, Image, ImageAlt string }{
+		Title:    "Your Tethr data was downloaded",
+		Preview:  "A copy of everything in your household was downloaded.",
+		Lead:     fmt.Sprintf("A copy of everything in your household was downloaded from %s on %s.", device, when),
+		Button:   "Check your sessions",
+		Link:     appURL + "/account",
+		Note:     "If this wasn’t you, sign out everywhere from your account page, then check that nobody else can get into your email.",
+		Footer:   "We send this every time your data is downloaded.",
+		AppURL:   appURL,
+		Image:    "email-download.png",
+		ImageAlt: "An old telly showing “Downloaded”",
 	}
 	var html bytes.Buffer
 	if err := emails.ExecuteTemplate(&html, "notice.html", data); err != nil {
