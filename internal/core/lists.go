@@ -368,6 +368,7 @@ func itemProgress(ctx context.Context, q *store.Queries, viewer int64, items []s
 			count(at, ok)
 		default:
 			p.Total = 0
+			var gap, afterLast *OrderedEpisode
 			for _, e := range shows[item.TitleID] {
 				if e.FirstAired == nil || e.FirstAired.After(now) {
 					continue
@@ -377,11 +378,18 @@ func itemProgress(ctx context.Context, q *store.Queries, viewer int64, items []s
 				}
 				p.Total++
 				at, ok := episodes[e.ID]
-				if !ok && p.Next == nil {
-					p.Next = &e
+				switch {
+				case ok && (p.LastWatchedAt == nil || !at.Before(*p.LastWatchedAt)):
+					afterLast = nil
+				case !ok:
+					gap = cmp.Or(gap, &e)
+					if afterLast == nil && p.LastWatchedAt != nil {
+						afterLast = &e
+					}
 				}
 				count(at, ok)
 			}
+			p.Next = cmp.Or(afterLast, gap)
 		}
 		out[item.ID] = p
 	}

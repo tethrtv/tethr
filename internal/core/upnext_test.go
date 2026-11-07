@@ -244,21 +244,31 @@ func TestUpNextLists(t *testing.T) {
 		t.Errorf("next in the season = %+v", got[0])
 	}
 
-	watch(episode(1, 2))
-	if got := next(owner); got[0].Next.Episode.EpisodeNumber != 1 {
-		t.Errorf("out of order, next is the earliest gap: %+v", got[0].Next.Episode)
+	watch(darkKnight)
+	if got := next(owner); got[0].Position != 2 {
+		t.Errorf("watching a later item skipped an earlier one: %+v", got[0])
 	}
-	watch(episode(1, 1))
+	watch(episode(1, 2))
+	got = next(owner)
+	shows, err := UpNext(ctx, db, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Next.Episode.EpisodeNumber != 3 || len(shows) != 1 || shows[0].Next.ID != got[0].Next.Episode.ID {
+		t.Errorf("next in the season = %+v, the show's own = %+v", got[0].Next.Episode, shows)
+	}
 	if _, err := ScrobblePause(ctx, db, caller, Scrobble{Ref: episode(1, 3), Progress: 30}); err != nil {
 		t.Fatal(err)
 	}
-	got = next(owner)
-	if got[0].Next.Episode.EpisodeNumber != 3 || got[0].Resume == nil || got[0].Resume.Progress != 30 {
+	if got := next(owner); got[0].Resume == nil || got[0].Resume.Progress != 30 {
 		t.Errorf("next with a resume point = %+v", got[0])
 	}
-
 	watch(episode(1, 3))
-	watch(darkKnight)
+	if got := next(owner); got[0].Next.Episode.EpisodeNumber != 1 {
+		t.Errorf("nothing after the latest, so the earliest gap: %+v", got[0].Next.Episode)
+	}
+
+	watch(episode(1, 1))
 	if got := next(owner); len(got) != 0 {
 		t.Errorf("a finished list stays in up next: %+v", got)
 	}
