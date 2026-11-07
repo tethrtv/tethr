@@ -334,6 +334,12 @@ type Title struct {
 	MergedIntoID       *int64
 }
 
+type UpNextList struct {
+	ProfileID int64
+	ListID    int64
+	AddedAt   time.Time
+}
+
 type WatchEvent struct {
 	ID              int64
 	ProfileID       int64

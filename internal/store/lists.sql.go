@@ -474,22 +474,25 @@ SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.c
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
     (SELECT count(*) FROM list_items i WHERE i.list_id = l.id)::bigint AS item_count,
-    coalesce((SELECT max(t.wikidata_checked_at) FROM list_items i JOIN titles t ON t.id = i.title_id WHERE i.list_id = l.id), 'epoch')::timestamptz AS titles_checked_at
+    coalesce((SELECT max(t.wikidata_checked_at) FROM list_items i JOIN titles t ON t.id = i.title_id WHERE i.list_id = l.id), 'epoch')::timestamptz AS titles_checked_at,
+    EXISTS (SELECT 1 FROM up_next_lists u WHERE u.list_id = l.id AND u.profile_id = $1::bigint) AS in_up_next
 FROM lists l
 JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN profiles v ON v.id = $1::bigint
 WHERE l.kind = 'custom'
   AND ($2::bigint IS NULL OR l.id = $2)
   AND ($3::bigint IS NULL OR l.profile_id = $3)
-  AND ($2::bigint IS NOT NULL OR $3::bigint IS NOT NULL OR o.household_id = v.household_id)
+  AND ($4::bigint[] IS NULL OR l.id = ANY($4::bigint[]))
+  AND ($2::bigint IS NOT NULL OR $3::bigint IS NOT NULL OR $4::bigint[] IS NOT NULL OR o.household_id = v.household_id)
   AND (l.profile_id = $1::bigint OR l.privacy = 'public' OR (l.privacy = 'household' AND o.household_id = v.household_id))
 ORDER BY l.profile_id <> $1::bigint, o.position, lower(l.name), l.id
 `
 
 type VisibleListsParams struct {
-	Viewer int64
-	ListID *int64
-	Owner  *int64
+	Viewer  int64
+	ListID  *int64
+	Owner   *int64
+	ListIds []int64
 }
 
 type VisibleListsRow struct {
@@ -500,10 +503,16 @@ type VisibleListsRow struct {
 	Access          string
 	ItemCount       int64
 	TitlesCheckedAt time.Time
+	InUpNext        bool
 }
 
 func (q *Queries) VisibleLists(ctx context.Context, arg VisibleListsParams) ([]VisibleListsRow, error) {
-	rows, err := q.db.Query(ctx, visibleLists, arg.Viewer, arg.ListID, arg.Owner)
+	rows, err := q.db.Query(ctx, visibleLists,
+		arg.Viewer,
+		arg.ListID,
+		arg.Owner,
+		arg.ListIds,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -530,6 +539,7 @@ func (q *Queries) VisibleLists(ctx context.Context, arg VisibleListsParams) ([]V
 			&i.Access,
 			&i.ItemCount,
 			&i.TitlesCheckedAt,
+			&i.InUpNext,
 		); err != nil {
 			return nil, err
 		}
