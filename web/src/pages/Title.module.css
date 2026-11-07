@@ -151,24 +151,60 @@
 }
 
 .newList {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.pick {
+  margin: -8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pickRow {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px 14px;
+  gap: 14px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
 }
 
-.newList input {
-  flex: 0 1 16rem;
-  min-height: 32px;
-  border: 0;
-  border-bottom: 2px solid var(--ink);
-  background: none;
-  font: inherit;
+.pickRow:hover {
+  background: var(--paper-2);
 }
 
-.newList input:focus {
-  outline: none;
-  background: var(--hl-soft);
+.pickRow input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pickRow input:focus-visible + span {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.pickName {
+  display: block;
+  font-weight: 700;
+}
+
+.pickWho {
+  display: block;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  font-stretch: var(--narrow);
+  font-weight: 650;
+}
+
+.said {
+  min-height: 1.5em;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
 }
 
 .rating {
@@ -253,14 +289,6 @@
 
 .due td {
   color: var(--ink-3);
-}
-
-.confirm {
-  color: var(--ink);
-}
-
-.danger {
-  color: var(--danger);
 }
 
 .play {
