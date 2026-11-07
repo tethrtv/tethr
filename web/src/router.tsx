@@ -3,6 +3,7 @@ import { ComingSoon } from './ComingSoon'
 import { cleanCode } from './components/CodeInput'
 import { Plain } from './components/Plain'
 import { Shell, useWatching } from './components/Shell'
+import { Broken, NotFound } from './components/Trouble'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
 import { CheckEmail } from './pages/CheckEmail'
@@ -155,7 +156,11 @@ const routes = [
   }),
 ]
 
-export const router = createRouter({ routeTree: root.addChildren(routes) })
+export const router = createRouter({
+  routeTree: root.addChildren(routes),
+  defaultNotFoundComponent: NotFound,
+  defaultErrorComponent: Broken,
+})
 
 declare module '@tanstack/react-router' {
   interface Register {
