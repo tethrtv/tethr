@@ -125,6 +125,7 @@ func serve(log *slog.Logger) error {
 		AppURL:         appURL,
 		AllowedOrigins: origins,
 		Limits:         limits,
+		Version:        version,
 		Cookie: api.CookieConfig{
 			Name:   envOr("SESSION_COOKIE", "tethr_session"),
 			Domain: os.Getenv("COOKIE_DOMAIN"),
