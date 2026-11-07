@@ -56,6 +56,7 @@ type List struct {
 	SortHow     string
 	Access      string
 	CanEdit     bool
+	InUpNext    bool
 	ItemCount   int64
 	Watched     *int64
 	CoverItemID *int64
@@ -91,6 +92,7 @@ type ItemProgress struct {
 	Watched       int
 	Total         int
 	LastWatchedAt *time.Time
+	Next          *OrderedEpisode
 }
 
 func (p ItemProgress) Done() bool {
@@ -159,6 +161,7 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 			SortHow:     l.SortHow,
 			Access:      row.Access,
 			CanEdit:     canEditItems(row.Access, l.Privacy, viewerKind),
+			InUpNext:    row.InUpNext,
 			ItemCount:   row.ItemCount,
 			CoverItemID: l.CoverItemID,
 			CreatedAt:   l.CreatedAt,
@@ -374,6 +377,9 @@ func itemProgress(ctx context.Context, q *store.Queries, viewer int64, items []s
 				}
 				p.Total++
 				at, ok := episodes[e.ID]
+				if !ok && p.Next == nil {
+					p.Next = &e
+				}
 				count(at, ok)
 			}
 		}

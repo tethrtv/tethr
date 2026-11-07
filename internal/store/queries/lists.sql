@@ -31,14 +31,16 @@ SELECT sqlc.embed(l), o.username AS owner_username, o.name AS owner_name, o.priv
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
     (SELECT count(*) FROM list_items i WHERE i.list_id = l.id)::bigint AS item_count,
-    coalesce((SELECT max(t.wikidata_checked_at) FROM list_items i JOIN titles t ON t.id = i.title_id WHERE i.list_id = l.id), 'epoch')::timestamptz AS titles_checked_at
+    coalesce((SELECT max(t.wikidata_checked_at) FROM list_items i JOIN titles t ON t.id = i.title_id WHERE i.list_id = l.id), 'epoch')::timestamptz AS titles_checked_at,
+    EXISTS (SELECT 1 FROM up_next_lists u WHERE u.list_id = l.id AND u.profile_id = sqlc.arg(viewer)::bigint) AS in_up_next
 FROM lists l
 JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN profiles v ON v.id = sqlc.arg(viewer)::bigint
 WHERE l.kind = 'custom'
   AND (sqlc.narg(list_id)::bigint IS NULL OR l.id = sqlc.narg(list_id))
   AND (sqlc.narg(owner)::bigint IS NULL OR l.profile_id = sqlc.narg(owner))
-  AND (sqlc.narg(list_id)::bigint IS NOT NULL OR sqlc.narg(owner)::bigint IS NOT NULL OR o.household_id = v.household_id)
+  AND (sqlc.narg(list_ids)::bigint[] IS NULL OR l.id = ANY(sqlc.narg(list_ids)::bigint[]))
+  AND (sqlc.narg(list_id)::bigint IS NOT NULL OR sqlc.narg(owner)::bigint IS NOT NULL OR sqlc.narg(list_ids)::bigint[] IS NOT NULL OR o.household_id = v.household_id)
   AND (l.profile_id = sqlc.arg(viewer)::bigint OR l.privacy = 'public' OR (l.privacy = 'household' AND o.household_id = v.household_id))
 ORDER BY l.profile_id <> sqlc.arg(viewer)::bigint, o.position, lower(l.name), l.id;
 
