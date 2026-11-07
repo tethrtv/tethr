@@ -5,6 +5,7 @@ import { api, type Me, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Plain } from '../components/Plain'
+import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { ago } from '../format'
 import { useSignedIn } from './connect'
 import styles from './Developers.module.css'
@@ -172,7 +173,7 @@ function ServerRow({
   onAddress: (address: string) => void
 }) {
   const queries = useQueryClient()
-  const [removing, setRemoving] = useState(false)
+  const [slip, setSlip] = useState<'address' | 'remove' | null>(null)
   const refresh = () => {
     queries.invalidateQueries({ queryKey: ['media-servers'] })
     queries.invalidateQueries({ queryKey: ['connections'] })
@@ -193,7 +194,10 @@ function ServerRow({
       if (error) throw error
       return data
     },
-    onSuccess: (data) => onAddress(apiURL + data.path),
+    onSuccess: (data) => {
+      setSlip(null)
+      onAddress(apiURL + data.path)
+    },
   })
   const remove = useMutation({
     mutationFn: async () => {
@@ -244,27 +248,57 @@ function ServerRow({
         {match.isError && <span className={home.error}>{problemMessage(match.error)}</span>}
       </span>
       <span className={home.rowActions}>
-        {removing ? (
-          <>
-            <span className={home.warn}>Stops logging plays from this server.</span>
-            <Button variant="text" onClick={() => setRemoving(false)}>
-              Keep it
-            </Button>
-            <Button variant="text" className={home.danger} onClick={() => remove.mutate()}>
-              Remove
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="text" aria-busy={address.isPending} onClick={() => address.mutate()}>
-              New address
-            </Button>
-            <Button variant="text" className={home.danger} onClick={() => setRemoving(true)}>
-              Remove
-            </Button>
-          </>
-        )}
+        <Button
+          variant="text"
+          onClick={() => {
+            address.reset()
+            setSlip('address')
+          }}
+        >
+          New address
+        </Button>
+        <Button
+          variant="text"
+          className={home.danger}
+          onClick={() => {
+            remove.reset()
+            setSlip('remove')
+          }}
+        >
+          Remove
+        </Button>
       </span>
+      <Slip
+        open={slip !== null}
+        onClose={() => setSlip(null)}
+        step={slip ?? 'address'}
+        title={slip === 'remove' ? `Remove ${s.name ?? names[s.kind]}?` : 'Make a new address?'}
+      >
+        <SlipBody>
+          <p>
+            {slip === 'remove'
+              ? 'Tethr stops logging plays from this server straight away. Everything it has logged stays in your history.'
+              : 'The current address stops working straight away, so paste the new one into the server’s webhook settings.'}
+          </p>
+          {(remove.isError || address.isError) && (
+            <p className={home.error}>{problemMessage(remove.error ?? address.error)}</p>
+          )}
+        </SlipBody>
+        <SlipFoot>
+          {slip === 'remove' ? (
+            <Button variant="danger" onClick={() => remove.mutate()} aria-busy={remove.isPending}>
+              Remove it
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={() => address.mutate()} aria-busy={address.isPending}>
+              Make a new address
+            </Button>
+          )}
+          <Button variant="text" onClick={() => setSlip(null)}>
+            {slip === 'remove' ? 'Keep it' : 'Keep the old one'}
+          </Button>
+        </SlipFoot>
+      </Slip>
     </li>
   )
 }
