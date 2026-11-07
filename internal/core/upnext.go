@@ -27,23 +27,9 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 	if err != nil {
 		return nil, err
 	}
-	var hidden []store.HiddenItem
-	for _, section := range []string{"progress_watched", "dropped"} {
-		items, err := q.HiddenItems(ctx, store.HiddenItemsParams{ProfileID: profileID, Section: section})
-		if err != nil {
-			return nil, err
-		}
-		hidden = append(hidden, items...)
-	}
-	hiddenShows := map[int64]bool{}
-	hiddenSeasons := map[int64][]int32{}
-	for _, h := range hidden {
-		switch {
-		case h.SeasonNumber == nil:
-			hiddenShows[h.TitleID] = true
-		case h.Section == "progress_watched":
-			hiddenSeasons[h.TitleID] = append(hiddenSeasons[h.TitleID], *h.SeasonNumber)
-		}
+	hiddenShows, hiddenSeasons, err := hiddenFromUpNext(ctx, q, profileID)
+	if err != nil {
+		return nil, err
 	}
 
 	watched := map[int64]map[int64]time.Time{}
@@ -101,6 +87,26 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 		entries[i].Resume = resume[entries[i].Next.ID]
 	}
 	return entries, nil
+}
+
+func hiddenFromUpNext(ctx context.Context, q *store.Queries, profileID int64) (map[int64]bool, map[int64][]int32, error) {
+	shows := map[int64]bool{}
+	seasons := map[int64][]int32{}
+	for _, section := range []string{"progress_watched", "dropped"} {
+		items, err := q.HiddenItems(ctx, store.HiddenItemsParams{ProfileID: profileID, Section: section})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, h := range items {
+			switch {
+			case h.SeasonNumber == nil:
+				shows[h.TitleID] = true
+			case section == "progress_watched":
+				seasons[h.TitleID] = append(seasons[h.TitleID], *h.SeasonNumber)
+			}
+		}
+	}
+	return shows, seasons, nil
 }
 
 func HideFromUpNext(ctx context.Context, db *pgxpool.Pool, profileID, showID int64) error {
