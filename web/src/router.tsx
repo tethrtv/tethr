@@ -7,6 +7,7 @@ import { Broken, LostSignal, NotFound } from './components/Trouble'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
 import { AutoListPage } from './pages/AutoList'
+import { Browse } from './pages/Browse'
 import { CheckEmail } from './pages/CheckEmail'
 import { useMe } from './pages/connect'
 import { Developers } from './pages/Developers'
@@ -21,6 +22,7 @@ import { MyLists } from './pages/MyLists'
 import { SignIn } from './pages/SignIn'
 import { TitlePage } from './pages/Title'
 import { UpNext } from './pages/UpNext'
+import { UserPage } from './pages/User'
 import { Verify } from './pages/Verify'
 import { Watchlist } from './pages/Watchlist'
 import { useLostSignal } from './signal'
@@ -67,7 +69,31 @@ function OneList() {
 }
 
 function WatchingList({ param }: { param: string }) {
-  return <ListPage param={param} profileID={useWatching().profile.id} />
+  const { profile } = useWatching()
+  return <ListPage param={param} profileID={profile.id} profileKind={profile.kind} />
+}
+
+function OneUser() {
+  const { username = '' } = useParams({ strict: false })
+  const me = useMe()
+  if (me.isPending) return null
+  if (me.data) {
+    return (
+      <Shell>
+        <WatchingUser key={username} username={username} />
+      </Shell>
+    )
+  }
+  if (import.meta.env.VITE_COMING_SOON === 'true') return <ComingSoon />
+  return (
+    <Plain wide>
+      <UserPage key={username} username={username} />
+    </Plain>
+  )
+}
+
+function WatchingUser({ username }: { username: string }) {
+  return <UserPage username={username} profileID={useWatching().profile.id} />
 }
 
 function Front() {
@@ -107,7 +133,17 @@ const routes = [
       </Shell>
     ),
   }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/lists/browse',
+    component: () => (
+      <Shell>
+        <Browse />
+      </Shell>
+    ),
+  }),
   createRoute({ getParentRoute: () => root, path: '/lists/$list', component: OneList }),
+  createRoute({ getParentRoute: () => root, path: '/@{$username}', component: OneUser }),
   createRoute({
     getParentRoute: () => root,
     path: '/lists/auto/$kind',

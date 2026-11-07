@@ -16,8 +16,12 @@ type List = components['schemas']['List']
 export const privacyWords: Record<List['privacy'], string> = {
   private: 'Only you',
   household: 'The household',
-  public: 'Anyone with the link',
+  public: 'Anyone',
 }
+
+export const goesOutside = (kind: string) => kind !== 'kids' && kind !== 'guest'
+
+export const ownerName = (l: List) => l.owner.name ?? `@${l.owner.username}`
 
 export const listPath = (l: List) => `${l.id}-${l.slug}`
 
@@ -39,6 +43,12 @@ export function MyLists() {
     queryKey: ['auto-lists', profile.id],
     queryFn: async () => (await api.GET('/v1/auto-lists', { params })).data ?? [],
   })
+  const outside = goesOutside(profile.kind)
+  const following = useQuery({
+    queryKey: ['lists', profile.id, 'following'],
+    enabled: outside,
+    queryFn: async () => (await api.GET('/v1/followed-lists', { params })).data ?? [],
+  })
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST('/v1/lists', { params, body: { name } })
@@ -59,8 +69,15 @@ export function MyLists() {
         <h1 className={styles.title}>Lists</h1>
         <p className={styles.lead}>
           Your watchlist, and lists you make yourself. Keep a list to yourself, share it with the household, or let{' '}
-          <strong>anyone with the link</strong> see it.
+          <strong>anyone</strong> find it.
         </p>
+        {outside && (
+          <p>
+            <Link to="/lists/browse" className={styles.titleLink}>
+              Browse lists other people have shared
+            </Link>
+          </p>
+        )}
       </header>
 
       <section>
@@ -129,6 +146,17 @@ export function MyLists() {
         </section>
       )}
 
+      {!!following.data?.length && (
+        <section>
+          <h2 className={styles.sectionTitle}>Following</h2>
+          <ol className={styles.rows}>
+            {following.data.map((l) => (
+              <ListRow key={l.id} list={l} />
+            ))}
+          </ol>
+        </section>
+      )}
+
       {shared.length > 0 && (
         <section>
           <h2 className={styles.sectionTitle}>From the household</h2>
@@ -143,7 +171,7 @@ export function MyLists() {
   )
 }
 
-function ListRow({ list: l }: { list: List }) {
+export function ListRow({ list: l }: { list: List }) {
   return (
     <li className={own.list}>
       <ListCover items={l.cover} />
@@ -151,7 +179,21 @@ function ListRow({ list: l }: { list: List }) {
         <Link to="/lists/$list" params={{ list: listPath(l) }} className={`${styles.rowTitle} ${styles.titleLink}`}>
           {l.name}
         </Link>
-        <span className={styles.quiet}>{l.access === 'mine' ? privacyWords[l.privacy] : `From ${l.owner.name}`}</span>
+        <span className={styles.quiet}>
+          {l.access === 'mine' ? (
+            privacyWords[l.privacy]
+          ) : l.access === 'household' ? (
+            `From ${ownerName(l)}`
+          ) : (
+            <>
+              From{' '}
+              <Link to="/@{$username}" params={{ username: l.owner.username }} className={styles.titleLink}>
+                {ownerName(l)}
+              </Link>
+              {l.follower_count > 0 && `, ${plural(l.follower_count, 'follower')}`}
+            </>
+          )}
+        </span>
       </div>
       <span className={`${styles.code} ${own.count}`}>
         {plural(l.item_count, 'thing')}

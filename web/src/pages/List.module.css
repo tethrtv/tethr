@@ -89,6 +89,34 @@
   font-weight: 600;
 }
 
+.quietAction {
+  color: var(--ink-3);
+}
+
+.warning {
+  padding-left: 12px;
+  border-left: 3px solid var(--hl);
+  font-size: 0.9375rem;
+}
+
+.report {
+  display: grid;
+  gap: 16px;
+  max-width: 36rem;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.followers {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 12px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
 .item {
   display: grid;
   grid-template-columns: 24px 28px 44px minmax(0, 1fr) 150px auto;
