@@ -178,10 +178,6 @@
   font-weight: 600;
 }
 
-.faint {
-  color: var(--ink-3);
-}
-
 @media (max-width: 560px) {
   .main {
     padding-top: 36px;
