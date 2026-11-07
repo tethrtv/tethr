@@ -12,6 +12,11 @@ const contact = (
     legal@tethr.tv
   </a>
 )
+const reports = (
+  <a href="mailto:reports@tethr.tv" className={home.inline}>
+    reports@tethr.tv
+  </a>
+)
 
 function Page({
   title,
@@ -127,8 +132,9 @@ export function Terms() {
 
       <Section title="Reporting something">
         <p>
-          If you see something on Tethr that breaks these rules, email {contact} with a link to it and what’s wrong. We
-          read every report, usually within a few days.
+          If you see a list that breaks these rules, use Report on the list. For anything else, email {reports} with a
+          link to it and what’s wrong. We read every report, usually within a few days, and a reported list stops
+          showing up when people browse until we have.
         </p>
         <p>
           We can hide or remove anything that breaks these rules, and suspend or close accounts that do it again or do
@@ -217,6 +223,16 @@ const kept = [
     until: 'Cleared once applied, or after 24 hours if you don’t go ahead',
   },
   {
+    what: 'Following',
+    detail: 'Which public lists each profile follows.',
+    until: 'Until you stop following',
+  },
+  {
+    what: 'Reports',
+    detail: 'Reports you send about a list: the reason, your note, and which profile sent it.',
+    until: 'A year after we’ve dealt with it',
+  },
+  {
     what: 'Backups',
     detail: 'Encrypted copies of the database, so nothing is lost if the server fails.',
     until: '30 days',
@@ -278,8 +294,13 @@ export function Privacy() {
           see the lists you share with them.
         </p>
         <p>
-          <strong>People you share with.</strong> A list you make public can be seen by anyone signed in to Tethr, along
-          with your profile’s name and username. Profiles are private until you say otherwise.
+          <strong>People you share with.</strong> Anyone can find a list you make public, along with your username. If
+          your profile is public, they see your name too, but profiles are private until you say otherwise. When you
+          follow someone’s list, they can see your username, and your name if your profile is public.
+        </p>
+        <p>
+          <strong>Reports.</strong> If you report a list, only we see that you did. The list’s owner is never told who
+          reported it.
         </p>
         <p>
           <strong>Apps you connect.</strong> They see the profile you connected them to, until you disconnect them.
@@ -308,7 +329,8 @@ export function Privacy() {
       <Section title="Kids profiles">
         <p>
           Accounts are for adults, who can add kids profiles for children in their household. A kids profile keeps the
-          same kind of watch data, it’s private, and it can’t make public lists.
+          same kind of watch data, it’s private, it can’t make public lists, and it can’t browse or follow lists from
+          outside the household.
         </p>
       </Section>
 
