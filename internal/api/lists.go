@@ -84,17 +84,17 @@ func (s *Server) toList(l core.List) List {
 	}
 }
 
-func etag(l core.List) string {
-	return `"` + l.Version + `"`
+func (s *Server) etag(l core.List) string {
+	return `"` + s.Version + "-" + l.Version + `"`
 }
 
-func unchanged(l core.List, ifNoneMatch *string) bool {
+func (s *Server) unchanged(l core.List, ifNoneMatch *string) bool {
 	if ifNoneMatch == nil {
 		return false
 	}
 	for _, tag := range strings.Split(*ifNoneMatch, ",") {
 		tag = strings.TrimPrefix(strings.TrimSpace(tag), "W/")
-		if tag == etag(l) || tag == "*" {
+		if tag == s.etag(l) || tag == "*" {
 			return true
 		}
 	}
@@ -166,10 +166,10 @@ func (s *Server) GetList(ctx context.Context, req GetListRequestObject) (GetList
 	if err != nil {
 		return nil, err
 	}
-	if unchanged(l, req.Params.IfNoneMatch) {
+	if s.unchanged(l, req.Params.IfNoneMatch) {
 		return GetList304Response{}, nil
 	}
-	tag := etag(l)
+	tag := s.etag(l)
 	return GetList200JSONResponse{Body: s.toList(l), Headers: GetList200ResponseHeaders{ETag: &tag}}, nil
 }
 
@@ -252,7 +252,7 @@ func (s *Server) ListListItems(ctx context.Context, req ListListItemsRequestObje
 	if err != nil {
 		return nil, err
 	}
-	if unchanged(l, p.IfNoneMatch) {
+	if s.unchanged(l, p.IfNoneMatch) {
 		return ListListItems304Response{}, nil
 	}
 	out := ListItemsPage{List: s.toList(l), Items: make([]ListItem, 0, len(entries)), Total: total, Page: query.Page.Page, Limit: query.Page.Limit}
@@ -263,7 +263,7 @@ func (s *Server) ListListItems(ctx context.Context, req ListListItemsRequestObje
 		}
 		out.Items = append(out.Items, item)
 	}
-	tag := etag(l)
+	tag := s.etag(l)
 	return ListListItems200JSONResponse{Body: out, Headers: ListListItems200ResponseHeaders{ETag: &tag}}, nil
 }
 
