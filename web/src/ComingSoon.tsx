@@ -1,4 +1,5 @@
 import styles from './ComingSoon.module.css'
+import { Telly } from './components/Telly'
 
 const listing = [
   { slot: 'Logs itself', body: 'Zuno and other players tell it what you play, while you play it.' },
@@ -23,6 +24,9 @@ export function ComingSoon() {
 
       <main className={styles.main}>
         <section className={styles.head}>
+          <div className={styles.tv}>
+            <Telly screen="starting" channel={1} />
+          </div>
           <span className={styles.stamp}>Coming soon</span>
           <h1 className={styles.title}>A watch history that follows you between players.</h1>
           <p className={styles.lead}>
