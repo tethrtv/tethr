@@ -55,7 +55,6 @@ export function ComingSoon() {
           Questions? <a href="mailto:hello@tethr.tv">hello@tethr.tv</a> ·{' '}
           <a href="https://github.com/tethrtv">GitHub</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
         </span>
-        <span className={styles.faint}>Made by the people behind Zuno, kept separate so any player can use it.</span>
       </footer>
     </div>
   )
