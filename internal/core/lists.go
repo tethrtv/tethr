@@ -57,6 +57,8 @@ type List struct {
 	Access      string
 	CanEdit     bool
 	InUpNext    bool
+	Following   bool
+	Followers   int64
 	ItemCount   int64
 	Watched     *int64
 	CoverItemID *int64
@@ -150,9 +152,13 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 	for _, row := range rows {
 		l := row.List
 		version := sha256.Sum256(fmt.Appendf(nil, "%d %d %d", l.UpdatedAt.UnixMicro(), row.TitlesCheckedAt.UnixMicro(), latest.UnixMicro()))
+		owner := ListOwner{ID: l.ProfileID, Username: row.OwnerUsername, Name: row.OwnerName, Private: row.OwnerPrivate}
+		if row.Access == "public" && owner.Private {
+			owner.Name = ""
+		}
 		lists = append(lists, List{
 			ID:          l.ID,
-			Owner:       ListOwner{ID: l.ProfileID, Username: row.OwnerUsername, Name: row.OwnerName, Private: row.OwnerPrivate},
+			Owner:       owner,
 			Name:        l.Name,
 			Slug:        l.Slug,
 			Description: l.Description,
@@ -162,6 +168,8 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 			Access:      row.Access,
 			CanEdit:     canEditItems(row.Access, l.Privacy, viewerKind),
 			InUpNext:    row.InUpNext,
+			Following:   row.Following,
+			Followers:   row.FollowerCount,
 			ItemCount:   row.ItemCount,
 			CoverItemID: l.CoverItemID,
 			CreatedAt:   l.CreatedAt,
