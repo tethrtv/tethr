@@ -1,0 +1,65 @@
+.toast {
+  position: fixed;
+  left: var(--gutter);
+  bottom: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  max-width: calc(100vw - 2 * var(--gutter));
+  padding: 12px 16px;
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.9375rem;
+  transform: translateY(calc(100% + 40px));
+  visibility: hidden;
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s 260ms;
+}
+
+.on {
+  transform: none;
+  visibility: visible;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.undo {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 650;
+  color: var(--paper);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 899px) {
+  .toast {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .on {
+    transition: opacity 160ms ease;
+    transform: none;
+  }
+
+  .toast {
+    opacity: 0;
+  }
+
+  .on {
+    opacity: 1;
+  }
+}
