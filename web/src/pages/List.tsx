@@ -276,7 +276,7 @@ function Head({
         <p className={styles.small}>
           {by}
           {privacyWords[list.privacy]} can see it.{' '}
-        {!mine && list.can_edit_items && profileID && 'You can add to it, take things off and change the order. '}
+          {!mine && list.can_edit_items && profileID && 'You can add to it, take things off and change the order. '}
           {list.item_count === 0
             ? 'Nothing on it yet.'
             : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
