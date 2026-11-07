@@ -731,6 +731,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/up-next/lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The next item on every list you watch in order
+         * @description For each list added to Up next, the first item in the list's own order that you haven't finished, as a film or an episode. A season or show points at its first unwatched episode, in the episode order picked for the show. Items with nothing aired yet are skipped. Finished lists, and lists you can no longer see, are left out until that changes. Lists you watched something from most recently come first. These rows aren't part of `/v1/up-next`, so a show can be in both; compare `next.title` to merge them.
+         */
+        get: operations["getUpNextLists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/up-next/lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Watch a list in order in Up next
+         * @description Any list you can see, up to 50 at a time. Adding one that's already there does nothing.
+         */
+        put: operations["addListToUpNext"];
+        post?: never;
+        /** Take a list out of Up next */
+        delete: operations["removeListFromUpNext"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/titles/{id}": {
         parameters: {
             query?: never;
@@ -1473,6 +1514,8 @@ export interface components {
             access: "mine" | "household" | "public";
             /** @description Whether the profile reading it can add, remove, reorder and note items. Other profiles in the household can on household lists, and on public ones unless they're kids or guest profiles. Only the owner changes the list's details. */
             can_edit_items: boolean;
+            /** @description Whether the profile reading it watches the list in order in Up next. */
+            in_up_next: boolean;
             /** Format: int64 */
             item_count: number;
             /**
@@ -1647,6 +1690,23 @@ export interface components {
             aired: number;
             /** @description How many of those have been watched. */
             watched: number;
+            resume?: components["schemas"]["Resume"];
+        };
+        UpNextListEntry: {
+            list: components["schemas"]["List"];
+            /**
+             * Format: int64
+             * @description The list item that's next. For an episode of a season or show on the list, the item holding it.
+             */
+            item_id: number;
+            /** @description Where that item is in the list's order, counting from 1. */
+            position: number;
+            next: components["schemas"]["Item"];
+            /**
+             * Format: date-time
+             * @description When you last watched anything on the list. Left out if you haven't yet.
+             */
+            last_watched_at?: string;
             resume?: components["schemas"]["Resume"];
         };
         /** @description Where it was paused, if it was started. */
@@ -3190,6 +3250,82 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Back in Up next */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getUpNextLists: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpNextListEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    addListToUpNext: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description In Up next */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    removeListFromUpNext: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Out of Up next */
             204: {
                 headers: {
                     [name: string]: unknown;
