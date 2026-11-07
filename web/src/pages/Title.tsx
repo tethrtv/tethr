@@ -5,10 +5,14 @@ import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Cover } from '../components/Cover'
+import { Field } from '../components/Field'
 import { useWatching } from '../components/Shell'
+import { Slip, SlipBody, SlipFoot } from '../components/Slip'
+import { useToast } from '../components/Toast'
 import { ago, date, duration, ep, plural } from '../format'
 import { type Details, type Group, type Season, useDetails, useGroup, useOrders, useSeason } from '../tmdb'
 import lists from './Lists.module.css'
+import { ownerName, privacyWords } from './MyLists'
 import styles from './Title.module.css'
 
 type Detail = components['schemas']['TitleDetail']
@@ -142,7 +146,10 @@ function useUnlog(profileID: number) {
   return useMutation({
     mutationFn: async (plays: Play[]) => {
       for (const p of plays) {
-        await api.DELETE('/v1/history/{id}', { params: { path: { id: p.id }, query: { profile_id: profileID } } })
+        const { error } = await api.DELETE('/v1/history/{id}', {
+          params: { path: { id: p.id }, query: { profile_id: profileID } },
+        })
+        if (error) throw error
       }
     },
     onSuccess: refresh,
@@ -518,16 +525,26 @@ function Episode({
 }) {
   const log = useLog(profileID)
   const unlog = useUnlog(profileID)
-  const [confirming, setConfirming] = useState(false)
-  const seen = e.watches.length > 0
+  const toast = useToast()
+  const plays = e.watches.map((w) => w.id).join()
+  const [cleared, setCleared] = useState('')
+  const seen = e.watches.length > 0 && cleared !== plays
   const due = !aired(e)
   const label = info?.name ?? `Episode ${shown(e).number}`
   const busy = log.isPending || unlog.isPending
 
   const toggle = () => {
-    if (!seen) log.mutate([episodeRef(show, e)])
-    else if (e.watches.length > 1) setConfirming(true)
-    else unlog.mutate(e.watches)
+    if (!seen) {
+      log.mutate([episodeRef(show, e)])
+      return
+    }
+    const n = e.watches.length
+    setCleared(plays)
+    toast({
+      text: n > 1 ? `Took all ${n} plays of ${label} off your history.` : `Unticked ${label}.`,
+      commit: () => unlog.mutateAsync(e.watches),
+      undo: () => setCleared(''),
+    })
   }
 
   return (
@@ -559,7 +576,7 @@ function Episode({
         <span className={lists.small}>
           {[
             info?.runtime && duration(info.runtime),
-            e.watches.length > 1 && `Seen ${e.watches.length} times`,
+            seen && e.watches.length > 1 && `Seen ${e.watches.length} times`,
             e.resume && !seen && `Paused at ${Math.round(e.resume.progress)}%`,
           ]
             .filter(Boolean)
@@ -571,26 +588,7 @@ function Episode({
         {e.episode.first_aired && (due ? `Due ${day(e.episode.first_aired)}` : date(e.episode.first_aired))}
       </td>
       <td className={`${lists.small} ${styles.colLog}`}>
-        {confirming ? (
-          <span className={styles.confirm}>
-            Remove all {e.watches.length} plays?{' '}
-            <button type="button" className={lists.textButton} onClick={() => setConfirming(false)}>
-              Keep them
-            </button>{' '}
-            <button
-              type="button"
-              className={`${lists.textButton} ${styles.danger}`}
-              onClick={() => {
-                setConfirming(false)
-                unlog.mutate(e.watches)
-              }}
-            >
-              Remove
-            </button>
-          </span>
-        ) : (
-          seen && `${how(e.watches[0])}, ${ago(e.watches[0].watched_at)}`
-        )}
+        {seen && `${how(e.watches[0])}, ${ago(e.watches[0].watched_at)}`}
       </td>
     </tr>
   )
@@ -750,6 +748,7 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
   const refresh = useRefresh(profileID)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
+  const [said, setSaid] = useState('')
   const self = titleRef(d)
   const params = { query: { profile_id: profileID } }
   const on = new Map((d.lists ?? []).map((l) => [l.list_id, l.item_id]))
@@ -762,17 +761,21 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
   const listed = all.data?.filter((l) => on.has(l.id)).map((l) => l.name) ?? []
 
   const toggle = useMutation({
-    mutationFn: async (id: number) => {
-      const item = on.get(id)
+    mutationFn: async (l: { id: number; name: string }) => {
+      const item = on.get(l.id)
       const { error } = item
-        ? await api.DELETE('/v1/lists/{id}/items/{item}', { params: { ...params, path: { id, item } } })
+        ? await api.DELETE('/v1/lists/{id}/items/{item}', { params: { ...params, path: { id: l.id, item } } })
         : await api.POST('/v1/lists/{id}/items', {
-            params: { ...params, path: { id } },
+            params: { ...params, path: { id: l.id } },
             body: { items: [{ item: self }] },
           })
       if (error) throw error
+      return item ? `Taken off ${l.name}.` : `Added to ${l.name}.`
     },
-    onSuccess: refresh,
+    onSuccess: (words) => {
+      setSaid(words)
+      refresh()
+    },
   })
   const create = useMutation({
     mutationFn: async () => {
@@ -783,35 +786,76 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
         body: { items: [{ item: self }] },
       })
       if (error) throw error
+      return made.data.name
     },
-    onSuccess: () => {
+    onSuccess: (made) => {
       setName('')
+      setSaid(`Made ${made} and added this to it.`)
       refresh()
     },
   })
+  const start = () => {
+    setSaid('')
+    toggle.reset()
+    create.reset()
+    setOpen(true)
+  }
 
   return (
     <div className={styles.onLists}>
       <p className={lists.small}>
         {listed.length > 0 && <>On {names(listed)}. </>}
-        <button type="button" className={lists.textButton} onClick={() => setOpen(!open)}>
-          {open ? 'Done' : listed.length ? 'Change lists' : 'Add to a list'}
+        <button type="button" className={lists.textButton} onClick={start}>
+          {listed.length ? 'Change lists' : 'Add to a list'}
         </button>
       </p>
-      {open && (
-        <>
-          {editable.length > 0 && (
-            <fieldset className={lists.options} disabled={toggle.isPending}>
-              <legend className={lists.hidden}>Lists you can add to</legend>
+      <Slip open={open} onClose={() => setOpen(false)} title={`Add ${d.title.name ?? 'this'} to a list`}>
+        <SlipBody>
+          {editable.length > 0 ? (
+            <ul className={styles.pick}>
               {editable.map((l) => (
-                <label key={l.id} className={on.has(l.id) ? `${lists.option} ${lists.chosen}` : lists.option}>
-                  <input type="checkbox" checked={on.has(l.id)} onChange={() => toggle.mutate(l.id)} />
-                  {l.name}
-                  {l.access !== 'mine' && <span className={lists.faint}>, {l.owner.name}’s</span>}
-                </label>
+                <li key={l.id}>
+                  <label className={styles.pickRow}>
+                    <input
+                      type="checkbox"
+                      checked={on.has(l.id)}
+                      disabled={toggle.isPending}
+                      onChange={() => toggle.mutate(l)}
+                    />
+                    <span className={on.has(l.id) ? `${lists.tickbox} ${lists.on}` : lists.tickbox}>
+                      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+                        <path
+                          d="M4.5 10.5l3.6 3.6L15.5 6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.4"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </span>
+                    <span>
+                      <span className={styles.pickName}>{l.name}</span>
+                      <span className={styles.pickWho}>
+                        {l.access === 'mine'
+                          ? privacyWords[l.privacy]
+                          : `${ownerName(l)}’s, ${privacyWords[l.privacy].toLowerCase()}`}
+                      </span>
+                    </span>
+                    <span className={`${lists.code} ${styles.pickWho}`}>{l.item_count}</span>
+                  </label>
+                </li>
               ))}
-            </fieldset>
+            </ul>
+          ) : (
+            all.data && <p className={lists.quiet}>You haven’t made any lists yet.</p>
           )}
+          <p className={styles.said} aria-live="polite">
+            {toggle.isError || create.isError ? (
+              <span className={lists.error}>{problemMessage(toggle.error ?? create.error)}</span>
+            ) : (
+              said
+            )}
+          </p>
           <form
             className={styles.newList}
             onSubmit={(e) => {
@@ -819,22 +863,19 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
               if (name.trim()) create.mutate()
             }}
           >
-            <input
-              aria-label="New list"
-              placeholder="New list"
-              value={name}
-              maxLength={100}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <button type="submit" className={lists.textButton} disabled={!name.trim() || create.isPending}>
-              Make it and add this
-            </button>
+            <Field label="Or start a new list" value={name} onChange={setName} maxLength={100} />
+            <Button type="submit" disabled={!name.trim() || create.isPending}>
+              Make it
+            </Button>
           </form>
-          {(toggle.isError || create.isError) && (
-            <p className={lists.error}>{problemMessage(toggle.error ?? create.error)}</p>
-          )}
-        </>
-      )}
+        </SlipBody>
+        <SlipFoot>
+          <Button variant="primary" onClick={() => setOpen(false)}>
+            Done
+          </Button>
+          <span className={lists.quiet}>Ticking adds it straight away.</span>
+        </SlipFoot>
+      </Slip>
     </div>
   )
 }
