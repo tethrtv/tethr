@@ -7,7 +7,9 @@ import { Button } from '../components/Button'
 import { Cover } from '../components/Cover'
 import { Field } from '../components/Field'
 import { ListCover } from '../components/ListCover'
+import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { TitleLink } from '../components/TitleLink'
+import { useToast } from '../components/Toast'
 import { MissingList } from '../components/Trouble'
 import { ep, plural } from '../format'
 import { useDetails } from '../tmdb'
@@ -274,24 +276,8 @@ function Head({
   profileKind?: string
   onChange: () => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [reporting, setReporting] = useState(false)
-  const [showFollowers, setShowFollowers] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [slip, setSlip] = useState<'details' | 'delete' | 'report' | 'followers' | null>(null)
   const [copied, setCopied] = useState(false)
-  const navigate = useNavigate()
-  const remove = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.DELETE('/v1/lists/{id}', {
-        params: { path: { id: list.id }, query: { profile_id: profileID } },
-      })
-      if (error) throw error
-    },
-    onSuccess: () => {
-      onChange()
-      navigate({ to: '/lists' })
-    },
-  })
   const queries = useQueryClient()
   const upNext = useMutation({
     mutationFn: async () => {
@@ -318,6 +304,7 @@ function Head({
   })
   const outsider = list.access === 'public' && !!profileID
   const canFollow = outsider && goesOutside(profileKind ?? '')
+  const close = () => setSlip(null)
   const by =
     list.access === 'mine' ? null : list.access === 'household' ? (
       `${ownerName(list)}’s list. `
@@ -331,18 +318,6 @@ function Head({
       </>
     )
 
-  if (editing) {
-    return (
-      <Editor
-        list={list}
-        profileID={profileID}
-        onDone={() => {
-          setEditing(false)
-          onChange()
-        }}
-      />
-    )
-  }
   return (
     <header className={own.top}>
       {list.cover.length > 0 && <ListCover items={list.cover} size="l" />}
@@ -378,31 +353,15 @@ function Head({
               {copied ? 'Link copied' : 'Copy the link'}
             </button>
           )}
-          {mine && !deleting && (
+          {mine && (
             <>
-              <button type="button" className={styles.textButton} onClick={() => setEditing(true)}>
+              <button type="button" className={styles.textButton} onClick={() => setSlip('details')}>
                 Change details
               </button>
-              <button type="button" className={`${styles.textButton} ${own.danger}`} onClick={() => setDeleting(true)}>
+              <button type="button" className={`${styles.textButton} ${own.danger}`} onClick={() => setSlip('delete')}>
                 Delete the list
               </button>
             </>
-          )}
-          {deleting && (
-            <span className={styles.small}>
-              Deleting it takes everything off, and can’t be undone.{' '}
-              <button type="button" className={styles.textButton} onClick={() => setDeleting(false)}>
-                Keep it
-              </button>{' '}
-              <button
-                type="button"
-                className={`${styles.textButton} ${own.danger}`}
-                onClick={() => remove.mutate()}
-                disabled={remove.isPending}
-              >
-                Delete
-              </button>
-            </span>
           )}
           {canFollow && (
             <button
@@ -425,15 +384,15 @@ function Head({
             </button>
           )}
           {mine && list.follower_count > 0 && (
-            <button type="button" className={styles.textButton} onClick={() => setShowFollowers(!showFollowers)}>
-              {showFollowers ? 'Hide followers' : 'See who follows it'}
+            <button type="button" className={styles.textButton} onClick={() => setSlip('followers')}>
+              See who follows it
             </button>
           )}
-          {outsider && !reporting && (
+          {outsider && (
             <button
               type="button"
               className={`${styles.textButton} ${own.quietAction}`}
-              onClick={() => setReporting(true)}
+              onClick={() => setSlip('report')}
             >
               Report
             </button>
@@ -444,68 +403,207 @@ function Head({
             </Link>
           )}
         </p>
-        {remove.isError && <p className={styles.error}>{problemMessage(remove.error)}</p>}
-        {showFollowers && <Followers list={list} profileID={profileID} />}
-        {reporting && <ReportForm list={list} profileID={profileID} onDone={() => setReporting(false)} />}
       </div>
+      {mine && (
+        <DetailsSlip
+          list={list}
+          profileID={profileID}
+          open={slip === 'details' || slip === 'delete'}
+          step={slip === 'delete' ? 'delete' : 'details'}
+          onStep={setSlip}
+          onClose={close}
+          onChange={onChange}
+        />
+      )}
+      {mine && (
+        <Slip open={slip === 'followers'} onClose={close} title="Who follows it">
+          <SlipBody>
+            <Followers list={list} profileID={profileID} />
+          </SlipBody>
+        </Slip>
+      )}
+      {outsider && <ReportSlip list={list} profileID={profileID} open={slip === 'report'} onClose={close} />}
     </header>
   )
 }
 
-function Editor({ list, profileID, onDone }: { list: List; profileID?: number; onDone: () => void }) {
+function DetailsSlip({
+  list,
+  profileID,
+  open,
+  step,
+  onStep,
+  onClose,
+  onChange,
+}: {
+  list: List
+  profileID?: number
+  open: boolean
+  step: 'details' | 'delete'
+  onStep: (step: 'details' | 'delete') => void
+  onClose: () => void
+  onChange: () => void
+}) {
   const [name, setName] = useState(list.name)
   const [description, setDescription] = useState(list.description ?? '')
   const [privacy, setPrivacy] = useState<Privacy>(list.privacy)
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setName(list.name)
+      setDescription(list.description ?? '')
+      setPrivacy(list.privacy)
+    }
+  }
+  return (
+    <Slip
+      open={open}
+      onClose={onClose}
+      step={step}
+      title={step === 'delete' ? `Delete ${list.name}?` : `Change ${list.name}`}
+    >
+      {step === 'delete' ? (
+        <DeleteList list={list} profileID={profileID} onKeep={() => onStep('details')} onChange={onChange} />
+      ) : (
+        <ListDetails
+          list={list}
+          profileID={profileID}
+          fields={{ name, description, privacy }}
+          set={{ name: setName, description: setDescription, privacy: setPrivacy }}
+          onDelete={() => onStep('delete')}
+          onClose={onClose}
+          onChange={onChange}
+        />
+      )}
+    </Slip>
+  )
+}
+
+function ListDetails({
+  list,
+  profileID,
+  fields,
+  set,
+  onDelete,
+  onClose,
+  onChange,
+}: {
+  list: List
+  profileID?: number
+  fields: { name: string; description: string; privacy: Privacy }
+  set: { name: (v: string) => void; description: (v: string) => void; privacy: (v: Privacy) => void }
+  onDelete: () => void
+  onClose: () => void
+  onChange: () => void
+}) {
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await api.PATCH('/v1/lists/{id}', {
         params: { path: { id: list.id }, query: { profile_id: profileID } },
-        body: { name, description, privacy },
+        body: fields,
       })
       if (error) throw error
     },
-    onSuccess: onDone,
+    onSuccess: () => {
+      onChange()
+      onClose()
+    },
   })
-
   return (
-    <form
-      className={`${styles.head} ${own.editor}`}
-      onSubmit={(e) => {
-        e.preventDefault()
-        save.mutate()
-      }}
-    >
-      <Field label="Name" value={name} onChange={setName} maxLength={100} required />
-      <Field label="Description" value={description} onChange={setDescription} maxLength={1000} />
-      <fieldset className={styles.options}>
-        <legend className={own.legend}>Who can see it</legend>
-        {(Object.keys(privacyWords) as Privacy[]).map((p) => (
-          <Option key={p} name="privacy" checked={p === privacy} onChange={() => setPrivacy(p)}>
-            {privacyWords[p]}
-          </Option>
-        ))}
-      </fieldset>
-      {privacy === 'public' && (
-        <p className={own.warning}>
-          Anyone can find this list when they browse, and see its notes and your username. If your profile is public,
-          they see your name too.
-        </p>
-      )}
-      <p className={styles.small}>
-        {list.cover_item_id
-          ? 'To change the cover, switch to Covers below and pick another.'
-          : 'The cover is the first four things on the list. To pick one instead, switch to Covers below.'}
-      </p>
-      {save.isError && <p className={styles.error}>{problemMessage(save.error)}</p>}
-      <p className={own.actions}>
-        <Button variant="primary" type="submit" disabled={!name.trim() || save.isPending}>
+    <>
+      <SlipBody>
+        <form
+          id="list-details"
+          className={own.form}
+          onSubmit={(e) => {
+            e.preventDefault()
+            save.mutate()
+          }}
+        >
+          <Field label="Name" value={fields.name} onChange={set.name} maxLength={100} required />
+          <Field label="Description" value={fields.description} onChange={set.description} maxLength={1000} />
+          <fieldset className={styles.options}>
+            <legend className={own.legend}>Who can see it</legend>
+            {(Object.keys(privacyWords) as Privacy[]).map((p) => (
+              <Option key={p} name="privacy" checked={p === fields.privacy} onChange={() => set.privacy(p)}>
+                {privacyWords[p]}
+              </Option>
+            ))}
+          </fieldset>
+          <div className={fields.privacy === 'public' ? `${own.reveal} ${own.revealed}` : own.reveal}>
+            <p className={own.warning}>
+              Anyone can find this list when they browse, and see its notes and your username. If your profile is
+              public, they see your name too.
+            </p>
+          </div>
+          <p className={styles.small}>
+            {list.cover_item_id
+              ? 'To change the cover, switch to Covers and pick another.'
+              : 'The cover is the first four things on the list. To pick one instead, switch to Covers.'}
+          </p>
+          {save.isError && <p className={styles.error}>{problemMessage(save.error)}</p>}
+          <p>
+            <button type="button" className={`${styles.textButton} ${own.danger}`} onClick={onDelete}>
+              Delete the list
+            </button>
+          </p>
+        </form>
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="primary" type="submit" form="list-details" disabled={!fields.name.trim() || save.isPending}>
           Save
         </Button>
-        <button type="button" className={styles.textButton} onClick={onDone}>
+        <Button variant="text" onClick={onClose}>
           Cancel
-        </button>
-      </p>
-    </form>
+        </Button>
+      </SlipFoot>
+    </>
+  )
+}
+
+function DeleteList({
+  list,
+  profileID,
+  onKeep,
+  onChange,
+}: {
+  list: List
+  profileID?: number
+  onKeep: () => void
+  onChange: () => void
+}) {
+  const navigate = useNavigate()
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE('/v1/lists/{id}', {
+        params: { path: { id: list.id }, query: { profile_id: profileID } },
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      onChange()
+      navigate({ to: '/lists' })
+    },
+  })
+  return (
+    <>
+      <SlipBody>
+        <p>
+          Everything on it comes off, and it can’t be undone. Your history stays as it is.
+          {list.follower_count > 0 && ` Its ${plural(list.follower_count, 'follower')} will lose it too.`}
+        </p>
+        {remove.isError && <p className={styles.error}>{problemMessage(remove.error)}</p>}
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="danger" onClick={() => remove.mutate()} disabled={remove.isPending}>
+          Delete it
+        </Button>
+        <Button variant="text" onClick={onKeep}>
+          Keep it
+        </Button>
+      </SlipFoot>
+    </>
   )
 }
 
@@ -669,14 +767,9 @@ function Row({
   const name = title?.name ?? i.item.title.name ?? 'Untitled'
   const [noting, setNoting] = useState(false)
   const [notes, setNotes] = useState(i.notes ?? '')
+  const [gone, setGone] = useState(false)
+  const toast = useToast()
   const params = { path: { id: list.id, item: i.id }, query: { profile_id: profileID } }
-  const remove = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.DELETE('/v1/lists/{id}/items/{item}', { params })
-      if (error) throw error
-    },
-    onSuccess: onChange,
-  })
   const note = useMutation({
     mutationFn: async () => {
       const { error } = await api.PATCH('/v1/lists/{id}/items/{item}', { params, body: { notes } })
@@ -687,6 +780,18 @@ function Row({
       onChange()
     },
   })
+  const remove = () => {
+    setGone(true)
+    toast({
+      text: `Took ${name} off ${list.name}.`,
+      commit: async () => {
+        const { error } = await api.DELETE('/v1/lists/{id}/items/{item}', { params })
+        if (error) throw error
+        onChange()
+      },
+      undo: () => setGone(false),
+    })
+  }
   const progress = progressWords(i)
   const done = progress === 'Watched'
   const facts = [
@@ -699,6 +804,7 @@ function Row({
     .join(', ')
   const synopsis = (i.item.type === 'movie' || i.item.type === 'show') && title?.overview
 
+  if (gone) return null
   return (
     <li
       ref={ref}
@@ -714,35 +820,7 @@ function Row({
         </TitleLink>
         <p className={styles.quiet}>{facts}</p>
         {synopsis && <p className={`${styles.small} ${own.synopsis}`}>{synopsis}</p>}
-        {noting ? (
-          <form
-            className={own.note}
-            onSubmit={(e) => {
-              e.preventDefault()
-              note.mutate()
-            }}
-          >
-            <input
-              aria-label="Note"
-              value={notes}
-              maxLength={500}
-              onChange={(e) => setNotes(e.target.value)}
-              // biome-ignore lint/a11y/noAutofocus: the field opens because the person asked to write a note
-              autoFocus
-            />
-            <button type="submit" className={styles.textButton} disabled={note.isPending}>
-              Save
-            </button>
-            <button type="button" className={styles.textButton} onClick={() => setNoting(false)}>
-              Cancel
-            </button>
-          </form>
-        ) : (
-          i.notes && <p className={`${styles.small} ${own.noteText}`}>{i.notes}</p>
-        )}
-        {(note.isError || remove.isError) && (
-          <p className={styles.error}>{problemMessage(note.error ?? remove.error)}</p>
-        )}
+        {i.notes && <p className={`${styles.small} ${own.noteText}`}>{i.notes}</p>}
       </div>
       <span className={done ? `${own.progress} ${own.done}` : own.progress}>
         {progress}
@@ -753,22 +831,56 @@ function Row({
         )}
       </span>
       <span className={own.tools}>
-        {editable && !noting && (
+        {editable && (
           <>
-            <button type="button" className={styles.textButton} onClick={() => setNoting(true)}>
-              {i.notes ? 'Change note' : 'Add a note'}
-            </button>
             <button
               type="button"
-              className={`${styles.textButton} ${styles.remove}`}
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
+              className={styles.textButton}
+              onClick={() => {
+                setNotes(i.notes ?? '')
+                note.reset()
+                setNoting(true)
+              }}
             >
+              {i.notes ? 'Change note' : 'Add a note'}
+            </button>
+            <button type="button" className={`${styles.textButton} ${styles.remove}`} onClick={remove}>
               Remove
             </button>
           </>
         )}
       </span>
+      {editable && (
+        <Slip open={noting} onClose={() => setNoting(false)} title={`Note on ${name}`}>
+          <SlipBody>
+            <form
+              id={`note-${i.id}`}
+              className={own.form}
+              onSubmit={(e) => {
+                e.preventDefault()
+                note.mutate()
+              }}
+            >
+              <Field
+                label="Note"
+                value={notes}
+                onChange={setNotes}
+                maxLength={500}
+                hint="Anyone who can see the list sees its notes."
+              />
+              {note.isError && <p className={styles.error}>{problemMessage(note.error)}</p>}
+            </form>
+          </SlipBody>
+          <SlipFoot>
+            <Button variant="primary" type="submit" form={`note-${i.id}`} disabled={note.isPending}>
+              Save
+            </Button>
+            <Button variant="text" onClick={() => setNoting(false)}>
+              Cancel
+            </Button>
+          </SlipFoot>
+        </Slip>
+      )}
     </li>
   )
 }
@@ -814,7 +926,7 @@ function Followers({ list, profileID }: { list: List; profileID?: number }) {
         })
       ).data ?? [],
   })
-  if (!followers.data) return null
+  if (!followers.data) return <p className={styles.quiet}>Looking for followers…</p>
   return (
     <ul className={own.followers}>
       {followers.data.map((f) => (
@@ -829,7 +941,59 @@ function Followers({ list, profileID }: { list: List; profileID?: number }) {
   )
 }
 
-function ReportForm({ list, profileID, onDone }: { list: List; profileID?: number; onDone: () => void }) {
+function ReportSlip({
+  list,
+  profileID,
+  open,
+  onClose,
+}: {
+  list: List
+  profileID?: number
+  open: boolean
+  onClose: () => void
+}) {
+  const [sent, setSent] = useState(false)
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setSent(false)
+  }
+  return (
+    <Slip
+      open={open}
+      onClose={onClose}
+      step={sent ? 'sent' : 'form'}
+      title={sent ? 'Thanks for telling us' : `Report ${list.name}`}
+    >
+      {sent ? (
+        <>
+          <SlipBody>
+            <p>We’ll take a look, usually within a few days. Until then it won’t show up when people browse lists.</p>
+          </SlipBody>
+          <SlipFoot>
+            <Button variant="primary" onClick={onClose}>
+              Done
+            </Button>
+          </SlipFoot>
+        </>
+      ) : (
+        <ReportForm list={list} profileID={profileID} onSent={() => setSent(true)} onClose={onClose} />
+      )}
+    </Slip>
+  )
+}
+
+function ReportForm({
+  list,
+  profileID,
+  onSent,
+  onClose,
+}: {
+  list: List
+  profileID?: number
+  onSent: () => void
+  onClose: () => void
+}) {
   const [reason, setReason] = useState<Reason>()
   const [note, setNote] = useState('')
   const send = useMutation({
@@ -840,44 +1004,39 @@ function ReportForm({ list, profileID, onDone }: { list: List; profileID?: numbe
       })
       if (error) throw error
     },
+    onSuccess: onSent,
   })
-
-  if (send.isSuccess) {
-    return (
-      <p className={own.report}>
-        Thanks for telling us. We’ll take a look, usually within a few days.{' '}
-        <button type="button" className={styles.textButton} onClick={onDone}>
-          Close
-        </button>
-      </p>
-    )
-  }
   return (
-    <form
-      className={own.report}
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (reason) send.mutate(reason)
-      }}
-    >
-      <fieldset className={styles.options}>
-        <legend className={own.legend}>What’s wrong with it?</legend>
-        {reasons.map((r) => (
-          <Option key={r.value} name="reason" checked={r.value === reason} onChange={() => setReason(r.value)}>
-            {r.label}
-          </Option>
-        ))}
-      </fieldset>
-      <Field label="Anything that would help us (optional)" value={note} onChange={setNote} maxLength={500} />
-      {send.isError && <p className={styles.error}>{problemMessage(send.error)}</p>}
-      <p className={own.actions}>
-        <Button variant="primary" type="submit" disabled={!reason || send.isPending}>
+    <>
+      <SlipBody>
+        <form
+          id="report"
+          className={own.form}
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (reason) send.mutate(reason)
+          }}
+        >
+          <fieldset className={styles.options}>
+            <legend className={own.legend}>What’s wrong with it?</legend>
+            {reasons.map((r) => (
+              <Option key={r.value} name="reason" checked={r.value === reason} onChange={() => setReason(r.value)}>
+                {r.label}
+              </Option>
+            ))}
+          </fieldset>
+          <Field label="Anything that would help us (optional)" value={note} onChange={setNote} maxLength={500} />
+          {send.isError && <p className={styles.error}>{problemMessage(send.error)}</p>}
+        </form>
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="primary" type="submit" form="report" disabled={!reason || send.isPending}>
           Send the report
         </Button>
-        <button type="button" className={styles.textButton} onClick={onDone}>
+        <Button variant="text" onClick={onClose}>
           Cancel
-        </button>
-      </p>
-    </form>
+        </Button>
+      </SlipFoot>
+    </>
   )
 }

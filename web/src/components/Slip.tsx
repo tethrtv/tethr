@@ -10,11 +10,18 @@ type Props = {
   onClose: () => void
   title: ReactNode
   children: ReactNode
-  foot?: ReactNode
   step?: string
 }
 
-export function Slip({ open, onClose, title, children, foot, step = '' }: Props) {
+export function SlipBody({ children }: { children: ReactNode }) {
+  return <div className={styles.body}>{children}</div>
+}
+
+export function SlipFoot({ children }: { children: ReactNode }) {
+  return <div className={styles.foot}>{children}</div>
+}
+
+export function Slip({ open, onClose, title, children, step = '' }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const paper = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
@@ -49,7 +56,10 @@ export function Slip({ open, onClose, title, children, foot, step = '' }: Props)
   const last = useRef({ step, height: 0 })
   useLayoutEffect(() => {
     const p = paper.current
-    if (!p || !shown) return
+    if (!p) {
+      last.current = { step, height: 0 }
+      return
+    }
     const height = p.offsetHeight
     const before = last.current
     last.current = { step, height }
@@ -132,8 +142,7 @@ export function Slip({ open, onClose, title, children, foot, step = '' }: Props)
             <div className={styles.perf} />
           </div>
           <div ref={content} className={styles.content}>
-            <div className={styles.body}>{children}</div>
-            {foot && <div className={styles.foot}>{foot}</div>}
+            {children}
           </div>
         </div>
       )}
