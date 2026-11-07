@@ -32,7 +32,9 @@ SELECT sqlc.embed(l), o.username AS owner_username, o.name AS owner_name, o.priv
          ELSE 'public' END::text AS access,
     (SELECT count(*) FROM list_items i WHERE i.list_id = l.id)::bigint AS item_count,
     coalesce((SELECT max(t.wikidata_checked_at) FROM list_items i JOIN titles t ON t.id = i.title_id WHERE i.list_id = l.id), 'epoch')::timestamptz AS titles_checked_at,
-    EXISTS (SELECT 1 FROM up_next_lists u WHERE u.list_id = l.id AND u.profile_id = sqlc.arg(viewer)::bigint) AS in_up_next
+    EXISTS (SELECT 1 FROM up_next_lists u WHERE u.list_id = l.id AND u.profile_id = sqlc.arg(viewer)::bigint) AS in_up_next,
+    (SELECT count(*) FROM list_follows f WHERE f.list_id = l.id)::bigint AS follower_count,
+    EXISTS (SELECT 1 FROM list_follows f WHERE f.list_id = l.id AND f.profile_id = sqlc.arg(viewer)::bigint) AS following
 FROM lists l
 JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN profiles v ON v.id = sqlc.arg(viewer)::bigint

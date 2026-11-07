@@ -24,6 +24,9 @@ func (c Cleanup) Run(ctx context.Context) {
 		if err := core.PruneHeldPlays(ctx, c.DB); err != nil && ctx.Err() == nil {
 			c.Log.Error("pruning held plays", "err", err)
 		}
+		if err := core.PruneReports(ctx, c.DB); err != nil && ctx.Err() == nil {
+			c.Log.Error("pruning reports", "err", err)
+		}
 		select {
 		case <-ctx.Done():
 			return

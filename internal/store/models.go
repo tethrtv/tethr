@@ -178,6 +178,12 @@ type List struct {
 	CoverItemID *int64
 }
 
+type ListFollow struct {
+	ProfileID  int64
+	ListID     int64
+	FollowedAt time.Time
+}
+
 type ListItem struct {
 	ID           int64
 	ListID       int64
@@ -188,6 +194,17 @@ type ListItem struct {
 	Notes        *string
 	ListedAt     time.Time
 	ImportID     *int64
+}
+
+type ListReport struct {
+	ID         int64
+	ListID     int64
+	ReporterID *int64
+	Reason     string
+	Note       *string
+	CreatedAt  time.Time
+	ResolvedAt *time.Time
+	Outcome    *string
 }
 
 type MediaServer struct {
