@@ -791,6 +791,109 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/auto-lists:
+    get:
+      operationId: listAutoLists
+      summary: Lists made from your own data
+      description: Lists that fill themselves from the profile's history and ratings. Only the profile can read them. The household list is left out until at least two profiles in the household count towards it.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AutoList'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/auto-lists/{kind}:
+    get:
+      operationId: listAutoListItems
+      summary: What's on a list made from your own data
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: kind
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/AutoListKind'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, show]
+        - name: sort_by
+          in: query
+          description: Left out, the list's own order.
+          schema:
+            $ref: '#/components/schemas/ListSortBy'
+        - name: sort_how
+          in: query
+          schema:
+            $ref: '#/components/schemas/ListSortHow'
+        - name: hide_watched
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: 100 by default, and up to 1,000.
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The list and a page of its items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoListItemsPage'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/auto-lists/{kind}/copy:
+    post:
+      operationId: copyAutoList
+      summary: Keep a copy as a list of your own
+      description: Makes a private list with the same name and the first 1,000 items in the same order. The copy doesn't change after that, and you can edit and share it like any other list.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: kind
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/AutoListKind'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
   /v1/lists:
     get:
       operationId: listLists
@@ -2662,6 +2765,62 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ListItem'
+        total:
+          type: integer
+          description: How many items match, across every page.
+        page:
+          type: integer
+        limit:
+          type: integer
+    AutoListKind:
+      type: string
+      description: '`stopped` is shows you started and haven''t watched for 90 days, or took out of Up next. `favourites` is films and shows you rated 9 or 10. `rewatch` is ones you rated 8 or more and last watched over a year ago. `household` is anything someone in the household rated 9 or 10, never counting guests, and counting only kids profiles when a kids profile asks.'
+      enum: [stopped, favourites, rewatch, household]
+    AutoList:
+      type: object
+      required: [kind, name, description, item_count, cover]
+      properties:
+        kind:
+          $ref: '#/components/schemas/AutoListKind'
+        name:
+          type: string
+        description:
+          type: string
+        item_count:
+          type: integer
+        cover:
+          type: array
+          description: The first four items. Fetch their posters from TMDB.
+          items:
+            $ref: '#/components/schemas/Item'
+    AutoListItem:
+      type: object
+      required: [rank, at, item]
+      properties:
+        rank:
+          type: integer
+          description: Where it sits in the list's own order.
+        at:
+          type: string
+          format: date-time
+          description: Why it's on the list, which is when you last watched it, or when it was rated on the favourites lists.
+        rating:
+          type: integer
+          description: Your own rating, if you've rated it.
+        item:
+          $ref: '#/components/schemas/Item'
+        progress:
+          $ref: '#/components/schemas/ItemProgress'
+    AutoListItemsPage:
+      type: object
+      required: [list, items, total, page, limit]
+      properties:
+        list:
+          $ref: '#/components/schemas/AutoList'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AutoListItem'
         total:
           type: integer
           description: How many items match, across every page.

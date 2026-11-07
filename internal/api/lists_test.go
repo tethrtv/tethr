@@ -215,3 +215,46 @@ func TestUpNextListEndpoints(t *testing.T) {
 		t.Errorf("after removing = %+v", got)
 	}
 }
+
+func TestAutoListEndpoints(t *testing.T) {
+	h, mail := newTestServer(t)
+	cookie := signIn(t, h, mail)
+
+	signedOut := httptest.NewRecorder()
+	h.ServeHTTP(signedOut, httptest.NewRequest("GET", "/v1/auto-lists", nil))
+	if signedOut.Code != http.StatusUnauthorized {
+		t.Errorf("signed out = %d", signedOut.Code)
+	}
+	if rec := do(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}},"rating":10},{"item":{"type":"movie","ids":{"tmdb":603}},"rating":9}]}`, cookie); rec.Code != http.StatusOK {
+		t.Fatalf("rate = %d %s", rec.Code, rec.Body)
+	}
+
+	rec := do(t, h, "GET", "/v1/auto-lists", "", cookie)
+	var lists []AutoList
+	_ = json.Unmarshal(rec.Body.Bytes(), &lists)
+	if rec.Code != http.StatusOK || len(lists) != 3 || lists[1].Kind != AutoListKindFavourites || lists[1].Name != "Favourites" || lists[1].ItemCount != 2 || len(lists[1].Cover) != 2 {
+		t.Fatalf("auto lists = %d %s", rec.Code, rec.Body)
+	}
+
+	rec = do(t, h, "GET", "/v1/auto-lists/favourites?sort_by=rank&sort_how=desc&limit=1", "", cookie)
+	var page AutoListItemsPage
+	_ = json.Unmarshal(rec.Body.Bytes(), &page)
+	if rec.Code != http.StatusOK || page.Total != 2 || len(page.Items) != 1 || page.Items[0].Rank != 2 || *page.Items[0].Rating != 9 || page.List.ItemCount != 2 {
+		t.Errorf("favourites = %d %s", rec.Code, rec.Body)
+	}
+	for _, path := range []string{"/v1/auto-lists/household", "/v1/auto-lists/nope"} {
+		if rec := do(t, h, "GET", path, "", cookie); rec.Code != http.StatusNotFound {
+			t.Errorf("%s = %d %s", path, rec.Code, rec.Body)
+		}
+	}
+
+	rec = do(t, h, "POST", "/v1/auto-lists/favourites/copy", "", cookie)
+	var copied List
+	_ = json.Unmarshal(rec.Body.Bytes(), &copied)
+	if rec.Code != http.StatusCreated || copied.Name != "Favourites" || copied.Privacy != ListPrivacyPrivate || copied.ItemCount != 2 {
+		t.Errorf("copy = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/v1/auto-lists/household/copy", "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("copying the household list alone = %d %s", rec.Code, rec.Body)
+	}
+}
