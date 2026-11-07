@@ -12,11 +12,20 @@ import { ep, plural } from '../format'
 import { useDetails } from '../tmdb'
 import own from './List.module.css'
 import styles from './Lists.module.css'
-import { privacyWords } from './MyLists'
+import { goesOutside, ownerName, privacyWords } from './MyLists'
 
 type List = components['schemas']['List']
 type Item = components['schemas']['ListItem']
 type Privacy = List['privacy']
+type Reason = components['schemas']['NewReport']['reason']
+
+const reasons: { value: Reason; label: string }[] = [
+  { value: 'illegal', label: 'Something illegal' },
+  { value: 'harassment', label: 'Threats or abuse' },
+  { value: 'personal', label: 'Someone’s private details' },
+  { value: 'spam', label: 'Adverts or scams' },
+  { value: 'other', label: 'Something else' },
+]
 
 const orders = [
   { label: 'List order', by: 'rank', how: 'asc' },
@@ -41,7 +50,15 @@ function storedView(): 'rows' | 'covers' {
   }
 }
 
-export function ListPage({ param, profileID }: { param: string; profileID?: number }) {
+export function ListPage({
+  param,
+  profileID,
+  profileKind,
+}: {
+  param: string
+  profileID?: number
+  profileKind?: string
+}) {
   const id = Number.parseInt(param, 10) || 0
   const queries = useQueryClient()
   const [kind, setKind] = useState<(typeof kinds)[number]['value']>('all')
@@ -116,7 +133,7 @@ export function ListPage({ param, profileID }: { param: string; profileID?: numb
 
   return (
     <div className={styles.page}>
-      <Head list={list} mine={mine} profileID={profileID} onChange={refresh} />
+      <Head list={list} mine={mine} profileID={profileID} profileKind={profileKind} onChange={refresh} />
 
       <div className={`${styles.filters} ${own.filters}`}>
         <fieldset className={styles.options}>
@@ -230,14 +247,18 @@ function Head({
   list,
   mine,
   profileID,
+  profileKind,
   onChange,
 }: {
   list: List
   mine: boolean
   profileID?: number
+  profileKind?: string
   onChange: () => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  const [showFollowers, setShowFollowers] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [copied, setCopied] = useState(false)
   const navigate = useNavigate()
@@ -267,7 +288,30 @@ function Head({
       queries.invalidateQueries({ queryKey: ['up-next-lists', profileID] })
     },
   })
-  const by = list.access === 'mine' ? '' : `${list.owner.name}’s list. `
+  const follow = useMutation({
+    mutationFn: async () => {
+      const params = { params: { path: { id: list.id }, query: { profile_id: profileID } } }
+      const { error } = list.following
+        ? await api.DELETE('/v1/followed-lists/{id}', params)
+        : await api.PUT('/v1/followed-lists/{id}', params)
+      if (error) throw error
+    },
+    onSuccess: onChange,
+  })
+  const outsider = list.access === 'public' && !!profileID
+  const canFollow = outsider && goesOutside(profileKind ?? '')
+  const by =
+    list.access === 'mine' ? null : list.access === 'household' ? (
+      `${ownerName(list)}’s list. `
+    ) : (
+      <>
+        A list by{' '}
+        <Link to="/@{$username}" params={{ username: list.owner.username }} className={styles.titleLink}>
+          {ownerName(list)}
+        </Link>
+        .{' '}
+      </>
+    )
 
   if (editing) {
     return (
@@ -295,8 +339,12 @@ function Head({
             ? 'Nothing on it yet.'
             : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
           {list.in_up_next && ' Up next shows what to watch from it next.'}
+          {list.privacy === 'public' && list.follower_count > 0 && ` ${plural(list.follower_count, 'follower')}.`}
+          {canFollow && !list.following && ' If you follow it, its owner sees your username.'}
         </p>
-        {upNext.isError && <p className={styles.error}>{problemMessage(upNext.error)}</p>}
+        {(upNext.isError || follow.isError) && (
+          <p className={styles.error}>{problemMessage(upNext.error ?? follow.error)}</p>
+        )}
         <p className={own.actions}>
           {list.privacy === 'public' && (
             <button
@@ -338,6 +386,16 @@ function Head({
               </button>
             </span>
           )}
+          {canFollow && (
+            <button
+              type="button"
+              className={styles.textButton}
+              onClick={() => follow.mutate()}
+              disabled={follow.isPending}
+            >
+              {list.following ? 'Stop following' : 'Follow'}
+            </button>
+          )}
           {profileID && (
             <button
               type="button"
@@ -348,6 +406,20 @@ function Head({
               {list.in_up_next ? 'Take it out of Up next' : 'Watch it in order in Up next'}
             </button>
           )}
+          {mine && list.follower_count > 0 && (
+            <button type="button" className={styles.textButton} onClick={() => setShowFollowers(!showFollowers)}>
+              {showFollowers ? 'Hide followers' : 'See who follows it'}
+            </button>
+          )}
+          {outsider && !reporting && (
+            <button
+              type="button"
+              className={`${styles.textButton} ${own.quietAction}`}
+              onClick={() => setReporting(true)}
+            >
+              Report
+            </button>
+          )}
           {!profileID && (
             <Link to="/sign-in" className={styles.textButton}>
               Sign in to see what you’ve watched
@@ -355,6 +427,8 @@ function Head({
           )}
         </p>
         {remove.isError && <p className={styles.error}>{problemMessage(remove.error)}</p>}
+        {showFollowers && <Followers list={list} profileID={profileID} />}
+        {reporting && <ReportForm list={list} profileID={profileID} onDone={() => setReporting(false)} />}
       </div>
     </header>
   )
@@ -394,7 +468,10 @@ function Editor({ list, profileID, onDone }: { list: List; profileID?: number; o
         ))}
       </fieldset>
       {privacy === 'public' && (
-        <p className={styles.small}>Anyone with the link sees the list, its notes, and your name and username.</p>
+        <p className={own.warning}>
+          Anyone can find this list when they browse, and see its notes and your username. If your profile is public,
+          they see your name too.
+        </p>
       )}
       <p className={styles.small}>
         {list.cover_item_id
@@ -706,5 +783,83 @@ function CoverItem({ item: i, isCover, onPick }: { item: Item; isCover: boolean;
           </button>
         ))}
     </li>
+  )
+}
+
+function Followers({ list, profileID }: { list: List; profileID?: number }) {
+  const followers = useQuery({
+    queryKey: ['followers', list.id],
+    queryFn: async () =>
+      (
+        await api.GET('/v1/lists/{id}/followers', {
+          params: { path: { id: list.id }, query: { profile_id: profileID } },
+        })
+      ).data ?? [],
+  })
+  if (!followers.data) return null
+  return (
+    <ul className={own.followers}>
+      {followers.data.map((f) => (
+        <li key={f.username}>
+          <Link to="/@{$username}" params={{ username: f.username }} className={styles.titleLink}>
+            @{f.username}
+          </Link>
+          {f.name && <span className={styles.faint}> {f.name}</span>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ReportForm({ list, profileID, onDone }: { list: List; profileID?: number; onDone: () => void }) {
+  const [reason, setReason] = useState<Reason>()
+  const [note, setNote] = useState('')
+  const send = useMutation({
+    mutationFn: async (r: Reason) => {
+      const { error } = await api.POST('/v1/lists/{id}/reports', {
+        params: { path: { id: list.id }, query: { profile_id: profileID } },
+        body: { reason: r, note: note.trim() || undefined },
+      })
+      if (error) throw error
+    },
+  })
+
+  if (send.isSuccess) {
+    return (
+      <p className={own.report}>
+        Thanks for telling us. We’ll take a look, usually within a few days.{' '}
+        <button type="button" className={styles.textButton} onClick={onDone}>
+          Close
+        </button>
+      </p>
+    )
+  }
+  return (
+    <form
+      className={own.report}
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (reason) send.mutate(reason)
+      }}
+    >
+      <fieldset className={styles.options}>
+        <legend className={own.legend}>What’s wrong with it?</legend>
+        {reasons.map((r) => (
+          <Option key={r.value} name="reason" checked={r.value === reason} onChange={() => setReason(r.value)}>
+            {r.label}
+          </Option>
+        ))}
+      </fieldset>
+      <Field label="Anything that would help us (optional)" value={note} onChange={setNote} maxLength={500} />
+      {send.isError && <p className={styles.error}>{problemMessage(send.error)}</p>}
+      <p className={own.actions}>
+        <Button variant="primary" type="submit" disabled={!reason || send.isPending}>
+          Send the report
+        </Button>
+        <button type="button" className={styles.textButton} onClick={onDone}>
+          Cancel
+        </button>
+      </p>
+    </form>
   )
 }
