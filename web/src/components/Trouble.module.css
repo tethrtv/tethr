@@ -1,0 +1,115 @@
+.trouble {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+}
+
+.telly {
+  width: min(300px, 80%);
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.lines {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.body {
+  fill: var(--paper);
+}
+
+.screen {
+  fill: var(--paper-2);
+}
+
+.static {
+  stroke: var(--ink-3);
+  stroke-width: 2.5;
+}
+
+.smoke {
+  stroke: var(--ink-3);
+  stroke-width: 2.5;
+}
+
+.band {
+  fill: #d4fa3c;
+  stroke: #141412;
+  stroke-width: 2;
+}
+
+.bandText {
+  fill: #141412;
+  font-family: var(--font);
+  font-stretch: 74%;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+.title {
+  margin: 0;
+  font-stretch: var(--wide);
+  font-weight: 800;
+  font-size: clamp(2.25rem, 1.5rem + 3vw, 3.75rem);
+  line-height: 1;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+.lead {
+  margin: 0;
+  font-size: 1.1875rem;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  margin: 10px 0 0;
+}
+
+.button {
+  text-decoration: none;
+}
+
+.textLink {
+  font-weight: 600;
+}
+
+.details {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  width: 100%;
+  color: var(--ink-2);
+}
+
+.details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.small {
+  font-size: 0.9375rem;
+}
+
+.code {
+  display: block;
+  font-family: var(--font);
+  padding: 10px 12px;
+  background: var(--paper-2);
+  border-radius: 4px;
+  font-stretch: var(--narrow);
+  font-weight: 650;
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
