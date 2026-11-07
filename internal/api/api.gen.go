@@ -19,6 +19,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AutoListKind.
+const (
+	AutoListKindFavourites AutoListKind = "favourites"
+	AutoListKindHousehold  AutoListKind = "household"
+	AutoListKindRewatch    AutoListKind = "rewatch"
+	AutoListKindStopped    AutoListKind = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the AutoListKind enum.
+func (e AutoListKind) Valid() bool {
+	switch e {
+	case AutoListKindFavourites:
+		return true
+	case AutoListKindHousehold:
+		return true
+	case AutoListKindRewatch:
+		return true
+	case AutoListKindStopped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ExportFormat.
 const (
 	Tethr ExportFormat = "tethr"
@@ -397,6 +421,24 @@ func (e WatchAction) Valid() bool {
 	}
 }
 
+// Defines values for ListAutoListItemsParamsType.
+const (
+	ListAutoListItemsParamsTypeMovie ListAutoListItemsParamsType = "movie"
+	ListAutoListItemsParamsTypeShow  ListAutoListItemsParamsType = "show"
+)
+
+// Valid indicates whether the value is a known member of the ListAutoListItemsParamsType enum.
+func (e ListAutoListItemsParamsType) Valid() bool {
+	switch e {
+	case ListAutoListItemsParamsTypeMovie:
+		return true
+	case ListAutoListItemsParamsTypeShow:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListHistoryParamsType.
 const (
 	ListHistoryParamsTypeEpisode ListHistoryParamsType = "episode"
@@ -598,6 +640,48 @@ type AuthorizationRequest struct {
 type AuthorizingApp struct {
 	AppName string `json:"app_name"`
 }
+
+// AutoList defines model for AutoList.
+type AutoList struct {
+	// Cover The first four items. Fetch their posters from TMDB.
+	Cover       []Item `json:"cover"`
+	Description string `json:"description"`
+	ItemCount   int    `json:"item_count"`
+
+	// Kind `stopped` is shows you started and haven't watched for 90 days, or took out of Up next. `favourites` is films and shows you rated 9 or 10. `rewatch` is ones you rated 8 or more and last watched over a year ago. `household` is anything someone in the household rated 9 or 10, never counting guests, and counting only kids profiles when a kids profile asks.
+	Kind AutoListKind `json:"kind"`
+	Name string       `json:"name"`
+}
+
+// AutoListItem defines model for AutoListItem.
+type AutoListItem struct {
+	// At Why it's on the list, which is when you last watched it, or when it was rated on the favourites lists.
+	At   time.Time `json:"at"`
+	Item Item      `json:"item"`
+
+	// Progress How much of the item the profile reading the list has watched. A film or episode has a total of 1, and a show or season counts aired episodes, leaving out specials for a show. Left out when signed out.
+	Progress *ItemProgress `json:"progress,omitempty"`
+
+	// Rank Where it sits in the list's own order.
+	Rank int `json:"rank"`
+
+	// Rating Your own rating, if you've rated it.
+	Rating *int `json:"rating,omitempty"`
+}
+
+// AutoListItemsPage defines model for AutoListItemsPage.
+type AutoListItemsPage struct {
+	Items []AutoListItem `json:"items"`
+	Limit int            `json:"limit"`
+	List  AutoList       `json:"list"`
+	Page  int            `json:"page"`
+
+	// Total How many items match, across every page.
+	Total int `json:"total"`
+}
+
+// AutoListKind `stopped` is shows you started and haven't watched for 90 days, or took out of Up next. `favourites` is films and shows you rated 9 or 10. `rewatch` is ones you rated 8 or more and last watched over a year ago. `household` is anything someone in the household rated 9 or 10, never counting guests, and counting only kids profiles when a kids profile asks.
+type AutoListKind string
 
 // Connection defines model for Connection.
 type Connection struct {
@@ -1386,6 +1470,37 @@ type GetAuthorizationParams struct {
 	RedirectUri string `form:"redirect_uri" json:"redirect_uri"`
 }
 
+// ListAutoListsParams defines parameters for ListAutoLists.
+type ListAutoListsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ListAutoListItemsParams defines parameters for ListAutoListItems.
+type ListAutoListItemsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId                   `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Type      *ListAutoListItemsParamsType `form:"type,omitempty" json:"type,omitempty"`
+
+	// SortBy Left out, the list's own order.
+	SortBy      *ListSortBy  `form:"sort_by,omitempty" json:"sort_by,omitempty"`
+	SortHow     *ListSortHow `form:"sort_how,omitempty" json:"sort_how,omitempty"`
+	HideWatched *bool        `form:"hide_watched,omitempty" json:"hide_watched,omitempty"`
+	Page        *int         `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit 100 by default, and up to 1,000.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAutoListItemsParamsType defines parameters for ListAutoListItems.
+type ListAutoListItemsParamsType string
+
+// CopyAutoListParams defines parameters for CopyAutoList.
+type CopyAutoListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // ListHistoryParams defines parameters for ListHistory.
 type ListHistoryParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -1788,6 +1903,15 @@ type ServerInterface interface {
 	// Authorize Approve an app's sign-in request for one of your profiles
 	// (POST /v1/authorize)
 	Authorize(w http.ResponseWriter, r *http.Request)
+	// ListAutoLists Lists made from your own data
+	// (GET /v1/auto-lists)
+	ListAutoLists(w http.ResponseWriter, r *http.Request, params ListAutoListsParams)
+	// ListAutoListItems What's on a list made from your own data
+	// (GET /v1/auto-lists/{kind})
+	ListAutoListItems(w http.ResponseWriter, r *http.Request, kind AutoListKind, params ListAutoListItemsParams)
+	// CopyAutoList Keep a copy as a list of your own
+	// (POST /v1/auto-lists/{kind}/copy)
+	CopyAutoList(w http.ResponseWriter, r *http.Request, kind AutoListKind, params CopyAutoListParams)
 	// ListConnections List the apps connected to your household
 	// (GET /v1/connections)
 	ListConnections(w http.ResponseWriter, r *http.Request)
@@ -2262,6 +2386,201 @@ func (siw *ServerInterfaceWrapper) Authorize(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Authorize(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAutoLists operation middleware
+func (siw *ServerInterfaceWrapper) ListAutoLists(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAutoListsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAutoLists(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAutoListItems operation middleware
+func (siw *ServerInterfaceWrapper) ListAutoListItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "kind" -------------
+	var kind AutoListKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAutoListItemsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_by" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_by", r.URL.Query(), &params.SortBy, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_by"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_by", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_how" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_how", r.URL.Query(), &params.SortHow, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_how"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_how", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hide_watched" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hide_watched", r.URL.Query(), &params.HideWatched, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hide_watched"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hide_watched", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAutoListItems(w, r, kind, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CopyAutoList operation middleware
+func (siw *ServerInterfaceWrapper) CopyAutoList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "kind" -------------
+	var kind AutoListKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CopyAutoListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CopyAutoList(w, r, kind, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4635,6 +4954,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/watchlist", wrapper.ListWatchlist)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/watchlist", wrapper.AddToWatchlist)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/watchlist/{id}", wrapper.RemoveFromWatchlist)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/auto-lists", wrapper.ListAutoLists)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/auto-lists/{kind}", wrapper.ListAutoListItems)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auto-lists/{kind}/copy", wrapper.CopyAutoList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists", wrapper.ListLists)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists", wrapper.CreateList)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/lists/{id}", wrapper.DeleteList)
@@ -5370,6 +5692,172 @@ func (response Authorize404JSONResponse) VisitAuthorizeResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAutoListsRequestObject struct {
+	Params ListAutoListsParams
+}
+
+type ListAutoListsResponseObject interface {
+	VisitListAutoListsResponse(w http.ResponseWriter) error
+}
+
+type ListAutoLists200JSONResponse []AutoList
+
+func (response ListAutoLists200JSONResponse) VisitListAutoListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAutoLists401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListAutoLists401JSONResponse) VisitListAutoListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAutoLists404JSONResponse Problem
+
+func (response ListAutoLists404JSONResponse) VisitListAutoListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAutoListItemsRequestObject struct {
+	Kind   AutoListKind `json:"kind"`
+	Params ListAutoListItemsParams
+}
+
+type ListAutoListItemsResponseObject interface {
+	VisitListAutoListItemsResponse(w http.ResponseWriter) error
+}
+
+type ListAutoListItems200JSONResponse AutoListItemsPage
+
+func (response ListAutoListItems200JSONResponse) VisitListAutoListItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAutoListItems401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListAutoListItems401JSONResponse) VisitListAutoListItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAutoListItems404JSONResponse Problem
+
+func (response ListAutoListItems404JSONResponse) VisitListAutoListItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyAutoListRequestObject struct {
+	Kind   AutoListKind `json:"kind"`
+	Params CopyAutoListParams
+}
+
+type CopyAutoListResponseObject interface {
+	VisitCopyAutoListResponse(w http.ResponseWriter) error
+}
+
+type CopyAutoList201JSONResponse List
+
+func (response CopyAutoList201JSONResponse) VisitCopyAutoListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyAutoList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response CopyAutoList401JSONResponse) VisitCopyAutoListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyAutoList404JSONResponse Problem
+
+func (response CopyAutoList404JSONResponse) VisitCopyAutoListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyAutoList422JSONResponse Problem
+
+func (response CopyAutoList422JSONResponse) VisitCopyAutoListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8830,6 +9318,15 @@ type StrictServerInterface interface {
 	// Authorize Approve an app's sign-in request for one of your profiles
 	// (POST /v1/authorize)
 	Authorize(ctx context.Context, request AuthorizeRequestObject) (AuthorizeResponseObject, error)
+	// ListAutoLists Lists made from your own data
+	// (GET /v1/auto-lists)
+	ListAutoLists(ctx context.Context, request ListAutoListsRequestObject) (ListAutoListsResponseObject, error)
+	// ListAutoListItems What's on a list made from your own data
+	// (GET /v1/auto-lists/{kind})
+	ListAutoListItems(ctx context.Context, request ListAutoListItemsRequestObject) (ListAutoListItemsResponseObject, error)
+	// CopyAutoList Keep a copy as a list of your own
+	// (POST /v1/auto-lists/{kind}/copy)
+	CopyAutoList(ctx context.Context, request CopyAutoListRequestObject) (CopyAutoListResponseObject, error)
 	// ListConnections List the apps connected to your household
 	// (GET /v1/connections)
 	ListConnections(ctx context.Context, request ListConnectionsRequestObject) (ListConnectionsResponseObject, error)
@@ -9448,6 +9945,86 @@ func (sh *strictHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AuthorizeResponseObject); ok {
 		if err := validResponse.VisitAuthorizeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAutoLists operation middleware
+func (sh *strictHandler) ListAutoLists(w http.ResponseWriter, r *http.Request, params ListAutoListsParams) {
+	var request ListAutoListsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAutoLists(ctx, request.(ListAutoListsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAutoLists")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAutoListsResponseObject); ok {
+		if err := validResponse.VisitListAutoListsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAutoListItems operation middleware
+func (sh *strictHandler) ListAutoListItems(w http.ResponseWriter, r *http.Request, kind AutoListKind, params ListAutoListItemsParams) {
+	var request ListAutoListItemsRequestObject
+
+	request.Kind = kind
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAutoListItems(ctx, request.(ListAutoListItemsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAutoListItems")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAutoListItemsResponseObject); ok {
+		if err := validResponse.VisitListAutoListItemsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CopyAutoList operation middleware
+func (sh *strictHandler) CopyAutoList(w http.ResponseWriter, r *http.Request, kind AutoListKind, params CopyAutoListParams) {
+	var request CopyAutoListRequestObject
+
+	request.Kind = kind
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CopyAutoList(ctx, request.(CopyAutoListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CopyAutoList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CopyAutoListResponseObject); ok {
+		if err := validResponse.VisitCopyAutoListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -42,7 +42,7 @@ func TestAutoLists(t *testing.T) {
 			t.Fatal(err)
 		}
 		for i := range outline {
-			outline[i].TMDBID = int32(tmdb)*10 + int32(i)
+			outline[i].TMDBID = tmdb*10 + int32(i)
 		}
 		if err := SaveOutline(ctx, db, show.ID, outline); err != nil {
 			t.Fatal(err)

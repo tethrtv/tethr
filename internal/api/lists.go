@@ -388,3 +388,105 @@ func (s *Server) RemoveManyFromList(ctx context.Context, req RemoveManyFromListR
 	}
 	return RemoveManyFromList200JSONResponse{Removed: removed}, nil
 }
+
+var autoListWords = map[string][2]string{
+	"stopped":    {"Stopped watching", "Shows you started and haven’t watched for 90 days, or took out of Up next."},
+	"favourites": {"Favourites", "Films and shows you rated 9 or 10."},
+	"rewatch":    {"Due a rewatch", "Things you rated 8 or more and last watched over a year ago."},
+	"household":  {"Household favourites", "Anything someone in the household rated 9 or 10."},
+}
+
+var noSuchAutoList = problem("not_found", "There’s no list of that kind for this profile.")
+
+func toAutoList(l core.AutoList) AutoList {
+	cover := make([]Item, 0, len(l.Cover))
+	for _, i := range l.Cover {
+		cover = append(cover, toItem(i))
+	}
+	words := autoListWords[l.Kind]
+	return AutoList{Kind: AutoListKind(l.Kind), Name: words[0], Description: words[1], ItemCount: l.Count, Cover: cover}
+}
+
+func (s *Server) ListAutoLists(ctx context.Context, req ListAutoListsRequestObject) (ListAutoListsResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return ListAutoLists404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return ListAutoLists401JSONResponse{notConnected}, err
+	}
+	lists, err := core.AutoLists(ctx, s.DB, c.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(ListAutoLists200JSONResponse, 0, len(lists))
+	for _, l := range lists {
+		out = append(out, toAutoList(l))
+	}
+	return out, nil
+}
+
+func (s *Server) ListAutoListItems(ctx context.Context, req ListAutoListItemsRequestObject) (ListAutoListItemsResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return ListAutoListItems404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return ListAutoListItems401JSONResponse{notConnected}, err
+	}
+	p := req.Params
+	query := core.ListQuery{HideWatched: value(p.HideWatched), Page: core.Page{Page: max(value(p.Page), 1), Limit: min(max(value(p.Limit), 0), 1000)}}
+	if query.Page.Limit == 0 {
+		query.Page.Limit = 100
+	}
+	if p.Type != nil {
+		query.Kind = string(*p.Type)
+	}
+	if p.SortBy != nil {
+		query.SortBy = string(*p.SortBy)
+	}
+	if p.SortHow != nil {
+		query.SortHow = string(*p.SortHow)
+	}
+	l, entries, total, err := core.AutoListEntries(ctx, s.DB, c.ProfileID, string(req.Kind), query)
+	if errors.Is(err, core.ErrNotFound) {
+		return ListAutoListItems404JSONResponse(noSuchAutoList), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := ListAutoListItems200JSONResponse{List: toAutoList(l), Items: make([]AutoListItem, 0, len(entries)), Total: total, Page: query.Page.Page, Limit: query.Page.Limit}
+	for _, e := range entries {
+		item := AutoListItem{Rank: int(e.Rank), At: e.At, Item: toItem(e.Item)}
+		if e.Rating != nil {
+			rating := int(*e.Rating)
+			item.Rating = &rating
+		}
+		if e.Progress != nil {
+			item.Progress = &ItemProgress{Watched: e.Progress.Watched, Total: e.Progress.Total, LastWatchedAt: e.Progress.LastWatchedAt}
+		}
+		out.Items = append(out.Items, item)
+	}
+	return out, nil
+}
+
+func (s *Server) CopyAutoList(ctx context.Context, req CopyAutoListRequestObject) (CopyAutoListResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return CopyAutoList404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return CopyAutoList401JSONResponse{notConnected}, err
+	}
+	l, err := core.CopyAutoList(ctx, s.DB, c.ProfileID, string(req.Kind), autoListWords[string(req.Kind)][0])
+	if errors.Is(err, core.ErrNotFound) {
+		return CopyAutoList404JSONResponse(noSuchAutoList), nil
+	}
+	if p, status, ok := listProblem(err); ok && status == 422 {
+		return CopyAutoList422JSONResponse(p), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return CopyAutoList201JSONResponse(s.toList(l)), nil
+}
