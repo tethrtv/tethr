@@ -57,11 +57,9 @@
   border-bottom: 1px solid var(--rule);
 }
 
-.editing {
+.slipForm {
   display: grid;
-  gap: 14px;
-  padding: 16px 0 18px;
-  border-bottom: 1px solid var(--rule);
+  gap: 18px;
 }
 
 .name {
@@ -98,10 +96,6 @@
 .inline {
   font-weight: 600;
   color: var(--ink);
-}
-
-.warn {
-  color: var(--ink-2);
 }
 
 .danger {
@@ -181,16 +175,6 @@
   padding: 0 4px;
   border-radius: 2px;
   font-weight: 600;
-}
-
-.deleteBox {
-  display: grid;
-  gap: 16px;
-  max-width: 520px;
-  margin-top: 14px;
-  padding: 18px 20px 20px;
-  border: 1.5px solid var(--danger);
-  border-radius: 2px;
 }
 
 .visuallyHidden {
