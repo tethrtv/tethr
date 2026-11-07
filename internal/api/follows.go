@@ -191,7 +191,7 @@ func (s *Server) reportEmail(r core.Report) mail.Message {
 }
 
 func RemovedListEmail(appURL string, removed core.RemovedList, reason string) (mail.Message, error) {
-	data := struct{ Title, Preview, Lead, Button, Link, Note, Footer, AppURL string }{
+	data := struct{ Title, Preview, Lead, Button, Link, Note, Footer, AppURL, Image, ImageAlt string }{
 		Title:   "We made one of your lists private",
 		Preview: fmt.Sprintf("Your list “%s” broke Tethr’s rules.", removed.Name),
 		Lead:    fmt.Sprintf("Your list “%s” was reported, and we found it breaks Tethr’s rules: %s. We’ve made it private, so only you can see it now. Nothing on it has been deleted.", removed.Name, reason),
