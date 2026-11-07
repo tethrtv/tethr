@@ -6,6 +6,7 @@ import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
 import { Plain } from '../components/Plain'
+import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { describeDevice } from '../device'
 import { addPasskey, passkeysSupported } from '../passkeys'
 import { returnTo } from '../returnTo'
@@ -129,48 +130,13 @@ function Household({ me }: { me: Me }) {
 }
 
 function ProfileRow({ profile, onChange }: { profile: Profile; onChange: () => void }) {
-  const [editing, setEditing] = useState(false)
-  const [confirming, setConfirming] = useState(false)
+  const [slip, setSlip] = useState<'edit' | 'remove' | null>(null)
   const [name, setName] = useState(profile.name)
   const [username, setUsername] = useState(profile.username)
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.PATCH('/v1/profiles/{id}', {
-        params: { path: { id: profile.id } },
-        body: { name, username },
-      })
-      if (error) throw error
-    },
-    onSuccess: () => {
-      setEditing(false)
-      onChange()
-    },
-  })
-  const remove = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.DELETE('/v1/profiles/{id}', { params: { path: { id: profile.id } } })
-      if (error) throw error
-    },
-    onSuccess: onChange,
-  })
-
-  if (editing) {
-    return (
-      <li className={styles.editing}>
-        <Field label="Name" value={name} onChange={setName} />
-        <Field label="Username" value={username} onChange={(v) => setUsername(v.toLowerCase())} spellCheck={false} />
-        <div className={styles.rowActions}>
-          <Button variant="primary" onClick={() => save.mutate()} aria-busy={save.isPending}>
-            Save
-          </Button>
-          <Button variant="text" onClick={() => setEditing(false)}>
-            Cancel
-          </Button>
-        </div>
-        {save.isError && <p className={styles.error}>{problemMessage(save.error)}</p>}
-      </li>
-    )
+  const open = (step: 'edit' | 'remove') => {
+    setName(profile.name)
+    setUsername(profile.username)
+    setSlip(step)
   }
 
   return (
@@ -182,30 +148,139 @@ function ProfileRow({ profile, onChange }: { profile: Profile; onChange: () => v
         {profile.private ? ', private' : ''}
       </span>
       <span className={styles.rowActions}>
-        {confirming ? (
-          <>
-            <span className={styles.warn}>Their history goes too.</span>
-            <Button variant="text" onClick={() => setConfirming(false)}>
-              Keep
-            </Button>
-            <Button variant="text" className={styles.danger} onClick={() => remove.mutate()}>
-              Remove
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="text" onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-            {profile.kind !== 'owner' && (
-              <Button variant="text" className={styles.danger} onClick={() => setConfirming(true)}>
-                Remove
-              </Button>
-            )}
-          </>
+        <Button variant="text" onClick={() => open('edit')}>
+          Edit
+        </Button>
+        {profile.kind !== 'owner' && (
+          <Button variant="text" className={styles.danger} onClick={() => open('remove')}>
+            Remove
+          </Button>
         )}
       </span>
+      <Slip
+        open={slip !== null}
+        onClose={() => setSlip(null)}
+        step={slip ?? 'edit'}
+        title={slip === 'remove' ? `Remove ${profile.name}?` : `Change ${profile.name}`}
+      >
+        {slip === 'remove' ? (
+          <RemoveProfile profile={profile} onKeep={() => setSlip('edit')} onChange={onChange} />
+        ) : (
+          <EditProfile
+            profile={profile}
+            name={name}
+            username={username}
+            setName={setName}
+            setUsername={setUsername}
+            onRemove={() => setSlip('remove')}
+            onClose={() => setSlip(null)}
+            onChange={onChange}
+          />
+        )}
+      </Slip>
     </li>
+  )
+}
+
+function EditProfile({
+  profile,
+  name,
+  username,
+  setName,
+  setUsername,
+  onRemove,
+  onClose,
+  onChange,
+}: {
+  profile: Profile
+  name: string
+  username: string
+  setName: (v: string) => void
+  setUsername: (v: string) => void
+  onRemove: () => void
+  onClose: () => void
+  onChange: () => void
+}) {
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PATCH('/v1/profiles/{id}', {
+        params: { path: { id: profile.id } },
+        body: { name, username },
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      onChange()
+      onClose()
+    },
+  })
+  const form = `profile-${profile.id}`
+  return (
+    <>
+      <SlipBody>
+        <form
+          id={form}
+          className={styles.slipForm}
+          onSubmit={(e) => {
+            e.preventDefault()
+            save.mutate()
+          }}
+        >
+          <Field label="Name" value={name} onChange={setName} />
+          <Field
+            label="Username"
+            value={username}
+            onChange={(v) => setUsername(v.toLowerCase())}
+            spellCheck={false}
+            hint="Apps show this, and so does anything this profile shares."
+          />
+          {save.isError && <p className={styles.error}>{problemMessage(save.error)}</p>}
+          {profile.kind !== 'owner' && (
+            <p>
+              <Button variant="text" className={styles.danger} onClick={onRemove}>
+                Remove this profile
+              </Button>
+            </p>
+          )}
+        </form>
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="primary" type="submit" form={form} aria-busy={save.isPending}>
+          Save
+        </Button>
+        <Button variant="text" onClick={onClose}>
+          Cancel
+        </Button>
+      </SlipFoot>
+    </>
+  )
+}
+
+function RemoveProfile({ profile, onKeep, onChange }: { profile: Profile; onKeep: () => void; onChange: () => void }) {
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE('/v1/profiles/{id}', { params: { path: { id: profile.id } } })
+      if (error) throw error
+    },
+    onSuccess: onChange,
+  })
+  return (
+    <>
+      <SlipBody>
+        <p>
+          Their history, ratings and lists go with them, and it can’t be undone. Apps connected as them stop logging.
+        </p>
+        {remove.isError && <p className={styles.error}>{problemMessage(remove.error)}</p>}
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="danger" onClick={() => remove.mutate()} aria-busy={remove.isPending}>
+          Remove {profile.name}
+        </Button>
+        <Button variant="text" onClick={onKeep}>
+          Keep them
+        </Button>
+      </SlipFoot>
+    </>
   )
 }
 
@@ -245,44 +320,12 @@ function ConnectedApps() {
 
 function ConnectionRow({ connection: c }: { connection: Connection }) {
   const queries = useQueryClient()
-  const [confirming, setConfirming] = useState(false)
-  const [renaming, setRenaming] = useState(false)
+  const [slip, setSlip] = useState<'rename' | 'disconnect' | null>(null)
   const [label, setLabel] = useState(c.label ?? '')
   const refresh = () => queries.invalidateQueries({ queryKey: ['connections'] })
-
-  const rename = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.PATCH('/v1/connections/{id}', { params: { path: { id: c.id } }, body: { label } })
-      if (error) throw error
-    },
-    onSuccess: () => {
-      setRenaming(false)
-      refresh()
-    },
-  })
-  const disconnect = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.DELETE('/v1/connections/{id}', { params: { path: { id: c.id } } })
-      if (error) throw error
-    },
-    onSuccess: refresh,
-  })
-
-  if (renaming) {
-    return (
-      <li className={styles.editing}>
-        <Field label={`Name for ${c.app_name}`} value={label} onChange={setLabel} placeholder="Living room" />
-        <div className={styles.rowActions}>
-          <Button variant="primary" onClick={() => rename.mutate()} aria-busy={rename.isPending}>
-            Save
-          </Button>
-          <Button variant="text" onClick={() => setRenaming(false)}>
-            Cancel
-          </Button>
-        </div>
-        {rename.isError && <p className={styles.error}>{problemMessage(rename.error)}</p>}
-      </li>
-    )
+  const open = (step: 'rename' | 'disconnect') => {
+    setLabel(c.label ?? '')
+    setSlip(step)
   }
 
   return (
@@ -295,28 +338,120 @@ function ConnectionRow({ connection: c }: { connection: Connection }) {
       <span className={styles.kind}>Logs as {c.profile_name}</span>
       <span className={styles.kind}>Last used {when(c.last_used_at ?? c.created_at)}</span>
       <span className={styles.rowActions}>
-        {confirming ? (
-          <>
-            <span className={styles.warn}>It’ll need a new code to come back.</span>
-            <Button variant="text" onClick={() => setConfirming(false)}>
-              Keep it
-            </Button>
-            <Button variant="text" className={styles.danger} onClick={() => disconnect.mutate()}>
-              Disconnect
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="text" onClick={() => setRenaming(true)}>
-              Rename
-            </Button>
-            <Button variant="text" className={styles.danger} onClick={() => setConfirming(true)}>
-              Disconnect
-            </Button>
-          </>
-        )}
+        <Button variant="text" onClick={() => open('rename')}>
+          Rename
+        </Button>
+        <Button variant="text" className={styles.danger} onClick={() => open('disconnect')}>
+          Disconnect
+        </Button>
       </span>
+      <Slip
+        open={slip !== null}
+        onClose={() => setSlip(null)}
+        step={slip ?? 'rename'}
+        title={slip === 'disconnect' ? `Disconnect ${c.app_name}?` : `Rename ${c.app_name}`}
+      >
+        {slip === 'disconnect' ? (
+          <Disconnect connection={c} onKeep={() => setSlip(null)} onDone={refresh} />
+        ) : (
+          <Rename connection={c} label={label} setLabel={setLabel} onClose={() => setSlip(null)} onDone={refresh} />
+        )}
+      </Slip>
     </li>
+  )
+}
+
+function Rename({
+  connection: c,
+  label,
+  setLabel,
+  onClose,
+  onDone,
+}: {
+  connection: Connection
+  label: string
+  setLabel: (v: string) => void
+  onClose: () => void
+  onDone: () => void
+}) {
+  const rename = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PATCH('/v1/connections/{id}', { params: { path: { id: c.id } }, body: { label } })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      onDone()
+      onClose()
+    },
+  })
+  const form = `rename-${c.id}`
+  return (
+    <>
+      <SlipBody>
+        <form
+          id={form}
+          className={styles.slipForm}
+          onSubmit={(e) => {
+            e.preventDefault()
+            rename.mutate()
+          }}
+        >
+          <Field
+            label="Name"
+            value={label}
+            onChange={setLabel}
+            placeholder="Living room"
+            hint="To tell two of the same app apart."
+          />
+          {rename.isError && <p className={styles.error}>{problemMessage(rename.error)}</p>}
+        </form>
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="primary" type="submit" form={form} aria-busy={rename.isPending}>
+          Save
+        </Button>
+        <Button variant="text" onClick={onClose}>
+          Cancel
+        </Button>
+      </SlipFoot>
+    </>
+  )
+}
+
+function Disconnect({
+  connection: c,
+  onKeep,
+  onDone,
+}: {
+  connection: Connection
+  onKeep: () => void
+  onDone: () => void
+}) {
+  const disconnect = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE('/v1/connections/{id}', { params: { path: { id: c.id } } })
+      if (error) throw error
+    },
+    onSuccess: onDone,
+  })
+  return (
+    <>
+      <SlipBody>
+        <p>
+          It stops logging as {c.profile_name} straight away, and never touches your history. To use it again, it’ll
+          need a new code.
+        </p>
+        {disconnect.isError && <p className={styles.error}>{problemMessage(disconnect.error)}</p>}
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="danger" onClick={() => disconnect.mutate()} aria-busy={disconnect.isPending}>
+          Disconnect
+        </Button>
+        <Button variant="text" onClick={onKeep}>
+          Keep it
+        </Button>
+      </SlipFoot>
+    </>
   )
 }
 
@@ -540,12 +675,30 @@ function YourData() {
 }
 
 function DeleteAccount({ me }: { me: Me }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>Delete the account</h2>
+      <p className={styles.note}>
+        This removes you, everyone in the household and all of your history. Backups roll off within 30 days.
+      </p>
+      <p>
+        <Button variant="text" className={styles.danger} onClick={() => setOpen(true)}>
+          Delete account
+        </Button>
+      </p>
+      <Slip open={open} onClose={() => setOpen(false)} title="Delete the whole account?">
+        <ConfirmDelete me={me} onKeep={() => setOpen(false)} />
+      </Slip>
+    </section>
+  )
+}
+
+function ConfirmDelete({ me, onKeep }: { me: Me; onKeep: () => void }) {
   const navigate = useNavigate()
   const queries = useQueryClient()
-  const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
   const owner = me.profiles.find((p) => p.kind === 'owner')
-
   const remove = useMutation({
     mutationFn: async () => {
       const { error } = await api.DELETE('/v1/me', { body: { username: typed } })
@@ -556,21 +709,21 @@ function DeleteAccount({ me }: { me: Me }) {
       navigate({ to: '/sign-in' })
     },
   })
-
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Delete the account</h2>
-      <p className={styles.note}>
-        This removes you, everyone in the household and all of your history. Backups roll off within 30 days.
-      </p>
-      {open ? (
+    <>
+      <SlipBody>
         <form
-          className={styles.deleteBox}
+          id="delete-account"
+          className={styles.slipForm}
           onSubmit={(e) => {
             e.preventDefault()
             remove.mutate()
           }}
         >
+          <p>
+            Every profile in the household goes, with all its history, ratings and lists. It can’t be undone. If you
+            might want your history later, download it first.
+          </p>
           <Field
             label={`Type ${owner?.username ?? 'your username'} to confirm`}
             value={typed}
@@ -580,22 +733,22 @@ function DeleteAccount({ me }: { me: Me }) {
             spellCheck={false}
             error={remove.isError ? problemMessage(remove.error) : undefined}
           />
-          <div className={styles.rowActions}>
-            <Button variant="danger" disabled={typed !== owner?.username} aria-busy={remove.isPending}>
-              Delete everything
-            </Button>
-            <Button type="button" variant="text" onClick={() => setOpen(false)}>
-              Keep my account
-            </Button>
-          </div>
         </form>
-      ) : (
-        <p>
-          <Button variant="text" className={styles.danger} onClick={() => setOpen(true)}>
-            Delete account
-          </Button>
-        </p>
-      )}
-    </section>
+      </SlipBody>
+      <SlipFoot>
+        <Button
+          variant="danger"
+          type="submit"
+          form="delete-account"
+          disabled={typed !== owner?.username}
+          aria-busy={remove.isPending}
+        >
+          Delete everything
+        </Button>
+        <Button variant="text" onClick={onKeep}>
+          Keep my account
+        </Button>
+      </SlipFoot>
+    </>
   )
 }
