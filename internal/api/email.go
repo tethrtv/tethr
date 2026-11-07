@@ -17,20 +17,24 @@ var emails = template.Must(template.ParseFS(emailFiles, "emails/*.html"))
 
 func signInEmail(appURL string, e *core.SignInEmail) (mail.Message, error) {
 	link := fmt.Sprintf("%s/verify?token=%s", appURL, e.Token)
-	data := struct{ Title, Preview, Lead, Button, Link, Code, AppURL string }{
-		Title:   "Sign in to Tethr",
-		Preview: "Your sign-in link and code for Tethr.",
-		Lead:    "Here’s your link to sign in. There’s no password to remember.",
-		Button:  "Sign in",
-		Link:    link,
-		Code:    e.Code,
-		AppURL:  appURL,
+	data := struct{ Title, Preview, Lead, Button, Link, Code, AppURL, Image, ImageAlt string }{
+		Title:    "Sign in to Tethr",
+		Preview:  "Your sign-in link and code for Tethr.",
+		Lead:     "Here’s your link to sign in. There’s no password to remember.",
+		Button:   "Sign in",
+		Link:     link,
+		Code:     e.Code,
+		AppURL:   appURL,
+		Image:    "email-signin.png",
+		ImageAlt: "An old telly showing “You’re on”",
 	}
 	if e.Purpose == "sign_up" {
 		data.Title = "Finish creating your account"
 		data.Preview = "One click and your Tethr account is ready."
 		data.Lead = "You’re one step away. Use the button to confirm this is your email address and sign in."
 		data.Button = "Finish signing up"
+		data.Image = "email-welcome.png"
+		data.ImageAlt = "An old telly showing “Welcome”"
 	}
 
 	var html bytes.Buffer
