@@ -5,6 +5,7 @@ import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Plain } from '../components/Plain'
+import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { ProfilePicker, useSignedIn } from './connect'
 import home from './Home.module.css'
 import styles from './Import.module.css'
@@ -256,24 +257,33 @@ function PastImport({ imp, profileID, onDone }: { imp: Import; profileID: number
       </div>
       {undoable(imp) && done.length > 0 && (
         <span className={home.rowActions}>
-          {confirming ? (
-            <>
-              <span className={home.warn}>Take out everything it added?</span>
-              <Button variant="danger" onClick={() => undo.mutate()} aria-busy={undo.isPending}>
-                Undo import
-              </Button>
-              <Button variant="text" onClick={() => setConfirming(false)}>
-                Keep
-              </Button>
-            </>
-          ) : (
-            <Button variant="text" onClick={() => setConfirming(true)}>
-              Undo
-            </Button>
-          )}
+          <Button
+            variant="text"
+            onClick={() => {
+              undo.reset()
+              setConfirming(true)
+            }}
+          >
+            Undo
+          </Button>
         </span>
       )}
-      {undo.isError && <p className={home.error}>{problemMessage(undo.error)}</p>}
+      <Slip open={confirming} onClose={() => setConfirming(false)} title="Undo this import?">
+        <SlipBody>
+          <p>
+            Everything it added comes out: {done.join(', ')}. Anything that was already here before the import stays.
+          </p>
+          {undo.isError && <p className={home.error}>{problemMessage(undo.error)}</p>}
+        </SlipBody>
+        <SlipFoot>
+          <Button variant="danger" onClick={() => undo.mutate()} aria-busy={undo.isPending}>
+            Undo the import
+          </Button>
+          <Button variant="text" onClick={() => setConfirming(false)}>
+            Keep it
+          </Button>
+        </SlipFoot>
+      </Slip>
     </li>
   )
 }

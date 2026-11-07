@@ -6,6 +6,7 @@ import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
 import { Plain } from '../components/Plain'
+import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { useSignedIn } from './connect'
 import styles from './Developers.module.css'
 import home from './Home.module.css'
@@ -168,65 +169,10 @@ function Register({ onRegistered }: { onRegistered: (name: string, secret: strin
 
 function AppRow({ app: a, onSecret }: { app: DeveloperApp; onSecret: (secret: string) => void }) {
   const queries = useQueryClient()
-  const [editing, setEditing] = useState(false)
-  const [revoking, setRevoking] = useState(false)
-  const [name, setName] = useState(a.name)
-  const [redirects, setRedirects] = useState(a.redirect_uris.join(' '))
+  const [slip, setSlip] = useState<'edit' | 'secret' | 'revoke' | null>(null)
   const refresh = () => queries.invalidateQueries({ queryKey: ['apps'] })
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.PATCH('/v1/apps/{id}', {
-        params: { path: { id: a.id } },
-        body: { name, redirect_uris: splitURIs(redirects) },
-      })
-      if (error) throw error
-    },
-    onSuccess: () => {
-      setEditing(false)
-      refresh()
-    },
-  })
-  const secret = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST('/v1/apps/{id}/secret', { params: { path: { id: a.id } } })
-      if (error) throw error
-      return data
-    },
-    onSuccess: (data) => onSecret(data.client_secret),
-  })
-  const revoke = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.DELETE('/v1/apps/{id}', { params: { path: { id: a.id } } })
-      if (error) throw error
-    },
-    onSuccess: refresh,
-  })
-
-  if (editing) {
-    return (
-      <li className={home.editing}>
-        <Field label="Name" value={name} onChange={setName} />
-        <Field
-          label="Sign-in returns to"
-          value={redirects}
-          onChange={setRedirects}
-          spellCheck={false}
-          autoCapitalize="none"
-          hint="Leave empty for TV codes only."
-        />
-        <div className={home.rowActions}>
-          <Button variant="primary" onClick={() => save.mutate()} aria-busy={save.isPending}>
-            Save
-          </Button>
-          <Button variant="text" onClick={() => setEditing(false)}>
-            Cancel
-          </Button>
-        </div>
-        {save.isError && <p className={home.error}>{problemMessage(save.error)}</p>}
-      </li>
-    )
-  }
+  const close = () => setSlip(null)
+  const titles = { edit: `Change ${a.name}`, secret: 'Make a new secret?', revoke: `Revoke ${a.name}?` }
 
   return (
     <li className={styles.app}>
@@ -257,32 +203,152 @@ function AppRow({ app: a, onSecret }: { app: DeveloperApp; onSecret: (secret: st
         )}
       </span>
       <span className={home.rowActions}>
-        {revoking ? (
-          <>
-            <span className={home.warn}>
-              {a.connections ? `Signs out ${a.connections} connected.` : 'Nobody is using it yet.'}
-            </span>
-            <Button variant="text" onClick={() => setRevoking(false)}>
-              Keep it
-            </Button>
-            <Button variant="text" className={home.danger} onClick={() => revoke.mutate()}>
-              Revoke
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="text" onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-            <Button variant="text" aria-busy={secret.isPending} onClick={() => secret.mutate()}>
-              New secret
-            </Button>
-            <Button variant="text" className={home.danger} onClick={() => setRevoking(true)}>
-              Revoke
-            </Button>
-          </>
-        )}
+        <Button variant="text" onClick={() => setSlip('edit')}>
+          Edit
+        </Button>
+        <Button variant="text" onClick={() => setSlip('secret')}>
+          New secret
+        </Button>
+        <Button variant="text" className={home.danger} onClick={() => setSlip('revoke')}>
+          Revoke
+        </Button>
       </span>
+      <Slip open={slip !== null} onClose={close} step={slip ?? 'edit'} title={titles[slip ?? 'edit']}>
+        {slip === 'secret' ? (
+          <NewSecret
+            app={a}
+            onClose={close}
+            onSecret={(value) => {
+              close()
+              onSecret(value)
+            }}
+          />
+        ) : slip === 'revoke' ? (
+          <Revoke app={a} onClose={close} onDone={refresh} />
+        ) : (
+          <EditApp app={a} onClose={close} onDone={refresh} />
+        )}
+      </Slip>
     </li>
+  )
+}
+
+function EditApp({ app: a, onClose, onDone }: { app: DeveloperApp; onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState(a.name)
+  const [redirects, setRedirects] = useState(a.redirect_uris.join(' '))
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PATCH('/v1/apps/{id}', {
+        params: { path: { id: a.id } },
+        body: { name, redirect_uris: splitURIs(redirects) },
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      onDone()
+      onClose()
+    },
+  })
+  const form = `app-${a.id}`
+  return (
+    <>
+      <SlipBody>
+        <form
+          id={form}
+          className={home.slipForm}
+          onSubmit={(e) => {
+            e.preventDefault()
+            save.mutate()
+          }}
+        >
+          <Field label="Name" value={name} onChange={setName} />
+          <Field
+            label="Sign-in returns to"
+            value={redirects}
+            onChange={setRedirects}
+            spellCheck={false}
+            autoCapitalize="none"
+            hint="Leave empty for TV codes only."
+          />
+          {save.isError && <p className={home.error}>{problemMessage(save.error)}</p>}
+        </form>
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="primary" type="submit" form={form} aria-busy={save.isPending}>
+          Save
+        </Button>
+        <Button variant="text" onClick={onClose}>
+          Cancel
+        </Button>
+      </SlipFoot>
+    </>
+  )
+}
+
+function NewSecret({
+  app: a,
+  onClose,
+  onSecret,
+}: {
+  app: DeveloperApp
+  onClose: () => void
+  onSecret: (secret: string) => void
+}) {
+  const secret = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST('/v1/apps/{id}/secret', { params: { path: { id: a.id } } })
+      if (error) throw error
+      return data
+    },
+    onSuccess: (data) => onSecret(data.client_secret),
+  })
+  return (
+    <>
+      <SlipBody>
+        <p>
+          The current secret for {a.name} stops working straight away, so update the app before anyone signs in again.
+          People already connected stay connected.
+        </p>
+        {secret.isError && <p className={home.error}>{problemMessage(secret.error)}</p>}
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="primary" onClick={() => secret.mutate()} aria-busy={secret.isPending}>
+          Make a new secret
+        </Button>
+        <Button variant="text" onClick={onClose}>
+          Keep the old one
+        </Button>
+      </SlipFoot>
+    </>
+  )
+}
+
+function Revoke({ app: a, onClose, onDone }: { app: DeveloperApp; onClose: () => void; onDone: () => void }) {
+  const revoke = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE('/v1/apps/{id}', { params: { path: { id: a.id } } })
+      if (error) throw error
+    },
+    onSuccess: onDone,
+  })
+  return (
+    <>
+      <SlipBody>
+        <p>
+          {a.connections
+            ? `It signs out the ${a.connections === 1 ? 'person' : `${a.connections} people`} connected, and the client ID stops working for good. Their history stays.`
+            : 'Nobody is using it yet. The client ID stops working for good.'}
+        </p>
+        {revoke.isError && <p className={home.error}>{problemMessage(revoke.error)}</p>}
+      </SlipBody>
+      <SlipFoot>
+        <Button variant="danger" onClick={() => revoke.mutate()} aria-busy={revoke.isPending}>
+          Revoke it
+        </Button>
+        <Button variant="text" onClick={onClose}>
+          Keep it
+        </Button>
+      </SlipFoot>
+    </>
   )
 }
