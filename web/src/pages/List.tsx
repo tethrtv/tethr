@@ -27,7 +27,7 @@ const orders = [
 ] as const
 type Order = (typeof orders)[number]
 
-const kinds = [
+export const kinds = [
   { value: 'all', label: 'Everything' },
   { value: 'movie', label: 'Films' },
   { value: 'show', label: 'Shows' },
@@ -207,7 +207,7 @@ export function ListPage({ param, profileID }: { param: string; profileID?: numb
   )
 }
 
-function Option({
+export function Option({
   name,
   checked,
   onChange,
@@ -527,7 +527,7 @@ function Rows({
   )
 }
 
-function what(i: Item) {
+export function what(i: Pick<Item, 'item'>) {
   switch (i.item.type) {
     case 'movie':
       return 'Film'
@@ -539,7 +539,7 @@ function what(i: Item) {
   return 'Show'
 }
 
-function progressWords(i: Item) {
+export function progressWords(i: Pick<Item, 'item' | 'progress'>) {
   const p = i.progress
   if (!p) return undefined
   if (p.total > 0 && p.watched >= p.total) return 'Watched'

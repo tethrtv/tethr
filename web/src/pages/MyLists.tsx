@@ -35,6 +35,10 @@ export function MyLists() {
     queryKey: ['watchlist', profile.id],
     queryFn: async () => (await api.GET('/v1/watchlist', { params })).data ?? [],
   })
+  const auto = useQuery({
+    queryKey: ['auto-lists', profile.id],
+    queryFn: async () => (await api.GET('/v1/auto-lists', { params })).data ?? [],
+  })
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST('/v1/lists', { params, body: { name } })
@@ -99,6 +103,31 @@ export function MyLists() {
           </Button>
         </form>
       </section>
+
+      {!!auto.data?.length && (
+        <section>
+          <h2 className={styles.sectionTitle}>From what you watch</h2>
+          <ol className={styles.rows}>
+            {auto.data.map((l) => (
+              <li key={l.kind} className={own.list}>
+                <ListCover items={l.cover} />
+                <div className={styles.main}>
+                  <Link
+                    to="/lists/auto/$kind"
+                    params={{ kind: l.kind }}
+                    className={`${styles.rowTitle} ${styles.titleLink}`}
+                  >
+                    {l.name}
+                  </Link>
+                  <span className={styles.quiet}>{l.description}</span>
+                </div>
+                <span className={`${styles.code} ${own.count}`}>{plural(l.item_count, 'thing')}</span>
+                <span className={styles.faint}>Only you</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {shared.length > 0 && (
         <section>

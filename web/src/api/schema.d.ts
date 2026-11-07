@@ -542,6 +542,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auto-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists made from your own data
+         * @description Lists that fill themselves from the profile's history and ratings. Only the profile can read them. The household list is left out until at least two profiles in the household count towards it.
+         */
+        get: operations["listAutoLists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auto-lists/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What's on a list made from your own data */
+        get: operations["listAutoListItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auto-lists/{kind}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep a copy as a list of your own
+         * @description Makes a private list with the same name and the first 1,000 items in the same order. The copy doesn't change after that, and you can edit and share it like any other list.
+         */
+        post: operations["copyAutoList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/lists": {
         parameters: {
             query?: never;
@@ -1583,6 +1640,40 @@ export interface components {
         ListItemsPage: {
             list: components["schemas"]["List"];
             items: components["schemas"]["ListItem"][];
+            /** @description How many items match, across every page. */
+            total: number;
+            page: number;
+            limit: number;
+        };
+        /**
+         * @description `stopped` is shows you started and haven't watched for 90 days, or took out of Up next. `favourites` is films and shows you rated 9 or 10. `rewatch` is ones you rated 8 or more and last watched over a year ago. `household` is anything someone in the household rated 9 or 10, never counting guests, and counting only kids profiles when a kids profile asks.
+         * @enum {string}
+         */
+        AutoListKind: "stopped" | "favourites" | "rewatch" | "household";
+        AutoList: {
+            kind: components["schemas"]["AutoListKind"];
+            name: string;
+            description: string;
+            item_count: number;
+            /** @description The first four items. Fetch their posters from TMDB. */
+            cover: components["schemas"]["Item"][];
+        };
+        AutoListItem: {
+            /** @description Where it sits in the list's own order. */
+            rank: number;
+            /**
+             * Format: date-time
+             * @description Why it's on the list, which is when you last watched it, or when it was rated on the favourites lists.
+             */
+            at: string;
+            /** @description Your own rating, if you've rated it. */
+            rating?: number;
+            item: components["schemas"]["Item"];
+            progress?: components["schemas"]["ItemProgress"];
+        };
+        AutoListItemsPage: {
+            list: components["schemas"]["AutoList"];
+            items: components["schemas"]["AutoListItem"][];
             /** @description How many items match, across every page. */
             total: number;
             page: number;
@@ -2801,6 +2892,94 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listAutoLists: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoList"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAutoListItems: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+                type?: "movie" | "show";
+                /** @description Left out, the list's own order. */
+                sort_by?: components["schemas"]["ListSortBy"];
+                sort_how?: components["schemas"]["ListSortHow"];
+                hide_watched?: boolean;
+                page?: number;
+                /** @description 100 by default, and up to 1,000. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["AutoListKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list and a page of its items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoListItemsPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    copyAutoList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["AutoListKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Made */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["List"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     listLists: {
