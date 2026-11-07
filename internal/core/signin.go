@@ -329,16 +329,23 @@ func hash(s string) []byte {
 }
 
 func CreateInvite(ctx context.Context, db *pgxpool.Pool, note string) (string, error) {
+	code, err := inviteCode()
+	if err != nil {
+		return "", err
+	}
+	var notePtr *string
+	if note != "" {
+		notePtr = &note
+	}
+	_, err = store.New(db).CreateInvite(ctx, store.CreateInviteParams{Code: code, Note: notePtr})
+	return code, err
+}
+
+func inviteCode() (string, error) {
 	b := make([]byte, 5)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	raw := base32.StdEncoding.EncodeToString(b)
-	code := raw[:4] + "-" + raw[4:]
-	var notePtr *string
-	if note != "" {
-		notePtr = &note
-	}
-	_, err := store.New(db).CreateInvite(ctx, store.CreateInviteParams{Code: code, Note: notePtr})
-	return code, err
+	return raw[:4] + "-" + raw[4:], nil
 }
