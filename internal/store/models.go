@@ -17,6 +17,7 @@ type Account struct {
 	Name            string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	ExtraInvites    int32
 }
 
 type ActivityMark struct {
@@ -155,12 +156,13 @@ type Import struct {
 }
 
 type Invite struct {
-	ID              int64
-	Code            string
-	Note            *string
-	UsedByAccountID *int64
-	UsedAt          *time.Time
-	CreatedAt       time.Time
+	ID                 int64
+	Code               string
+	Note               *string
+	UsedByAccountID    *int64
+	UsedAt             *time.Time
+	CreatedAt          time.Time
+	CreatedByAccountID *int64
 }
 
 type List struct {
@@ -344,6 +346,11 @@ type Session struct {
 	LastSeenAt time.Time
 	ExpiresAt  time.Time
 	RevokedAt  *time.Time
+}
+
+type Switch struct {
+	Name  string
+	SetAt time.Time
 }
 
 type Title struct {

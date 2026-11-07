@@ -11,7 +11,7 @@ import (
 )
 
 const accountByEmail = `-- name: AccountByEmail :one
-SELECT id, email, email_verified_at, name, created_at, updated_at FROM accounts WHERE email = $1
+SELECT id, email, email_verified_at, name, created_at, updated_at, extra_invites FROM accounts WHERE email = $1
 `
 
 func (q *Queries) AccountByEmail(ctx context.Context, email string) (Account, error) {
@@ -24,12 +24,13 @@ func (q *Queries) AccountByEmail(ctx context.Context, email string) (Account, er
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExtraInvites,
 	)
 	return i, err
 }
 
 const accountByID = `-- name: AccountByID :one
-SELECT id, email, email_verified_at, name, created_at, updated_at FROM accounts WHERE id = $1
+SELECT id, email, email_verified_at, name, created_at, updated_at, extra_invites FROM accounts WHERE id = $1
 `
 
 func (q *Queries) AccountByID(ctx context.Context, id int64) (Account, error) {
@@ -42,6 +43,7 @@ func (q *Queries) AccountByID(ctx context.Context, id int64) (Account, error) {
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExtraInvites,
 	)
 	return i, err
 }
@@ -120,7 +122,7 @@ func (q *Queries) CreateEmailLink(ctx context.Context, arg CreateEmailLinkParams
 }
 
 const createInvite = `-- name: CreateInvite :one
-INSERT INTO invites (code, note) VALUES ($1, $2) RETURNING id, code, note, used_by_account_id, used_at, created_at
+INSERT INTO invites (code, note) VALUES ($1, $2) RETURNING id, code, note, used_by_account_id, used_at, created_at, created_by_account_id
 `
 
 type CreateInviteParams struct {
@@ -138,6 +140,7 @@ func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Inv
 		&i.UsedByAccountID,
 		&i.UsedAt,
 		&i.CreatedAt,
+		&i.CreatedByAccountID,
 	)
 	return i, err
 }
@@ -294,7 +297,7 @@ func (q *Queries) HouseholdProfiles(ctx context.Context, ownerAccountID int64) (
 }
 
 const inviteByCode = `-- name: InviteByCode :one
-SELECT id, code, note, used_by_account_id, used_at, created_at FROM invites WHERE code = $1 FOR UPDATE
+SELECT id, code, note, used_by_account_id, used_at, created_at, created_by_account_id FROM invites WHERE code = $1 FOR UPDATE
 `
 
 func (q *Queries) InviteByCode(ctx context.Context, code string) (Invite, error) {
@@ -307,6 +310,7 @@ func (q *Queries) InviteByCode(ctx context.Context, code string) (Invite, error)
 		&i.UsedByAccountID,
 		&i.UsedAt,
 		&i.CreatedAt,
+		&i.CreatedByAccountID,
 	)
 	return i, err
 }
