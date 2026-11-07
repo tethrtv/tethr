@@ -223,6 +223,11 @@ const kept = [
     until: 'Cleared once applied, or after 24 hours if you don’t go ahead',
   },
   {
+    what: 'Invites',
+    detail: 'The invites you make, who used each one, and who invited you.',
+    until: 'Until either account is deleted',
+  },
+  {
     what: 'Following',
     detail: 'Which public lists each profile follows.',
     until: 'Until you stop following',
@@ -297,6 +302,10 @@ export function Privacy() {
           <strong>People you share with.</strong> Anyone can find a list you make public, along with your username. If
           your profile is public, they see your name too, but profiles are private until you say otherwise. When you
           follow someone’s list, they can see your username, and your name if your profile is public.
+        </p>
+        <p>
+          <strong>People you invite.</strong> They see your username when they use your invite, and you see theirs once
+          they’ve joined.
         </p>
         <p>
           <strong>Reports.</strong> If you report a list, only we see that you did. The list’s owner is never told who
