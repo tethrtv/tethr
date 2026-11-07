@@ -3,6 +3,7 @@ import { ComingSoon } from './ComingSoon'
 import { cleanCode } from './components/CodeInput'
 import { Plain } from './components/Plain'
 import { Shell, useWatching } from './components/Shell'
+import { Broken, LostSignal, NotFound } from './components/Trouble'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
 import { AutoListPage } from './pages/AutoList'
@@ -21,8 +22,13 @@ import { TitlePage } from './pages/Title'
 import { UpNext } from './pages/UpNext'
 import { Verify } from './pages/Verify'
 import { Watchlist } from './pages/Watchlist'
+import { useLostSignal } from './signal'
 
-const root = createRootRoute({ component: Outlet })
+function Root() {
+  return useLostSignal() ? <LostSignal /> : <Outlet />
+}
+
+const root = createRootRoute({ component: Root })
 
 const upNext = () => (
   <Shell>
@@ -168,7 +174,11 @@ const routes = [
   }),
 ]
 
-export const router = createRouter({ routeTree: root.addChildren(routes) })
+export const router = createRouter({
+  routeTree: root.addChildren(routes),
+  defaultNotFoundComponent: NotFound,
+  defaultErrorComponent: Broken,
+})
 
 declare module '@tanstack/react-router' {
   interface Register {
