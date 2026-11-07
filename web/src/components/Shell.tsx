@@ -97,7 +97,9 @@ export function Shell({ children }: { children: ReactNode }) {
                 Details and images from TMDB. Tethr uses the TMDB API but isn’t endorsed or certified by TMDB.
               </span>
             </span>
-            <span className={styles.faint}>Free and open source.</span>
+            <span className={styles.faint}>
+              Free and open source. <Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link>
+            </span>
           </div>
         </footer>
 

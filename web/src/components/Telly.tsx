@@ -118,6 +118,37 @@ function Picture({ shown, first }: { shown: Screen | (typeof extras)[number]; fi
   }
 }
 
+export function TellySet({ lost }: { lost?: boolean }) {
+  return (
+    <g className={`${styles.lines} ${styles.draw}`}>
+      {lost ? (
+        <>
+          <path pathLength={1} d="M152 70L130 40L96 52" />
+          <circle pathLength={1} cx="92" cy="54" r="5" />
+        </>
+      ) : (
+        <>
+          <path pathLength={1} d="M152 70L112 18" />
+          <circle pathLength={1} cx="110" cy="15" r="5" />
+        </>
+      )}
+      <path pathLength={1} d="M164 70L214 24" />
+      <circle pathLength={1} cx="216" cy="21" r="5" />
+      <path
+        pathLength={1}
+        d="M44 78q-3-8 6-9l214-4q10 0 10 9l3 138q0 9-9 10l-212 6q-10 0-10-9z"
+        className={styles.body}
+      />
+      <path pathLength={1} d="M62 96q0-8 8-8l146-2q8 0 8 8l1 104q0 8-8 8l-146 3q-8 0-8-8z" className={styles.screen} />
+      <circle pathLength={1} cx="250" cy="104" r="9" />
+      <circle pathLength={1} cx="250" cy="138" r="9" />
+      <path pathLength={1} d="M246 136l8 4" />
+      <path pathLength={1} d="M240 168h22M240 180h22M240 192h22" />
+      <path pathLength={1} d="M84 225l-10 18M236 222l10 18" />
+    </g>
+  )
+}
+
 export function Telly({ screen, channel }: { screen: Screen; channel: number }) {
   const [hops, setHops] = useState(0)
   const [flicker, setFlicker] = useState(false)
@@ -138,36 +169,7 @@ export function Telly({ screen, channel }: { screen: Screen; channel: number }) 
   return (
     <div className={styles.set}>
       <svg className={styles.telly} viewBox="0 0 320 250" role="img" aria-hidden="true">
-        <g className={`${styles.lines} ${styles.draw}`}>
-          {screen === 'lost' ? (
-            <>
-              <path pathLength={1} d="M152 70L130 40L96 52" />
-              <circle pathLength={1} cx="92" cy="54" r="5" />
-            </>
-          ) : (
-            <>
-              <path pathLength={1} d="M152 70L112 18" />
-              <circle pathLength={1} cx="110" cy="15" r="5" />
-            </>
-          )}
-          <path pathLength={1} d="M164 70L214 24" />
-          <circle pathLength={1} cx="216" cy="21" r="5" />
-          <path
-            pathLength={1}
-            d="M44 78q-3-8 6-9l214-4q10 0 10 9l3 138q0 9-9 10l-212 6q-10 0-10-9z"
-            className={styles.body}
-          />
-          <path
-            pathLength={1}
-            d="M62 96q0-8 8-8l146-2q8 0 8 8l1 104q0 8-8 8l-146 3q-8 0-8-8z"
-            className={styles.screen}
-          />
-          <circle pathLength={1} cx="250" cy="104" r="9" />
-          <circle pathLength={1} cx="250" cy="138" r="9" />
-          <path pathLength={1} d="M246 136l8 4" />
-          <path pathLength={1} d="M240 168h22M240 180h22M240 192h22" />
-          <path pathLength={1} d="M84 225l-10 18M236 222l10 18" />
-        </g>
+        <TellySet lost={screen === 'lost'} />
         <g className={styles.lines}>
           <path d="M250 99v10" className={styles.dial} style={{ transform: `rotate(${hops * 60}deg)` }} />
         </g>
