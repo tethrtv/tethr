@@ -295,6 +295,33 @@ func (e NewProfileKind) Valid() bool {
 	}
 }
 
+// Defines values for NewReportReason.
+const (
+	Harassment NewReportReason = "harassment"
+	Illegal    NewReportReason = "illegal"
+	Other      NewReportReason = "other"
+	Personal   NewReportReason = "personal"
+	Spam       NewReportReason = "spam"
+)
+
+// Valid indicates whether the value is a known member of the NewReportReason enum.
+func (e NewReportReason) Valid() bool {
+	switch e {
+	case Harassment:
+		return true
+	case Illegal:
+		return true
+	case Other:
+		return true
+	case Personal:
+		return true
+	case Spam:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PlayAction.
 const (
 	PlayActionCheckin  PlayAction = "checkin"
@@ -493,6 +520,24 @@ func (e ListPlaybackParamsType) Valid() bool {
 	case ListPlaybackParamsTypeEpisode:
 		return true
 	case ListPlaybackParamsTypeMovie:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowseListsParamsOrder.
+const (
+	Newest  BrowseListsParamsOrder = "newest"
+	Popular BrowseListsParamsOrder = "popular"
+)
+
+// Valid indicates whether the value is a known member of the BrowseListsParamsOrder enum.
+func (e BrowseListsParamsOrder) Valid() bool {
+	switch e {
+	case Newest:
+		return true
+	case Popular:
 		return true
 	default:
 		return false
@@ -790,6 +835,15 @@ type Export struct {
 // ExportFormat defines model for Export.Format.
 type ExportFormat string
 
+// Follower defines model for Follower.
+type Follower struct {
+	FollowedAt time.Time `json:"followed_at"`
+
+	// Name Left out when the follower's profile is private.
+	Name     *string `json:"name,omitempty"`
+	Username string  `json:"username"`
+}
+
 // HiddenItem defines model for HiddenItem.
 type HiddenItem struct {
 	HiddenAt time.Time `json:"hidden_at"`
@@ -907,10 +961,14 @@ type List struct {
 	Cover []Item `json:"cover"`
 
 	// CoverItemId The item picked as the list's cover. Left out when none is picked.
-	CoverItemId *int64    `json:"cover_item_id,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	Description *string   `json:"description,omitempty"`
-	Id          int64     `json:"id"`
+	CoverItemId   *int64    `json:"cover_item_id,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	Description   *string   `json:"description,omitempty"`
+	FollowerCount int64     `json:"follower_count"`
+
+	// Following Whether the profile reading it follows the list.
+	Following bool  `json:"following"`
+	Id        int64 `json:"id"`
 
 	// InUpNext Whether the profile reading it watches the list in order in Up next.
 	InUpNext  bool      `json:"in_up_next"`
@@ -984,8 +1042,9 @@ type ListItemsPage struct {
 
 // ListOwner defines model for ListOwner.
 type ListOwner struct {
-	Name     string `json:"name"`
-	Username string `json:"username"`
+	// Name Left out when the owner's profile is private and you're outside their household.
+	Name     *string `json:"name,omitempty"`
+	Username string  `json:"username"`
 }
 
 // ListPrivacy `household` lets every profile in the household read it. `public` lets anyone with the link.
@@ -1004,6 +1063,16 @@ type Listing struct {
 	ListedAt time.Time `json:"listed_at"`
 	Notes    *string   `json:"notes,omitempty"`
 	Rank     int       `json:"rank"`
+}
+
+// ListsPage defines model for ListsPage.
+type ListsPage struct {
+	Limit int    `json:"limit"`
+	Lists []List `json:"lists"`
+	Page  int    `json:"page"`
+
+	// Total How many lists match, across every page.
+	Total int `json:"total"`
 }
 
 // Me defines model for Me.
@@ -1110,6 +1179,18 @@ type NewRatings struct {
 		Rating  int        `json:"rating"`
 	} `json:"items"`
 }
+
+// NewReport defines model for NewReport.
+type NewReport struct {
+	// Note Anything that helps, up to 500 characters.
+	Note *string `json:"note,omitempty"`
+
+	// Reason `illegal` for anything against the law, `harassment` for threats or abuse, `personal` for someone's private details, `spam` for adverts or scams.
+	Reason NewReportReason `json:"reason"`
+}
+
+// NewReportReason `illegal` for anything against the law, `harassment` for threats or abuse, `personal` for someone's private details, `spam` for adverts or scams.
+type NewReportReason string
 
 // NewWatches defines model for NewWatches.
 type NewWatches struct {
@@ -1419,6 +1500,17 @@ type UpNextListEntry struct {
 	Resume *Resume `json:"resume,omitempty"`
 }
 
+// User defines model for User.
+type User struct {
+	// Lists The profile's lists that you can see.
+	Lists []List `json:"lists"`
+
+	// Name Left out when the profile is private and you're outside its household.
+	Name     *string `json:"name,omitempty"`
+	Private  bool    `json:"private"`
+	Username string  `json:"username"`
+}
+
 // Verification Either `token` from the link, or `email` and `code` from the email.
 type Verification struct {
 	Code  *string `json:"code,omitempty"`
@@ -1497,6 +1589,24 @@ type ListAutoListItemsParamsType string
 
 // CopyAutoListParams defines parameters for CopyAutoList.
 type CopyAutoListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// ListFollowedListsParams defines parameters for ListFollowedLists.
+type ListFollowedListsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// UnfollowListParams defines parameters for UnfollowList.
+type UnfollowListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// FollowListParams defines parameters for FollowList.
+type FollowListParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
@@ -1590,6 +1700,12 @@ type UpdateListParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// ListFollowersParams defines parameters for ListFollowers.
+type ListFollowersParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // ListListItemsParams defines parameters for ListListItems.
 type ListListItemsParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -1656,6 +1772,12 @@ type ReorderListParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// ReportListParams defines parameters for ReportList.
+type ReportListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // DeleteAccountJSONBody defines parameters for DeleteAccount.
 type DeleteAccountJSONBody struct {
 	Username string `json:"username"`
@@ -1676,6 +1798,25 @@ type RemovePlaybackParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
+
+// BrowseListsParams defines parameters for BrowseLists.
+type BrowseListsParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+
+	// Order Most followed first, or newest first. Newest by default.
+	Order *BrowseListsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
+
+	// Q Only lists whose name contains this, ignoring case.
+	Q    *string `form:"q,omitempty" json:"q,omitempty"`
+	Page *int    `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit 20 by default, and up to 100.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// BrowseListsParamsOrder defines parameters for BrowseLists.
+type BrowseListsParamsOrder string
 
 // ListRatingsParams defines parameters for ListRatings.
 type ListRatingsParams struct {
@@ -1759,6 +1900,12 @@ type AddListToUpNextParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// GetUserParams defines parameters for GetUser.
+type GetUserParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // ListWatchlistParams defines parameters for ListWatchlist.
 type ListWatchlistParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -1828,6 +1975,9 @@ type UpdateListItemJSONRequestBody UpdateListItemJSONBody
 
 // ReorderListJSONRequestBody defines body for ReorderList for application/json ContentType.
 type ReorderListJSONRequestBody ReorderListJSONBody
+
+// ReportListJSONRequestBody defines body for ReportList for application/json ContentType.
+type ReportListJSONRequestBody = NewReport
 
 // DeleteAccountJSONRequestBody defines body for DeleteAccount for application/json ContentType.
 type DeleteAccountJSONRequestBody DeleteAccountJSONBody
@@ -1933,6 +2083,15 @@ type ServerInterface interface {
 	// ExportData Everything in your household, as a zip
 	// (GET /v1/export)
 	ExportData(w http.ResponseWriter, r *http.Request)
+	// ListFollowedLists Lists you follow
+	// (GET /v1/followed-lists)
+	ListFollowedLists(w http.ResponseWriter, r *http.Request, params ListFollowedListsParams)
+	// UnfollowList Stop following a list
+	// (DELETE /v1/followed-lists/{id})
+	UnfollowList(w http.ResponseWriter, r *http.Request, id Id, params UnfollowListParams)
+	// FollowList Follow a list
+	// (PUT /v1/followed-lists/{id})
+	FollowList(w http.ResponseWriter, r *http.Request, id Id, params FollowListParams)
 	// ListHistory Watches, newest first
 	// (GET /v1/history)
 	ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams)
@@ -1972,6 +2131,9 @@ type ServerInterface interface {
 	// UpdateList Rename a list, or change its description, privacy or order
 	// (PATCH /v1/lists/{id})
 	UpdateList(w http.ResponseWriter, r *http.Request, id Id, params UpdateListParams)
+	// ListFollowers Who follows your list
+	// (GET /v1/lists/{id}/followers)
+	ListFollowers(w http.ResponseWriter, r *http.Request, id Id, params ListFollowersParams)
 	// ListListItems What's on a list
 	// (GET /v1/lists/{id}/items)
 	ListListItems(w http.ResponseWriter, r *http.Request, id Id, params ListListItemsParams)
@@ -1990,6 +2152,9 @@ type ServerInterface interface {
 	// ReorderList Put a list in a new order
 	// (PUT /v1/lists/{id}/order)
 	ReorderList(w http.ResponseWriter, r *http.Request, id Id, params ReorderListParams)
+	// ReportList Report a list that breaks the rules
+	// (POST /v1/lists/{id}/reports)
+	ReportList(w http.ResponseWriter, r *http.Request, id Id, params ReportListParams)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(w http.ResponseWriter, r *http.Request)
@@ -2041,6 +2206,9 @@ type ServerInterface interface {
 	// UpdateProfile Rename a profile, change its username or privacy
 	// (PATCH /v1/profiles/{id})
 	UpdateProfile(w http.ResponseWriter, r *http.Request, id Id)
+	// BrowseLists Browse public lists
+	// (GET /v1/public-lists)
+	BrowseLists(w http.ResponseWriter, r *http.Request, params BrowseListsParams)
 	// ListRatings Ratings, newest first
 	// (GET /v1/ratings)
 	ListRatings(w http.ResponseWriter, r *http.Request, params ListRatingsParams)
@@ -2092,6 +2260,9 @@ type ServerInterface interface {
 	// AddListToUpNext Watch a list in order in Up next
 	// (PUT /v1/up-next/lists/{id})
 	AddListToUpNext(w http.ResponseWriter, r *http.Request, id Id, params AddListToUpNextParams)
+	// GetUser Someone's public page
+	// (GET /v1/users/{username})
+	GetUser(w http.ResponseWriter, r *http.Request, username string, params GetUserParams)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(w http.ResponseWriter, r *http.Request, params ListWatchlistParams)
@@ -2748,6 +2919,123 @@ func (siw *ServerInterfaceWrapper) ExportData(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListFollowedLists operation middleware
+func (siw *ServerInterfaceWrapper) ListFollowedLists(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFollowedListsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFollowedLists(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnfollowList operation middleware
+func (siw *ServerInterfaceWrapper) UnfollowList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnfollowListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnfollowList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// FollowList operation middleware
+func (siw *ServerInterfaceWrapper) FollowList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params FollowListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FollowList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListHistory operation middleware
 func (siw *ServerInterfaceWrapper) ListHistory(w http.ResponseWriter, r *http.Request) {
 
@@ -3326,6 +3614,48 @@ func (siw *ServerInterfaceWrapper) UpdateList(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListFollowers operation middleware
+func (siw *ServerInterfaceWrapper) ListFollowers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFollowersParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFollowers(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListListItems operation middleware
 func (siw *ServerInterfaceWrapper) ListListItems(w http.ResponseWriter, r *http.Request) {
 
@@ -3686,6 +4016,48 @@ func (siw *ServerInterfaceWrapper) ReorderList(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReorderList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReportList operation middleware
+func (siw *ServerInterfaceWrapper) ReportList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReportListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportList(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4065,6 +4437,91 @@ func (siw *ServerInterfaceWrapper) UpdateProfile(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProfile(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BrowseLists operation middleware
+func (siw *ServerInterfaceWrapper) BrowseLists(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BrowseListsParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "order" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "order", r.URL.Query(), &params.Order, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "order"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BrowseLists(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4676,6 +5133,48 @@ func (siw *ServerInterfaceWrapper) AddListToUpNext(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetUser operation middleware
+func (siw *ServerInterfaceWrapper) GetUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "username" -------------
+	var username string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "username", r.PathValue("username"), &username, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "username", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUserParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUser(w, r, username, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWatchlist operation middleware
 func (siw *ServerInterfaceWrapper) ListWatchlist(w http.ResponseWriter, r *http.Request) {
 
@@ -4968,6 +5467,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/lists/{id}/items/{item}", wrapper.UpdateListItem)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists/{id}/items/remove", wrapper.RemoveManyFromList)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/lists/{id}/order", wrapper.ReorderList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists/{id}/followers", wrapper.ListFollowers)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists/{id}/reports", wrapper.ReportList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/followed-lists", wrapper.ListFollowedLists)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/followed-lists/{id}", wrapper.UnfollowList)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/followed-lists/{id}", wrapper.FollowList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/public-lists", wrapper.BrowseLists)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/users/{username}", wrapper.GetUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.GetActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
@@ -6202,6 +6708,180 @@ func (response ExportData429JSONResponse) VisitExportDataResponse(w http.Respons
 	return err
 }
 
+type ListFollowedListsRequestObject struct {
+	Params ListFollowedListsParams
+}
+
+type ListFollowedListsResponseObject interface {
+	VisitListFollowedListsResponse(w http.ResponseWriter) error
+}
+
+type ListFollowedLists200JSONResponse []List
+
+func (response ListFollowedLists200JSONResponse) VisitListFollowedListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFollowedLists401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListFollowedLists401JSONResponse) VisitListFollowedListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFollowedLists404JSONResponse Problem
+
+func (response ListFollowedLists404JSONResponse) VisitListFollowedListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnfollowListRequestObject struct {
+	Id     Id `json:"id"`
+	Params UnfollowListParams
+}
+
+type UnfollowListResponseObject interface {
+	VisitUnfollowListResponse(w http.ResponseWriter) error
+}
+
+type UnfollowList204Response struct {
+}
+
+func (response UnfollowList204Response) VisitUnfollowListResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UnfollowList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response UnfollowList401JSONResponse) VisitUnfollowListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnfollowList404JSONResponse Problem
+
+func (response UnfollowList404JSONResponse) VisitUnfollowListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FollowListRequestObject struct {
+	Id     Id `json:"id"`
+	Params FollowListParams
+}
+
+type FollowListResponseObject interface {
+	VisitFollowListResponse(w http.ResponseWriter) error
+}
+
+type FollowList200JSONResponse List
+
+func (response FollowList200JSONResponse) VisitFollowListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FollowList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response FollowList401JSONResponse) VisitFollowListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FollowList403JSONResponse Problem
+
+func (response FollowList403JSONResponse) VisitFollowListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FollowList404JSONResponse Problem
+
+func (response FollowList404JSONResponse) VisitFollowListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FollowList409JSONResponse Problem
+
+func (response FollowList409JSONResponse) VisitFollowListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListHistoryRequestObject struct {
 	Params ListHistoryParams
 }
@@ -6995,6 +7675,71 @@ func (response UpdateList404JSONResponse) VisitUpdateListResponse(w http.Respons
 	return err
 }
 
+type ListFollowersRequestObject struct {
+	Id     Id `json:"id"`
+	Params ListFollowersParams
+}
+
+type ListFollowersResponseObject interface {
+	VisitListFollowersResponse(w http.ResponseWriter) error
+}
+
+type ListFollowers200JSONResponse []Follower
+
+func (response ListFollowers200JSONResponse) VisitListFollowersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFollowers401JSONResponse struct{ ProblemJSONResponse }
+
+func (response ListFollowers401JSONResponse) VisitListFollowersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFollowers403JSONResponse Problem
+
+func (response ListFollowers403JSONResponse) VisitListFollowersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFollowers404JSONResponse Problem
+
+func (response ListFollowers404JSONResponse) VisitListFollowersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListListItemsRequestObject struct {
 	Id     Id `json:"id"`
 	Params ListListItemsParams
@@ -7431,6 +8176,80 @@ func (response ReorderList404JSONResponse) VisitReorderListResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportListRequestObject struct {
+	Id     Id `json:"id"`
+	Params ReportListParams
+	Body   *ReportListJSONRequestBody
+}
+
+type ReportListResponseObject interface {
+	VisitReportListResponse(w http.ResponseWriter) error
+}
+
+type ReportList204Response struct {
+}
+
+func (response ReportList204Response) VisitReportListResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response ReportList400JSONResponse) VisitReportListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportList401JSONResponse Problem
+
+func (response ReportList401JSONResponse) VisitReportListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportList404JSONResponse Problem
+
+func (response ReportList404JSONResponse) VisitReportListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportList429JSONResponse Problem
+
+func (response ReportList429JSONResponse) VisitReportListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8238,6 +9057,70 @@ func (response UpdateProfile409JSONResponse) VisitUpdateProfileResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseListsRequestObject struct {
+	Params BrowseListsParams
+}
+
+type BrowseListsResponseObject interface {
+	VisitBrowseListsResponse(w http.ResponseWriter) error
+}
+
+type BrowseLists200JSONResponse ListsPage
+
+func (response BrowseLists200JSONResponse) VisitBrowseListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseLists401JSONResponse struct{ ProblemJSONResponse }
+
+func (response BrowseLists401JSONResponse) VisitBrowseListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseLists403JSONResponse Problem
+
+func (response BrowseLists403JSONResponse) VisitBrowseListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseLists404JSONResponse Problem
+
+func (response BrowseLists404JSONResponse) VisitBrowseListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9114,6 +9997,71 @@ func (response AddListToUpNext422JSONResponse) VisitAddListToUpNextResponse(w ht
 	return err
 }
 
+type GetUserRequestObject struct {
+	Username string `json:"username"`
+	Params   GetUserParams
+}
+
+type GetUserResponseObject interface {
+	VisitGetUserResponse(w http.ResponseWriter) error
+}
+
+type GetUser200JSONResponse User
+
+func (response GetUser200JSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUser401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetUser401JSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUser403JSONResponse Problem
+
+func (response GetUser403JSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUser404JSONResponse Problem
+
+func (response GetUser404JSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListWatchlistRequestObject struct {
 	Params ListWatchlistParams
 }
@@ -9348,6 +10296,15 @@ type StrictServerInterface interface {
 	// ExportData Everything in your household, as a zip
 	// (GET /v1/export)
 	ExportData(ctx context.Context, request ExportDataRequestObject) (ExportDataResponseObject, error)
+	// ListFollowedLists Lists you follow
+	// (GET /v1/followed-lists)
+	ListFollowedLists(ctx context.Context, request ListFollowedListsRequestObject) (ListFollowedListsResponseObject, error)
+	// UnfollowList Stop following a list
+	// (DELETE /v1/followed-lists/{id})
+	UnfollowList(ctx context.Context, request UnfollowListRequestObject) (UnfollowListResponseObject, error)
+	// FollowList Follow a list
+	// (PUT /v1/followed-lists/{id})
+	FollowList(ctx context.Context, request FollowListRequestObject) (FollowListResponseObject, error)
 	// ListHistory Watches, newest first
 	// (GET /v1/history)
 	ListHistory(ctx context.Context, request ListHistoryRequestObject) (ListHistoryResponseObject, error)
@@ -9387,6 +10344,9 @@ type StrictServerInterface interface {
 	// UpdateList Rename a list, or change its description, privacy or order
 	// (PATCH /v1/lists/{id})
 	UpdateList(ctx context.Context, request UpdateListRequestObject) (UpdateListResponseObject, error)
+	// ListFollowers Who follows your list
+	// (GET /v1/lists/{id}/followers)
+	ListFollowers(ctx context.Context, request ListFollowersRequestObject) (ListFollowersResponseObject, error)
 	// ListListItems What's on a list
 	// (GET /v1/lists/{id}/items)
 	ListListItems(ctx context.Context, request ListListItemsRequestObject) (ListListItemsResponseObject, error)
@@ -9405,6 +10365,9 @@ type StrictServerInterface interface {
 	// ReorderList Put a list in a new order
 	// (PUT /v1/lists/{id}/order)
 	ReorderList(ctx context.Context, request ReorderListRequestObject) (ReorderListResponseObject, error)
+	// ReportList Report a list that breaks the rules
+	// (POST /v1/lists/{id}/reports)
+	ReportList(ctx context.Context, request ReportListRequestObject) (ReportListResponseObject, error)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
@@ -9456,6 +10419,9 @@ type StrictServerInterface interface {
 	// UpdateProfile Rename a profile, change its username or privacy
 	// (PATCH /v1/profiles/{id})
 	UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error)
+	// BrowseLists Browse public lists
+	// (GET /v1/public-lists)
+	BrowseLists(ctx context.Context, request BrowseListsRequestObject) (BrowseListsResponseObject, error)
 	// ListRatings Ratings, newest first
 	// (GET /v1/ratings)
 	ListRatings(ctx context.Context, request ListRatingsRequestObject) (ListRatingsResponseObject, error)
@@ -9507,6 +10473,9 @@ type StrictServerInterface interface {
 	// AddListToUpNext Watch a list in order in Up next
 	// (PUT /v1/up-next/lists/{id})
 	AddListToUpNext(ctx context.Context, request AddListToUpNextRequestObject) (AddListToUpNextResponseObject, error)
+	// GetUser Someone's public page
+	// (GET /v1/users/{username})
+	GetUser(ctx context.Context, request GetUserRequestObject) (GetUserResponseObject, error)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(ctx context.Context, request ListWatchlistRequestObject) (ListWatchlistResponseObject, error)
@@ -10224,6 +11193,86 @@ func (sh *strictHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListFollowedLists operation middleware
+func (sh *strictHandler) ListFollowedLists(w http.ResponseWriter, r *http.Request, params ListFollowedListsParams) {
+	var request ListFollowedListsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFollowedLists(ctx, request.(ListFollowedListsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFollowedLists")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFollowedListsResponseObject); ok {
+		if err := validResponse.VisitListFollowedListsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnfollowList operation middleware
+func (sh *strictHandler) UnfollowList(w http.ResponseWriter, r *http.Request, id Id, params UnfollowListParams) {
+	var request UnfollowListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnfollowList(ctx, request.(UnfollowListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnfollowList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnfollowListResponseObject); ok {
+		if err := validResponse.VisitUnfollowListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// FollowList operation middleware
+func (sh *strictHandler) FollowList(w http.ResponseWriter, r *http.Request, id Id, params FollowListParams) {
+	var request FollowListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.FollowList(ctx, request.(FollowListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "FollowList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(FollowListResponseObject); ok {
+		if err := validResponse.VisitFollowListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListHistory operation middleware
 func (sh *strictHandler) ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams) {
 	var request ListHistoryRequestObject
@@ -10592,6 +11641,33 @@ func (sh *strictHandler) UpdateList(w http.ResponseWriter, r *http.Request, id I
 	}
 }
 
+// ListFollowers operation middleware
+func (sh *strictHandler) ListFollowers(w http.ResponseWriter, r *http.Request, id Id, params ListFollowersParams) {
+	var request ListFollowersRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFollowers(ctx, request.(ListFollowersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFollowers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFollowersResponseObject); ok {
+		if err := validResponse.VisitListFollowersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListListItems operation middleware
 func (sh *strictHandler) ListListItems(w http.ResponseWriter, r *http.Request, id Id, params ListListItemsParams) {
 	var request ListListItemsRequestObject
@@ -10777,6 +11853,40 @@ func (sh *strictHandler) ReorderList(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReorderListResponseObject); ok {
 		if err := validResponse.VisitReorderListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportList operation middleware
+func (sh *strictHandler) ReportList(w http.ResponseWriter, r *http.Request, id Id, params ReportListParams) {
+	var request ReportListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body ReportListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportList(ctx, request.(ReportListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportListResponseObject); ok {
+		if err := validResponse.VisitReportListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11252,6 +12362,32 @@ func (sh *strictHandler) UpdateProfile(w http.ResponseWriter, r *http.Request, i
 	}
 }
 
+// BrowseLists operation middleware
+func (sh *strictHandler) BrowseLists(w http.ResponseWriter, r *http.Request, params BrowseListsParams) {
+	var request BrowseListsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BrowseLists(ctx, request.(BrowseListsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BrowseLists")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BrowseListsResponseObject); ok {
+		if err := validResponse.VisitBrowseListsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRatings operation middleware
 func (sh *strictHandler) ListRatings(w http.ResponseWriter, r *http.Request, params ListRatingsParams) {
 	var request ListRatingsRequestObject
@@ -11708,6 +12844,33 @@ func (sh *strictHandler) AddListToUpNext(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AddListToUpNextResponseObject); ok {
 		if err := validResponse.VisitAddListToUpNextResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUser operation middleware
+func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, username string, params GetUserParams) {
+	var request GetUserRequestObject
+
+	request.Username = username
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUser(ctx, request.(GetUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUserResponseObject); ok {
+		if err := validResponse.VisitGetUserResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

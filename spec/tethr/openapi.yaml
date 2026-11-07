@@ -1246,6 +1246,197 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/lists/{id}/followers:
+    get:
+      operationId: listFollowers
+      summary: Who follows your list
+      description: Only the list's owner can ask. Each follower shows their username, and their name too if their profile is public. Newest first.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Followers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Follower'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/lists/{id}/reports:
+    post:
+      operationId: reportList
+      summary: Report a list that breaks the rules
+      description: For public lists from outside your household. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewReport'
+      responses:
+        '204':
+          description: Reported
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /v1/followed-lists:
+    get:
+      operationId: listFollowedLists
+      summary: Lists you follow
+      description: Public lists from outside your household, most recently followed first. A followed list that stops being public is left out until it's public again.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/List'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/followed-lists/{id}:
+    put:
+      operationId: followList
+      summary: Follow a list
+      description: Any public list from outside your household. Kids and guest profiles can't. The owner can see that you follow it, by your username. Following one you already follow does nothing.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Following
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: unfollowList
+      summary: Stop following a list
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '204':
+          description: Not following
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/public-lists:
+    get:
+      operationId: browseLists
+      summary: Browse public lists
+      description: Public lists with at least one item, from anyone. Lists with a report waiting to be looked at are left out. Kids and guest profiles can't browse.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: order
+          in: query
+          description: Most followed first, or newest first. Newest by default.
+          schema:
+            type: string
+            enum: [popular, newest]
+        - name: q
+          in: query
+          description: Only lists whose name contains this, ignoring case.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: 20 by default, and up to 100.
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A page of lists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListsPage'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/users/{username}:
+    get:
+      operationId: getUser
+      summary: Someone's public page
+      description: A profile's username, its name if the profile is public or in your household, and the lists you can see. Anyone can read it, signed in or not, but kids and guest profiles only see their own household's pages.
+      security:
+        - session: []
+        - bearer: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/activity:
     get:
       operationId: getActivity
@@ -2628,7 +2819,7 @@ components:
       enum: [private, household, public]
     List:
       type: object
-      required: [id, name, slug, privacy, sort_by, sort_how, owner, access, can_edit_items, in_up_next, item_count, cover, url, created_at, updated_at]
+      required: [id, name, slug, privacy, sort_by, sort_how, owner, access, can_edit_items, in_up_next, following, follower_count, item_count, cover, url, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -2658,6 +2849,12 @@ components:
         in_up_next:
           type: boolean
           description: Whether the profile reading it watches the list in order in Up next.
+        following:
+          type: boolean
+          description: Whether the profile reading it follows the list.
+        follower_count:
+          type: integer
+          format: int64
         item_count:
           type: integer
           format: int64
@@ -2685,12 +2882,67 @@ components:
           format: date-time
     ListOwner:
       type: object
-      required: [username, name]
+      required: [username]
       properties:
         username:
           type: string
         name:
           type: string
+          description: Left out when the owner's profile is private and you're outside their household.
+    Follower:
+      type: object
+      required: [username, followed_at]
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+          description: Left out when the follower's profile is private.
+        followed_at:
+          type: string
+          format: date-time
+    NewReport:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: "`illegal` for anything against the law, `harassment` for threats or abuse, `personal` for someone's private details, `spam` for adverts or scams."
+          enum: [illegal, harassment, personal, spam, other]
+        note:
+          type: string
+          description: Anything that helps, up to 500 characters.
+    ListsPage:
+      type: object
+      required: [lists, total, page, limit]
+      properties:
+        lists:
+          type: array
+          items:
+            $ref: '#/components/schemas/List'
+        total:
+          type: integer
+          description: How many lists match, across every page.
+        page:
+          type: integer
+        limit:
+          type: integer
+    User:
+      type: object
+      required: [username, private, lists]
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+          description: Left out when the profile is private and you're outside its household.
+        private:
+          type: boolean
+        lists:
+          type: array
+          description: The profile's lists that you can see.
+          items:
+            $ref: '#/components/schemas/List'
     NewList:
       type: object
       required: [name]
