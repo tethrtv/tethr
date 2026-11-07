@@ -66,6 +66,7 @@ export function Home() {
           </p>
         </header>
         <Household me={me.data} />
+        <Invites />
         <ConnectedApps />
         <SigningIn />
         <YourData />
@@ -417,6 +418,72 @@ function SigningIn() {
             </li>
           ))}
         </ul>
+      </div>
+    </section>
+  )
+}
+
+function Invites() {
+  const queries = useQueryClient()
+  const [copied, setCopied] = useState('')
+  const invites = useQuery({
+    queryKey: ['invites'],
+    queryFn: async () => (await api.GET('/v1/invites')).data ?? null,
+  })
+  const make = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST('/v1/invites')
+      if (error) throw error
+    },
+    onSuccess: () => queries.invalidateQueries({ queryKey: ['invites'] }),
+  })
+  const copy = (url: string) =>
+    navigator.clipboard
+      ?.writeText(url)
+      .then(() => setCopied(url))
+      .catch(() => {})
+
+  const data = invites.data
+  if (!data || data.open) return null
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>Invites</h2>
+      <div className={styles.group}>
+        <div className={styles.groupHead}>
+          <h3>
+            {data.left === 0 ? 'No invites left' : `${data.left} ${data.left === 1 ? 'invite' : 'invites'} to share`}
+          </h3>
+          {data.left > 0 && !data.paused && (
+            <Button variant="plain" onClick={() => make.mutate()} aria-busy={make.isPending}>
+              Make an invite
+            </Button>
+          )}
+        </div>
+        <p className={styles.note}>
+          Tethr is invite-only for now. Send a link to someone you think would like it. Each one works once, and they’ll
+          see your username when they join.
+          {data.paused && ' New invites are paused for a little while, but the ones you’ve made still work.'}
+        </p>
+        {make.isError && <p className={styles.error}>{problemMessage(make.error)}</p>}
+        {data.invites.length > 0 && (
+          <ul className={styles.rows}>
+            {data.invites.map((i) => (
+              <li key={i.code} className={styles.row}>
+                <span className={`${styles.name} ${styles.code}`}>{i.code}</span>
+                <span className={styles.kind}>
+                  {i.used_by ? `Used by @${i.used_by}` : i.used_at ? 'Used' : `Made ${when(i.created_at)}`}
+                </span>
+                <span className={styles.rowActions}>
+                  {!i.used_at && (
+                    <Button variant="text" onClick={() => copy(i.url)}>
+                      {copied === i.url ? 'Link copied' : 'Copy the link'}
+                    </Button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   )

@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { type FormEvent, useState } from 'react'
 import { api, type Problem, problemMessage } from '../api/client'
@@ -35,6 +35,13 @@ export function Join() {
   const { invite: invited } = useSearch({ from: '/join' })
   const [invite, setInvite] = useState(invited ?? '')
   const handle = edited ? username : toUsername(name)
+  const code = invite.trim()
+  const check = useQuery({
+    queryKey: ['invite', code],
+    enabled: code.length === 9,
+    queryFn: async () => (await api.GET('/v1/invites/{code}', { params: { path: { code } } })).data ?? null,
+  })
+  const inviter = check.data?.valid ? check.data.invited_by : undefined
 
   const create = useMutation({
     mutationFn: async () => {
@@ -69,6 +76,11 @@ export function Join() {
       <form className={styles.slip} onSubmit={submit} noValidate>
         <div className={styles.section}>
           <h1 className={styles.title}>Create an account</h1>
+          {inviter && (
+            <p className={styles.invited}>
+              <mark>@{inviter}</mark> invited you.
+            </p>
+          )}
           <p className={styles.quiet}>
             Free, with nothing to upgrade to. Your history stays private unless you share it.
           </p>
@@ -111,7 +123,10 @@ export function Join() {
               onChange={(v) => setInvite(v.toUpperCase())}
               autoCapitalize="characters"
               spellCheck={false}
-              error={fieldError(['invite_required', 'invalid_invite'])}
+              error={
+                fieldError(['invite_required', 'invalid_invite']) ??
+                (check.data?.valid === false ? 'That code has been used, or isn’t quite right.' : undefined)
+              }
               hint="Tethr is invite-only for now."
             />
           )}
