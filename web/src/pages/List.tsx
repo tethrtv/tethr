@@ -253,6 +253,20 @@ function Head({
       navigate({ to: '/lists' })
     },
   })
+  const queries = useQueryClient()
+  const upNext = useMutation({
+    mutationFn: async () => {
+      const params = { params: { path: { id: list.id }, query: { profile_id: profileID } } }
+      const { error } = list.in_up_next
+        ? await api.DELETE('/v1/up-next/lists/{id}', params)
+        : await api.PUT('/v1/up-next/lists/{id}', params)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      onChange()
+      queries.invalidateQueries({ queryKey: ['up-next-lists', profileID] })
+    },
+  })
   const by = list.access === 'mine' ? '' : `${list.owner.name}’s list. `
 
   if (editing) {
@@ -280,7 +294,9 @@ function Head({
           {list.item_count === 0
             ? 'Nothing on it yet.'
             : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
+          {list.in_up_next && ' Up next shows what to watch from it next.'}
         </p>
+        {upNext.isError && <p className={styles.error}>{problemMessage(upNext.error)}</p>}
         <p className={own.actions}>
           {list.privacy === 'public' && (
             <button
@@ -321,6 +337,16 @@ function Head({
                 Delete
               </button>
             </span>
+          )}
+          {profileID && (
+            <button
+              type="button"
+              className={styles.textButton}
+              onClick={() => upNext.mutate()}
+              disabled={upNext.isPending}
+            >
+              {list.in_up_next ? 'Take it out of Up next' : 'Watch it in order in Up next'}
+            </button>
           )}
           {!profileID && (
             <Link to="/sign-in" className={styles.textButton}>
