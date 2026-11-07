@@ -32,6 +32,18 @@
   color: var(--ink-2);
 }
 
+.invited {
+  font-size: 1.0625rem;
+}
+
+.invited mark {
+  padding: 0 4px;
+  background: var(--hl);
+  mix-blend-mode: var(--hl-blend);
+  color: var(--hl-ink);
+  font-weight: 700;
+}
+
 .small {
   font-size: 0.875rem;
   color: var(--ink-3);

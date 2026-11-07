@@ -69,6 +69,12 @@
   font-size: 1.0625rem;
 }
 
+.code {
+  font-stretch: var(--narrow);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
 .handle {
   font-stretch: var(--narrow);
   font-weight: 650;
