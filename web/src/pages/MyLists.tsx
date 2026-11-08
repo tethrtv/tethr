@@ -23,7 +23,7 @@ export const goesOutside = (kind: string) => kind !== 'kids' && kind !== 'guest'
 
 export const ownerName = (l: List) => l.owner.name ?? `@${l.owner.username}`
 
-export const listPath = (l: List) => `${l.id}-${l.slug}`
+export const listParams = (l: List) => ({ username: l.owner.username, slug: l.slug })
 
 export function MyLists() {
   const { profile } = useWatching()
@@ -57,7 +57,7 @@ export function MyLists() {
     },
     onSuccess: (l) => {
       queries.invalidateQueries({ queryKey: ['lists', profile.id] })
-      navigate({ to: '/lists/$list', params: { list: listPath(l) } })
+      navigate({ to: '/@{$username}/lists/$slug', params: listParams(l) })
     },
   })
   const mine = lists.data?.filter((l) => l.access === 'mine') ?? []
@@ -176,7 +176,11 @@ export function ListRow({ list: l }: { list: List }) {
     <li className={own.list}>
       <ListCover items={l.cover} />
       <div className={styles.main}>
-        <Link to="/lists/$list" params={{ list: listPath(l) }} className={`${styles.rowTitle} ${styles.titleLink}`}>
+        <Link
+          to="/@{$username}/lists/$slug"
+          params={listParams(l)}
+          className={`${styles.rowTitle} ${styles.titleLink}`}
+        >
           {l.name}
         </Link>
         <span className={styles.quiet}>

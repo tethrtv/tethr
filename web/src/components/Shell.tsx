@@ -30,7 +30,8 @@ function stored() {
   }
 }
 
-const section = (path: string) => (path === '/watchlist' || path.startsWith('/lists/') ? '/lists' : path)
+const section = (path: string) =>
+  path === '/watchlist' || path.startsWith('/lists/') || /^\/@[^/]+\/lists\//.test(path) ? '/lists' : path
 
 export function Shell({ children }: { children: ReactNode }) {
   const me = useSignedIn()

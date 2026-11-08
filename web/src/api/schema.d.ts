@@ -840,9 +840,29 @@ export interface paths {
         };
         /**
          * Someone's public page
-         * @description A profile's username, its name if the profile is public or in your household, and the lists you can see. Anyone can read it, signed in or not, but kids and guest profiles only see their own household's pages.
+         * @description A profile's username, its name if the profile is public or in your household, and the lists you can see. Anyone can read it, signed in or not, but kids and guest profiles only see their own household's pages. An old username still finds the profile until someone else takes it, and the page you get back has the current one.
          */
         get: operations["getUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{username}/lists/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One list by its address
+         * @description Finds a list by its owner's username and its slug, as in the list's url. Old usernames and old slugs still find the list after a rename, and the list you get back has the current ones. Who can read it works as for getting a list by its ID.
+         */
+        get: operations["getUserList"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1712,7 +1732,7 @@ export interface components {
             cover_item_id?: number;
             /** @description The picked cover item, or the first four items in list order when none is picked. Fetch their posters from TMDB. */
             cover: components["schemas"]["Item"][];
-            /** @description The list's page on the website. */
+            /** @description The list's page on the website, made from its owner's username and its slug. */
             url: string;
             /** Format: date-time */
             created_at: string;
@@ -3698,6 +3718,34 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getUserList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                username: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["List"];
+                };
+            };
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
