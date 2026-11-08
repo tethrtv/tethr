@@ -9,7 +9,7 @@ import { Field } from '../components/Field'
 import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { useToast } from '../components/Toast'
-import { ago, date, duration, ep, plural } from '../format'
+import { date, duration, ep, playedAgo, playedOn, plural } from '../format'
 import { type Details, type Group, type Season, useDetails, useGroup, useOrders, useSeason } from '../tmdb'
 import lists from './Lists.module.css'
 import { ownerName, privacyWords } from './MyLists'
@@ -588,7 +588,7 @@ function Episode({
         {e.episode.first_aired && (due ? `Due ${day(e.episode.first_aired)}` : date(e.episode.first_aired))}
       </td>
       <td className={`${lists.small} ${styles.colLog}`}>
-        {seen && `${how(e.watches[0])}, ${ago(e.watches[0].watched_at)}`}
+        {seen && `${how(e.watches[0])}, ${playedAgo(e.watches[0])}`}
       </td>
     </tr>
   )
@@ -625,7 +625,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               {d.resume
                 ? `Paused ${Math.round(d.resume.progress)}% in${runtime ? `, with about ${duration(Math.round(runtime * (1 - d.resume.progress / 100)))} left` : ''}. Any connected app can pick it up.`
                 : plays.length
-                  ? `Watched ${plays.length === 1 ? 'once' : plural(plays.length, 'time')}, last ${ago(plays[0].watched_at)}.`
+                  ? `Watched ${plays.length === 1 ? 'once' : plural(plays.length, 'time')}${plays[0].precision === 'none' ? '' : `, last ${playedAgo(plays[0])}`}.`
                   : 'Not watched yet.'}
             </p>
             {d.resume && (
@@ -654,7 +654,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           <ol className={lists.plainList}>
             {plays.map((p) => (
               <li key={p.id} className={styles.play}>
-                <span className={lists.code}>{date(p.watched_at)}</span>
+                <span className={lists.code}>{playedOn(p)}</span>
                 <span className={lists.quiet}>{how(p)}</span>
                 <button
                   type="button"
