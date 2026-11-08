@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 
 	"github.com/tethrtv/tethr/internal/core"
@@ -80,7 +79,7 @@ func (s *Server) toList(l core.List) List {
 		WatchedCount:  l.Watched,
 		CoverItemId:   l.CoverItemID,
 		Cover:         cover,
-		Url:           s.AppURL + "/lists/" + strconv.FormatInt(l.ID, 10) + "-" + l.Slug,
+		Url:           s.AppURL + l.Path(),
 		CreatedAt:     l.CreatedAt,
 		UpdatedAt:     l.UpdatedAt,
 	}

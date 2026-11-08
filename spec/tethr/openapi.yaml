@@ -1412,7 +1412,7 @@ paths:
     get:
       operationId: getUser
       summary: Someone's public page
-      description: A profile's username, its name if the profile is public or in your household, and the lists you can see. Anyone can read it, signed in or not, but kids and guest profiles only see their own household's pages.
+      description: A profile's username, its name if the profile is public or in your household, and the lists you can see. Anyone can read it, signed in or not, but kids and guest profiles only see their own household's pages. An old username still finds the profile until someone else takes it, and the page you get back has the current one.
       security:
         - session: []
         - bearer: []
@@ -1434,6 +1434,38 @@ paths:
         '401':
           $ref: '#/components/responses/Problem'
         '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/users/{username}/lists/{slug}:
+    get:
+      operationId: getUserList
+      summary: One list by its address
+      description: Finds a list by its owner's username and its slug, as in the list's url. Old usernames and old slugs still find the list after a rename, and the list you get back has the current ones. Who can read it works as for getting a list by its ID.
+      security:
+        - session: []
+        - bearer: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '401':
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
@@ -2873,7 +2905,7 @@ components:
             $ref: '#/components/schemas/Item'
         url:
           type: string
-          description: The list's page on the website.
+          description: The list's page on the website, made from its owner's username and its slug.
         created_at:
           type: string
           format: date-time

@@ -147,7 +147,7 @@ func (s *Server) listJSON(l core.List) map[string]any {
 		"name":            l.Name,
 		"description":     l.Description,
 		"privacy":         privacy,
-		"share_link":      s.AppURL + "/lists/" + strconv.FormatInt(l.ID, 10) + "-" + l.Slug,
+		"share_link":      s.AppURL + l.Path(),
 		"type":            "personal",
 		"display_numbers": l.SortBy == "rank",
 		"allow_comments":  false,

@@ -40,7 +40,7 @@ func TestLists(t *testing.T) {
 	if len(mine) != 2 || mine[0]["name"] != "Best of 2010" || mine[1]["privacy"] != "friends" || mine[0]["sort_by"] != "released" || mine[0]["item_count"] != 2.0 {
 		t.Errorf("my lists = %v", mine)
 	}
-	if mine[0]["share_link"] != "https://tethr.tv/lists/"+strconv.FormatInt(public.ID, 10)+"-best-of-2010" {
+	if mine[0]["share_link"] != "https://tethr.tv/@nathan/lists/best-of-2010" {
 		t.Errorf("share link = %v", mine[0]["share_link"])
 	}
 
