@@ -1124,10 +1124,10 @@ export interface paths {
         get: operations["listImports"];
         put?: never;
         /**
-         * Read a Trakt export before importing it
-         * @description Send the zip from Trakt's data export as the body. Tethr reads history, the watchlist, resume points, ratings and hidden items, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
+         * Read a Trakt export or Simkl backup before importing it
+         * @description Send the zip from Trakt's data export, or the zip from Simkl's "Download backup", as the body. Tethr reads history, the watchlist, resume points, ratings and hidden items, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
          *
-         *     Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Plays already in history at the same time are skipped, so importing the same file twice is safe.
+         *     Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
          */
         post: operations["createImport"];
         delete?: never;
@@ -2169,7 +2169,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            source: "trakt";
+            source: "trakt" | "simkl";
             filename: string;
             /** @enum {string} */
             status: "parsed" | "queued" | "applied" | "failed" | "undone";
