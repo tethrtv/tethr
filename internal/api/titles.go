@@ -53,6 +53,7 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 			seasons = append(seasons, SeasonDetail{Number: int(season.Number), Episodes: episodes})
 		}
 		out.Seasons = &seasons
+		out.RewatchFrom = t.RewatchFrom
 	}
 	return GetTitle200JSONResponse(out), nil
 }

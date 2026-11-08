@@ -1593,6 +1593,9 @@ type TitleDetail struct {
 	// Resume Where it was paused, if it was started.
 	Resume *Resume `json:"resume,omitempty"`
 
+	// RewatchFrom Set while you're rewatching the show. Only plays after it count towards progress.
+	RewatchFrom *time.Time `json:"rewatch_from,omitempty"`
+
 	// Seasons Numbered in the show's episode order, with specials last. Episodes the order leaves out aren't listed.
 	Seasons *[]SeasonDetail `json:"seasons,omitempty"`
 	Title   Title           `json:"title"`
@@ -1647,9 +1650,12 @@ type UpNextEntry struct {
 
 	// Resume Where it was paused, if it was started.
 	Resume *Resume `json:"resume,omitempty"`
-	Show   Title   `json:"show"`
 
-	// Watched How many of those have been watched.
+	// RewatchFrom Set while you're rewatching the show. Only plays after it count towards progress.
+	RewatchFrom *time.Time `json:"rewatch_from,omitempty"`
+	Show        Title      `json:"show"`
+
+	// Watched How many of those have been watched, since the rewatch started if there is one.
 	Watched int `json:"watched"`
 }
 
@@ -2085,6 +2091,18 @@ type AddListToUpNextParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// StopRewatchParams defines parameters for StopRewatch.
+type StopRewatchParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// StartRewatchParams defines parameters for StartRewatch.
+type StartRewatchParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // GetUpcomingParams defines parameters for GetUpcoming.
 type GetUpcomingParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -2469,6 +2487,12 @@ type ServerInterface interface {
 	// AddListToUpNext Watch a list in order in Up next
 	// (PUT /v1/up-next/lists/{id})
 	AddListToUpNext(w http.ResponseWriter, r *http.Request, id Id, params AddListToUpNextParams)
+	// StopRewatch Stop rewatching a show
+	// (DELETE /v1/up-next/rewatch/{id})
+	StopRewatch(w http.ResponseWriter, r *http.Request, id Id, params StopRewatchParams)
+	// StartRewatch Watch a show again from the start
+	// (PUT /v1/up-next/rewatch/{id})
+	StartRewatch(w http.ResponseWriter, r *http.Request, id Id, params StartRewatchParams)
 	// GetUpcoming Episodes coming up for the shows you watch
 	// (GET /v1/upcoming)
 	GetUpcoming(w http.ResponseWriter, r *http.Request, params GetUpcomingParams)
@@ -5402,6 +5426,90 @@ func (siw *ServerInterfaceWrapper) AddListToUpNext(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// StopRewatch operation middleware
+func (siw *ServerInterfaceWrapper) StopRewatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StopRewatchParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopRewatch(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartRewatch operation middleware
+func (siw *ServerInterfaceWrapper) StartRewatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StartRewatchParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartRewatch(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetUpcoming operation middleware
 func (siw *ServerInterfaceWrapper) GetUpcoming(w http.ResponseWriter, r *http.Request) {
 
@@ -5835,6 +5943,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.HideFromUpNext)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/rewatch/{id}", wrapper.StopRewatch)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/rewatch/{id}", wrapper.StartRewatch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next/lists", wrapper.GetUpNextLists)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.RemoveListFromUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.AddListToUpNext)
@@ -10462,6 +10572,96 @@ func (response AddListToUpNext422JSONResponse) VisitAddListToUpNextResponse(w ht
 	return err
 }
 
+type StopRewatchRequestObject struct {
+	Id     Id `json:"id"`
+	Params StopRewatchParams
+}
+
+type StopRewatchResponseObject interface {
+	VisitStopRewatchResponse(w http.ResponseWriter) error
+}
+
+type StopRewatch204Response struct {
+}
+
+func (response StopRewatch204Response) VisitStopRewatchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type StopRewatch401JSONResponse struct{ ProblemJSONResponse }
+
+func (response StopRewatch401JSONResponse) VisitStopRewatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopRewatch404JSONResponse Problem
+
+func (response StopRewatch404JSONResponse) VisitStopRewatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRewatchRequestObject struct {
+	Id     Id `json:"id"`
+	Params StartRewatchParams
+}
+
+type StartRewatchResponseObject interface {
+	VisitStartRewatchResponse(w http.ResponseWriter) error
+}
+
+type StartRewatch204Response struct {
+}
+
+func (response StartRewatch204Response) VisitStartRewatchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type StartRewatch401JSONResponse struct{ ProblemJSONResponse }
+
+func (response StartRewatch401JSONResponse) VisitStartRewatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRewatch404JSONResponse Problem
+
+func (response StartRewatch404JSONResponse) VisitStartRewatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetUpcomingRequestObject struct {
 	Params GetUpcomingParams
 }
@@ -11049,6 +11249,12 @@ type StrictServerInterface interface {
 	// AddListToUpNext Watch a list in order in Up next
 	// (PUT /v1/up-next/lists/{id})
 	AddListToUpNext(ctx context.Context, request AddListToUpNextRequestObject) (AddListToUpNextResponseObject, error)
+	// StopRewatch Stop rewatching a show
+	// (DELETE /v1/up-next/rewatch/{id})
+	StopRewatch(ctx context.Context, request StopRewatchRequestObject) (StopRewatchResponseObject, error)
+	// StartRewatch Watch a show again from the start
+	// (PUT /v1/up-next/rewatch/{id})
+	StartRewatch(ctx context.Context, request StartRewatchRequestObject) (StartRewatchResponseObject, error)
 	// GetUpcoming Episodes coming up for the shows you watch
 	// (GET /v1/upcoming)
 	GetUpcoming(ctx context.Context, request GetUpcomingRequestObject) (GetUpcomingResponseObject, error)
@@ -13511,6 +13717,60 @@ func (sh *strictHandler) AddListToUpNext(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AddListToUpNextResponseObject); ok {
 		if err := validResponse.VisitAddListToUpNextResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StopRewatch operation middleware
+func (sh *strictHandler) StopRewatch(w http.ResponseWriter, r *http.Request, id Id, params StopRewatchParams) {
+	var request StopRewatchRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StopRewatch(ctx, request.(StopRewatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StopRewatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StopRewatchResponseObject); ok {
+		if err := validResponse.VisitStopRewatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartRewatch operation middleware
+func (sh *strictHandler) StartRewatch(w http.ResponseWriter, r *http.Request, id Id, params StartRewatchParams) {
+	var request StartRewatchRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartRewatch(ctx, request.(StartRewatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartRewatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartRewatchResponseObject); ok {
+		if err := validResponse.VisitStartRewatchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
