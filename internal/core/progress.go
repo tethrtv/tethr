@@ -101,6 +101,7 @@ type ShowProgress struct {
 	HiddenSeasons []int32
 	Next          *OrderedEpisode
 	Last          *OrderedEpisode
+	ResetAt       *time.Time
 }
 
 func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, specials bool) (ShowProgress, error) {
@@ -124,15 +125,25 @@ func Progress(ctx context.Context, db *pgxpool.Pool, profileID int64, show Ref, 
 	if err != nil {
 		return ShowProgress{}, err
 	}
+	resets, err := rewatches(ctx, q, profileID)
+	if err != nil {
+		return ShowProgress{}, err
+	}
+	reset, rewatching := resets[r.title.ID]
 	watched := map[int64]time.Time{}
 	for _, w := range rows {
-		watched[*w.EpisodeID] = w.LastWatchedAt
+		if !rewatching || w.LastWatchedAt.After(reset) {
+			watched[*w.EpisodeID] = w.LastWatchedAt
+		}
 	}
 	hidden, err := q.HiddenSeasons(ctx, store.HiddenSeasonsParams{ProfileID: profileID, TitleID: r.title.ID})
 	if err != nil {
 		return ShowProgress{}, err
 	}
 	p := showProgress(episodes[r.title.ID], watched, hidden, specials, time.Now())
+	if rewatching {
+		p.ResetAt = &reset
+	}
 	p.Show = item
 	p.HiddenSeasons = hidden
 	return p, nil

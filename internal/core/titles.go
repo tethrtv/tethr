@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,14 +15,15 @@ import (
 )
 
 type TitleState struct {
-	Item    Item
-	Watches []Entry
-	Resume  *Entry
-	Rating  *Entry
-	Listing *Entry
-	Lists   []InList
-	Order   string
-	Seasons []SeasonState
+	Item        Item
+	Watches     []Entry
+	Resume      *Entry
+	Rating      *Entry
+	Listing     *Entry
+	Lists       []InList
+	Order       string
+	Seasons     []SeasonState
+	RewatchFrom *time.Time
 }
 
 type InList struct {
@@ -106,6 +108,13 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 	s.Order, err = q.ShowOrder(ctx, store.ShowOrderParams{ProfileID: profileID, ShowID: t.ID})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return s, err
+	}
+	resets, err := rewatches(ctx, q, profileID)
+	if err != nil {
+		return s, err
+	}
+	if reset, ok := resets[t.ID]; ok {
+		s.RewatchFrom = &reset
 	}
 	episodes, err := showEpisodes(ctx, q, profileID, []int64{t.ID})
 	if err != nil {

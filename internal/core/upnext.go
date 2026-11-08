@@ -19,6 +19,7 @@ type UpNextEntry struct {
 	Aired         int64
 	Watched       int64
 	Resume        *Entry
+	RewatchFrom   *time.Time
 }
 
 func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEntry, error) {
@@ -28,6 +29,10 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 		return nil, err
 	}
 	hiddenShows, hiddenSeasons, err := hiddenFromUpNext(ctx, q, profileID)
+	if err != nil {
+		return nil, err
+	}
+	resets, err := rewatches(ctx, q, profileID)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +47,9 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 			watched[r.TitleID] = map[int64]time.Time{}
 			showIDs = append(showIDs, r.TitleID)
 		}
-		watched[r.TitleID][*r.EpisodeID] = r.LastWatchedAt
+		if reset, ok := resets[r.TitleID]; !ok || r.LastWatchedAt.After(reset) {
+			watched[r.TitleID][*r.EpisodeID] = r.LastWatchedAt
+		}
 	}
 	episodes, err := showEpisodes(ctx, q, profileID, showIDs)
 	if err != nil {
@@ -58,6 +65,9 @@ func UpNext(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNextEnt
 			continue
 		}
 		e := UpNextEntry{Next: *p.Next, Last: p.Last, Aired: int64(p.Aired), Watched: int64(p.Completed)}
+		if reset, ok := resets[id]; ok {
+			e.RewatchFrom, e.LastWatchedAt = &reset, reset
+		}
 		for _, at := range watched[id] {
 			if at.After(e.LastWatchedAt) {
 				e.LastWatchedAt = at
