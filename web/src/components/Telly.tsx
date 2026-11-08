@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import styles from './Trouble.module.css'
 
-type Screen = 'no-signal' | 'stand-by' | 'lost' | 'starting'
+type Screen = 'no-signal' | 'stand-by' | 'lost' | 'starting' | 'off-air'
 const extras = ['test-card', 'weather', 'cat', 'normal-service'] as const
 
 const staticLines = [
@@ -40,6 +40,17 @@ function Picture({ shown, first }: { shown: Screen | (typeof extras)[number]; fi
             ))}
           </g>
           <Band lines={['NO SIGNAL']} width={118} first={first} />
+        </>
+      )
+    case 'off-air':
+      return (
+        <>
+          <g className={styles.lines}>
+            {staticLines.slice(2).map((d) => (
+              <path key={d} d={d} className={styles.static} />
+            ))}
+          </g>
+          <Band lines={['OFF AIR']} width={104} first={first} />
         </>
       )
     case 'stand-by':

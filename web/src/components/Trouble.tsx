@@ -8,10 +8,22 @@ import { Shell } from './Shell'
 import { Telly } from './Telly'
 import styles from './Trouble.module.css'
 
-export function NotFound() {
-  const me = useMe()
+function Listing({ note }: { note: string }) {
   const path = useRouterState({ select: (s) => s.location.href })
   const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div className={styles.listing}>
+      <span className={styles.time}>{time}</span>
+      <div>
+        <p className={styles.programme}>{path}</p>
+        <p className={styles.note}>{note}</p>
+      </div>
+    </div>
+  )
+}
+
+export function NotFound() {
+  const me = useMe()
   if (me.isPending) return null
   const page = (
     <div className={styles.trouble}>
@@ -19,13 +31,7 @@ export function NotFound() {
       <Telly screen="no-signal" channel={404} />
       <h1 className={styles.title}>Nothing on this channel</h1>
       <p className={styles.lead}>There’s no page at this address. The link might be old, or have a typo in it.</p>
-      <div className={styles.listing}>
-        <span className={styles.time}>{time}</span>
-        <div>
-          <p className={styles.programme}>{path}</p>
-          <p className={styles.note}>Not found. No repeats scheduled.</p>
-        </div>
-      </div>
+      <Listing note="Not found. No repeats scheduled." />
       <p className={styles.actions}>
         <Link to="/" className={`${buttons.primary} ${styles.button}`}>
           Go to Up next
@@ -37,6 +43,37 @@ export function NotFound() {
     </div>
   )
   return me.data ? <Shell>{page}</Shell> : <Plain>{page}</Plain>
+}
+
+export function MissingList({ signedIn }: { signedIn: boolean }) {
+  return (
+    <div className={styles.trouble}>
+      <title>Off air · Tethr</title>
+      <Telly screen="off-air" channel={404} />
+      <h1 className={styles.title}>No list here</h1>
+      <p className={styles.lead}>
+        There’s no list at this address, or it isn’t shared with you.
+        {!signedIn && ' If it’s yours or your household’s, sign in first.'}
+      </p>
+      <Listing note="Off air. It may be private, or gone for good." />
+      <p className={styles.actions}>
+        {signedIn ? (
+          <>
+            <Link to="/lists" className={`${buttons.primary} ${styles.button}`}>
+              Your lists
+            </Link>
+            <Link to="/lists/browse" className={styles.textLink}>
+              Browse lists
+            </Link>
+          </>
+        ) : (
+          <Link to="/sign-in" className={`${buttons.primary} ${styles.button}`}>
+            Sign in
+          </Link>
+        )}
+      </p>
+    </div>
+  )
 }
 
 export function Broken({ error }: { error: unknown }) {
