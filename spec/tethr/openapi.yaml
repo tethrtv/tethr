@@ -1654,6 +1654,29 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/upcoming:
+    get:
+      operationId: getUpcoming
+      summary: Episodes coming up for the shows you watch
+      description: Every episode airing in the next 7 days for shows you've watched any of, whether you're caught up or not, and the next one after that for shows with nothing this week. Shows on your watchlist that you haven't started only appear for the first episode of a season. Specials, episodes you've already watched and hidden shows are left out. Air dates are the date TMDB gives, without a time. Soonest first.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: One entry per episode
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UpcomingEntry'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/titles/{id}:
     get:
       operationId: getTitle
@@ -3391,6 +3414,17 @@ components:
           description: How many of those have been watched.
         resume:
           $ref: '#/components/schemas/Resume'
+    UpcomingEntry:
+      type: object
+      required: [show, episode, watchlist]
+      properties:
+        show:
+          $ref: '#/components/schemas/Title'
+        episode:
+          $ref: '#/components/schemas/Episode'
+        watchlist:
+          type: boolean
+          description: The show is on your watchlist and you haven't started it.
     UpNextListEntry:
       type: object
       required: [list, item_id, position, next]

@@ -1670,6 +1670,15 @@ type UpNextListEntry struct {
 	Resume *Resume `json:"resume,omitempty"`
 }
 
+// UpcomingEntry defines model for UpcomingEntry.
+type UpcomingEntry struct {
+	Episode Episode `json:"episode"`
+	Show    Title   `json:"show"`
+
+	// Watchlist The show is on your watchlist and you haven't started it.
+	Watchlist bool `json:"watchlist"`
+}
+
 // User defines model for User.
 type User struct {
 	// Lists The profile's lists that you can see.
@@ -2076,6 +2085,12 @@ type AddListToUpNextParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// GetUpcomingParams defines parameters for GetUpcoming.
+type GetUpcomingParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // GetUserParams defines parameters for GetUser.
 type GetUserParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -2454,6 +2469,9 @@ type ServerInterface interface {
 	// AddListToUpNext Watch a list in order in Up next
 	// (PUT /v1/up-next/lists/{id})
 	AddListToUpNext(w http.ResponseWriter, r *http.Request, id Id, params AddListToUpNextParams)
+	// GetUpcoming Episodes coming up for the shows you watch
+	// (GET /v1/upcoming)
+	GetUpcoming(w http.ResponseWriter, r *http.Request, params GetUpcomingParams)
 	// GetUser Someone's public page
 	// (GET /v1/users/{username})
 	GetUser(w http.ResponseWriter, r *http.Request, username string, params GetUserParams)
@@ -5384,6 +5402,39 @@ func (siw *ServerInterfaceWrapper) AddListToUpNext(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetUpcoming operation middleware
+func (siw *ServerInterfaceWrapper) GetUpcoming(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUpcomingParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUpcoming(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetUser operation middleware
 func (siw *ServerInterfaceWrapper) GetUser(w http.ResponseWriter, r *http.Request) {
 
@@ -5787,6 +5838,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next/lists", wrapper.GetUpNextLists)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.RemoveListFromUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.AddListToUpNext)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/upcoming", wrapper.GetUpcoming)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/titles/{id}", wrapper.GetTitle)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.UseAiredOrder)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.PickEpisodeOrder)
@@ -10410,6 +10462,56 @@ func (response AddListToUpNext422JSONResponse) VisitAddListToUpNextResponse(w ht
 	return err
 }
 
+type GetUpcomingRequestObject struct {
+	Params GetUpcomingParams
+}
+
+type GetUpcomingResponseObject interface {
+	VisitGetUpcomingResponse(w http.ResponseWriter) error
+}
+
+type GetUpcoming200JSONResponse []UpcomingEntry
+
+func (response GetUpcoming200JSONResponse) VisitGetUpcomingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUpcoming401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetUpcoming401JSONResponse) VisitGetUpcomingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUpcoming404JSONResponse Problem
+
+func (response GetUpcoming404JSONResponse) VisitGetUpcomingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetUserRequestObject struct {
 	Username string `json:"username"`
 	Params   GetUserParams
@@ -10947,6 +11049,9 @@ type StrictServerInterface interface {
 	// AddListToUpNext Watch a list in order in Up next
 	// (PUT /v1/up-next/lists/{id})
 	AddListToUpNext(ctx context.Context, request AddListToUpNextRequestObject) (AddListToUpNextResponseObject, error)
+	// GetUpcoming Episodes coming up for the shows you watch
+	// (GET /v1/upcoming)
+	GetUpcoming(ctx context.Context, request GetUpcomingRequestObject) (GetUpcomingResponseObject, error)
 	// GetUser Someone's public page
 	// (GET /v1/users/{username})
 	GetUser(ctx context.Context, request GetUserRequestObject) (GetUserResponseObject, error)
@@ -13406,6 +13511,32 @@ func (sh *strictHandler) AddListToUpNext(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AddListToUpNextResponseObject); ok {
 		if err := validResponse.VisitAddListToUpNextResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUpcoming operation middleware
+func (sh *strictHandler) GetUpcoming(w http.ResponseWriter, r *http.Request, params GetUpcomingParams) {
+	var request GetUpcomingRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUpcoming(ctx, request.(GetUpcomingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUpcoming")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUpcomingResponseObject); ok {
+		if err := validResponse.VisitGetUpcomingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
