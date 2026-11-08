@@ -18,6 +18,19 @@ export function ago(iso: string) {
   return date(iso)
 }
 
+type Played = { watched_at: string; precision: 'time' | 'day' | 'none' }
+
+export function playedAgo(p: Played) {
+  if (p.precision === 'none') return 'date unknown'
+  if (p.precision === 'day') {
+    const label = dayLabel(p.watched_at)
+    if (label === 'Today' || label === 'Yesterday') return label.toLowerCase()
+  }
+  return ago(p.watched_at)
+}
+
+export const playedOn = (p: Played) => (p.precision === 'none' ? 'Date unknown' : date(p.watched_at))
+
 export function dayLabel(iso: string) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)

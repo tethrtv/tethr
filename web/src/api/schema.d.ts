@@ -1705,6 +1705,11 @@ export interface components {
             id: number;
             /** Format: date-time */
             watched_at: string;
+            /**
+             * @description How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
+             * @enum {string}
+             */
+            precision: "time" | "day" | "none";
             /** @enum {string} */
             action: "scrobble" | "checkin" | "watch";
             item: components["schemas"]["Item"];
@@ -2106,6 +2111,11 @@ export interface components {
             id: number;
             /** Format: date-time */
             watched_at: string;
+            /**
+             * @description How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
+             * @enum {string}
+             */
+            precision: "time" | "day" | "none";
             /** @enum {string} */
             action: "scrobble" | "checkin" | "watch";
         };

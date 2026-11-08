@@ -35,7 +35,7 @@ export function History() {
 
   const groups: { label: string; items: Watch[] }[] = []
   for (const w of history.data?.items ?? []) {
-    const label = dayLabel(w.watched_at)
+    const label = w.precision === 'none' ? 'Date unknown' : dayLabel(w.watched_at)
     const last = groups[groups.length - 1]
     if (last?.label === label) last.items.push(w)
     else groups.push({ label, items: [w] })
@@ -108,7 +108,7 @@ function Entry({ watch: w, profileID }: { watch: Watch; profileID: number }) {
 
   return (
     <li className={styles.entry}>
-      <span className={`${styles.code} ${styles.time}`}>{clock(w.watched_at)}</span>
+      <span className={`${styles.code} ${styles.time}`}>{w.precision === 'time' && clock(w.watched_at)}</span>
       <Cover id={w.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} size="xs" />
       <span className={styles.main}>
         <TitleLink type={w.item.type} slug={w.item.title.slug} className={`${styles.entryTitle} ${styles.titleLink}`}>
