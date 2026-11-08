@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,26 +85,48 @@ func (s *Server) matchFilm(ctx context.Context, f film) (matched, error) {
 	if err != nil {
 		return matched{}, err
 	}
-	if len(found) == 0 && f.Year > 0 {
-		if found, err = s.TMDB.SearchFilms(ctx, name, 0); err != nil {
+	named := func(r tmdb.Result) bool { return fold(r.Name) == fold(name) || fold(r.Original) == fold(name) }
+	same := sameFilm(found, named, f.Year)
+	if len(same) != 1 && f.Year > 0 {
+		more, err := s.TMDB.SearchFilms(ctx, name, 0)
+		if err != nil {
 			return matched{}, err
 		}
+		for _, r := range more {
+			if !slices.ContainsFunc(found, func(x tmdb.Result) bool { return x.ID == r.ID }) {
+				found = append(found, r)
+			}
+		}
+		same = sameFilm(found, named, f.Year)
 	}
 	out := matched{Candidates: make([]result, 0, matchCandidates)}
-	var same []tmdb.Result
-	for _, r := range found {
-		if (fold(r.Name) == fold(name) || fold(r.Original) == fold(name)) && f.Year > 0 && r.Year >= f.Year-1 && r.Year <= f.Year+1 {
-			same = append(same, r)
-		}
-	}
 	if len(same) == 1 {
 		m := toResult(same[0])
 		out.Match = &m
 	}
+	slices.SortStableFunc(found, func(a, b tmdb.Result) int {
+		switch {
+		case named(a) && !named(b):
+			return -1
+		case named(b) && !named(a):
+			return 1
+		}
+		return 0
+	})
 	for _, r := range found[:min(matchCandidates, len(found))] {
 		out.Candidates = append(out.Candidates, toResult(r))
 	}
 	return out, nil
+}
+
+func sameFilm(found []tmdb.Result, named func(tmdb.Result) bool, year int) []tmdb.Result {
+	var out []tmdb.Result
+	for _, r := range found {
+		if named(r) && year > 0 && r.Year >= year-1 && r.Year <= year+1 {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func toResult(r tmdb.Result) result {
