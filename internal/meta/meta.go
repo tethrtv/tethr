@@ -38,6 +38,7 @@ type Server struct {
 
 	once     sync.Once
 	searches *limit.Limiter
+	matches  *limit.Limiter
 }
 
 type title struct {
@@ -120,6 +121,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /meta/tv/{id}/orders", s.ownSite(s.orders))
 	mux.HandleFunc("GET /meta/tv/{id}/order/{group}", s.ownSite(s.order))
 	mux.Handle("GET /meta/search", s.SignedIn(s.search))
+	mux.Handle("POST /meta/match", s.SignedIn(s.match))
+	mux.Handle("OPTIONS /meta/match", s.SignedIn(s.match))
 }
 
 // Only Tethr's own pages may ask; apps fetch from TMDB with their own keys.
@@ -243,7 +246,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64)
 		write(w, "no-store", map[string]any{"results": []result{}})
 		return
 	}
-	s.once.Do(func() { s.searches = limit.New(searchLimit) })
+	s.once.Do(s.limits)
 	now := time.Now()
 	if wait, ok := s.searches.Allow(strconv.FormatInt(accountID, 10), now); !ok {
 		w.Header().Set("Cache-Control", "no-store")
@@ -264,6 +267,11 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64)
 		out = append(out, res)
 	}
 	write(w, searchCache, map[string]any{"results": out})
+}
+
+func (s *Server) limits() {
+	s.searches = limit.New(searchLimit)
+	s.matches = limit.New(matchLimit)
 }
 
 func (s *Server) found(w http.ResponseWriter, r *http.Request, err error) bool {
