@@ -45,11 +45,12 @@ WHERE id = $1 AND profile_id = $2 AND status = 'applied' AND applied_at > now() 
 DELETE FROM imports WHERE status = 'parsed' AND created_at < now() - interval '24 hours';
 
 -- name: ImportWatchEvent :execrows
-INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, import_id)
-SELECT $1, $2, sqlc.narg(episode_id), $3, $4, $5
+INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, precision, action, import_id)
+SELECT $1, $2, sqlc.narg(episode_id), $3, @precision, $4, $5
 WHERE NOT EXISTS (
     SELECT 1 FROM watch_events
-    WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM sqlc.narg(episode_id) AND watched_at = $3
+    WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM sqlc.narg(episode_id)
+      AND (watched_at = $3 OR @precision = 'none')
 );
 
 -- name: ImportListItem :execrows

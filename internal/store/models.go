@@ -388,6 +388,7 @@ type WatchEvent struct {
 	DurationSeconds *float64
 	CreatedAt       time.Time
 	ImportID        *int64
+	Precision       string
 }
 
 type Watching struct {

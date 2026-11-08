@@ -1,6 +1,7 @@
 package core
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,14 +22,15 @@ var (
 const maxUnmatched = 100
 
 type ImportItem struct {
-	Ref      Ref
-	Label    string
-	At       *time.Time
-	Action   string
-	Notes    string
-	Progress float64
-	Rating   int16
-	Section  string
+	Ref       Ref
+	Label     string
+	At        *time.Time
+	Precision string
+	Action    string
+	Notes     string
+	Progress  float64
+	Rating    int16
+	Section   string
 }
 
 type ImportFile struct {
@@ -311,8 +313,9 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 	profileID, importID := imp.ProfileID, &imp.ID
 
 	err := im.each(f.History, &summary.History, []string{"movie", "episode"}, field("watched_at"), func(item ImportItem, r resolved) (int64, error) {
-		if item.At == nil {
-			return 0, nil
+		at, precision := UnknownDate, "none"
+		if item.At != nil {
+			at, precision = *item.At, cmp.Or(item.Precision, "time")
 		}
 		action := item.Action
 		if action != "scrobble" && action != "checkin" {
@@ -322,7 +325,8 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 			ProfileID: profileID,
 			TitleID:   r.title.ID,
 			EpisodeID: r.episodeID(),
-			WatchedAt: *item.At,
+			WatchedAt: at,
+			Precision: precision,
 			Action:    action,
 			ImportID:  importID,
 		})

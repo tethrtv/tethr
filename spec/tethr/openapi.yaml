@@ -2834,7 +2834,7 @@ components:
           $ref: '#/components/schemas/Item'
     Watch:
       type: object
-      required: [id, watched_at, action, item]
+      required: [id, watched_at, precision, action, item]
       properties:
         id:
           type: integer
@@ -2842,6 +2842,10 @@ components:
         watched_at:
           type: string
           format: date-time
+        precision:
+          type: string
+          enum: [time, day, none]
+          description: How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
         action:
           type: string
           enum: [scrobble, checkin, watch]
@@ -3506,7 +3510,7 @@ components:
           $ref: '#/components/schemas/Resume'
     Play:
       type: object
-      required: [id, watched_at, action]
+      required: [id, watched_at, precision, action]
       properties:
         id:
           type: integer
@@ -3514,6 +3518,10 @@ components:
         watched_at:
           type: string
           format: date-time
+        precision:
+          type: string
+          enum: [time, day, none]
+          description: How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
         action:
           type: string
           enum: [scrobble, checkin, watch]

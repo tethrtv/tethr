@@ -138,7 +138,7 @@ func (q *Queries) CountListItems(ctx context.Context, listID int64) (int64, erro
 const createWatchEvent = `-- name: CreateWatchEvent :one
 INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id
+RETURNING id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id, precision
 `
 
 type CreateWatchEventParams struct {
@@ -173,6 +173,7 @@ func (q *Queries) CreateWatchEvent(ctx context.Context, arg CreateWatchEventPara
 		&i.DurationSeconds,
 		&i.CreatedAt,
 		&i.ImportID,
+		&i.Precision,
 	)
 	return i, err
 }
@@ -420,7 +421,7 @@ func (q *Queries) HideItem(ctx context.Context, arg HideItemParams) error {
 }
 
 const history = `-- name: History :many
-SELECT w.id, w.profile_id, w.title_id, w.episode_id, w.watched_at, w.action, w.grant_id, w.duration_seconds, w.created_at, w.import_id
+SELECT w.id, w.profile_id, w.title_id, w.episode_id, w.watched_at, w.action, w.grant_id, w.duration_seconds, w.created_at, w.import_id, w.precision
 FROM watch_events w
 JOIN titles t ON t.id = w.title_id
 WHERE w.profile_id = $1
@@ -473,6 +474,7 @@ func (q *Queries) History(ctx context.Context, arg HistoryParams) ([]WatchEvent,
 			&i.DurationSeconds,
 			&i.CreatedAt,
 			&i.ImportID,
+			&i.Precision,
 		); err != nil {
 			return nil, err
 		}
@@ -645,7 +647,7 @@ func (q *Queries) ProfileByID(ctx context.Context, id int64) (Profile, error) {
 }
 
 const recentWatchEvent = `-- name: RecentWatchEvent :one
-SELECT id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id FROM watch_events
+SELECT id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id, precision FROM watch_events
 WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM $4
   AND action = 'scrobble' AND watched_at > $3
 ORDER BY watched_at DESC
@@ -678,6 +680,7 @@ func (q *Queries) RecentWatchEvent(ctx context.Context, arg RecentWatchEventPara
 		&i.DurationSeconds,
 		&i.CreatedAt,
 		&i.ImportID,
+		&i.Precision,
 	)
 	return i, err
 }
@@ -864,7 +867,7 @@ func (q *Queries) TitleRating(ctx context.Context, arg TitleRatingParams) (Title
 }
 
 const titleWatches = `-- name: TitleWatches :many
-SELECT id, episode_id, watched_at, action FROM watch_events
+SELECT id, episode_id, watched_at, precision, action FROM watch_events
 WHERE profile_id = $1 AND title_id = $2
 ORDER BY watched_at DESC, id DESC
 `
@@ -878,6 +881,7 @@ type TitleWatchesRow struct {
 	ID        int64
 	EpisodeID *int64
 	WatchedAt time.Time
+	Precision string
 	Action    string
 }
 
@@ -894,6 +898,7 @@ func (q *Queries) TitleWatches(ctx context.Context, arg TitleWatchesParams) ([]T
 			&i.ID,
 			&i.EpisodeID,
 			&i.WatchedAt,
+			&i.Precision,
 			&i.Action,
 		); err != nil {
 			return nil, err

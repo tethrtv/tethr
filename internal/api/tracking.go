@@ -109,7 +109,7 @@ func (s *Server) ListHistory(ctx context.Context, req ListHistoryRequestObject) 
 	}
 	out := HistoryPage{Items: make([]Watch, 0, len(entries)), Total: total, Page: page.Page, Limit: page.Limit}
 	for _, e := range entries {
-		out.Items = append(out.Items, Watch{Id: e.ID, WatchedAt: e.At, Action: WatchAction(e.Action), Item: toItem(e.Item)})
+		out.Items = append(out.Items, Watch{Id: e.ID, WatchedAt: e.At, Precision: WatchPrecision(e.Precision), Action: WatchAction(e.Action), Item: toItem(e.Item)})
 	}
 	return ListHistory200JSONResponse(out), nil
 }

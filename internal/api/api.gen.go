@@ -346,6 +346,27 @@ func (e PlayAction) Valid() bool {
 	}
 }
 
+// Defines values for PlayPrecision.
+const (
+	PlayPrecisionDay  PlayPrecision = "day"
+	PlayPrecisionNone PlayPrecision = "none"
+	PlayPrecisionTime PlayPrecision = "time"
+)
+
+// Valid indicates whether the value is a known member of the PlayPrecision enum.
+func (e PlayPrecision) Valid() bool {
+	switch e {
+	case PlayPrecisionDay:
+		return true
+	case PlayPrecisionNone:
+		return true
+	case PlayPrecisionTime:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProfileKind.
 const (
 	ProfileKindGuest  ProfileKind = "guest"
@@ -445,6 +466,27 @@ func (e WatchAction) Valid() bool {
 	case WatchActionScrobble:
 		return true
 	case WatchActionWatch:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WatchPrecision.
+const (
+	WatchPrecisionDay  WatchPrecision = "day"
+	WatchPrecisionNone WatchPrecision = "none"
+	WatchPrecisionTime WatchPrecision = "time"
+)
+
+// Valid indicates whether the value is a known member of the WatchPrecision enum.
+func (e WatchPrecision) Valid() bool {
+	switch e {
+	case WatchPrecisionDay:
+		return true
+	case WatchPrecisionNone:
+		return true
+	case WatchPrecisionTime:
 		return true
 	default:
 		return false
@@ -1277,13 +1319,19 @@ type PasskeyResponse struct {
 
 // Play defines model for Play.
 type Play struct {
-	Action    PlayAction `json:"action"`
-	Id        int64      `json:"id"`
-	WatchedAt time.Time  `json:"watched_at"`
+	Action PlayAction `json:"action"`
+	Id     int64      `json:"id"`
+
+	// Precision How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
+	Precision PlayPrecision `json:"precision"`
+	WatchedAt time.Time     `json:"watched_at"`
 }
 
 // PlayAction defines model for Play.Action.
 type PlayAction string
+
+// PlayPrecision How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
+type PlayPrecision string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -1558,14 +1606,20 @@ type Verification struct {
 
 // Watch defines model for Watch.
 type Watch struct {
-	Action    WatchAction `json:"action"`
-	Id        int64       `json:"id"`
-	Item      Item        `json:"item"`
-	WatchedAt time.Time   `json:"watched_at"`
+	Action WatchAction `json:"action"`
+	Id     int64       `json:"id"`
+	Item   Item        `json:"item"`
+
+	// Precision How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
+	Precision WatchPrecision `json:"precision"`
+	WatchedAt time.Time      `json:"watched_at"`
 }
 
 // WatchAction defines model for Watch.Action.
 type WatchAction string
+
+// WatchPrecision How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
+type WatchPrecision string
 
 // DeviceCode defines model for DeviceCode.
 type DeviceCode = string

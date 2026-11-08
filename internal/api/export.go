@@ -101,7 +101,7 @@ func (s *Server) exportZip(h core.HouseholdExport, at time.Time) ([]byte, error)
 			Imports:   make([]Import, 0, len(p.Imports)),
 		}
 		for _, e := range p.History {
-			out.History = append(out.History, Watch{Id: e.ID, WatchedAt: e.At, Action: WatchAction(e.Action), Item: toItem(e.Item)})
+			out.History = append(out.History, Watch{Id: e.ID, WatchedAt: e.At, Precision: WatchPrecision(e.Precision), Action: WatchAction(e.Action), Item: toItem(e.Item)})
 			rows = append(rows, historyRow(p.Profile.Name, e))
 		}
 		for _, e := range p.Playback {
@@ -157,9 +157,19 @@ func (s *Server) exportZip(h core.HouseholdExport, at time.Time) ([]byte, error)
 	return buf.Bytes(), nil
 }
 
+func watchedAt(e core.Entry) string {
+	switch e.Precision {
+	case "day":
+		return e.At.UTC().Format(time.DateOnly)
+	case "none":
+		return ""
+	}
+	return e.At.UTC().Format(time.RFC3339)
+}
+
 func historyRow(profile string, e core.Entry) []string {
 	t := e.Item.Title
-	row := []string{e.At.UTC().Format(time.RFC3339), profile, e.Item.Kind(), "", "", "", "", "", t.Imdb, t.Tvdb, e.Action}
+	row := []string{watchedAt(e), profile, e.Item.Kind(), "", "", "", "", "", t.Imdb, t.Tvdb, e.Action}
 	if t.Name != nil {
 		row[3] = *t.Name
 	}
