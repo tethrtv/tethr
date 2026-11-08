@@ -973,6 +973,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/up-next/rewatch/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Watch a show again from the start
+         * @description From now on only new plays count towards the show's progress, so Up next offers the first episode again. Nothing is deleted from history. Starting again while a rewatch is going restarts it. This is the same as Trakt's progress reset.
+         */
+        put: operations["startRewatch"];
+        post?: never;
+        /**
+         * Stop rewatching a show
+         * @description Progress counts every play again.
+         */
+        delete: operations["stopRewatch"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/up-next/lists": {
         parameters: {
             query?: never;
@@ -2053,9 +2077,14 @@ export interface components {
             last_watched_at: string;
             /** @description Episodes aired so far, not counting specials. */
             aired: number;
-            /** @description How many of those have been watched. */
+            /** @description How many of those have been watched, since the rewatch started if there is one. */
             watched: number;
             resume?: components["schemas"]["Resume"];
+            /**
+             * Format: date-time
+             * @description Set while you're rewatching the show. Only plays after it count towards progress.
+             */
+            rewatch_from?: string;
         };
         UpcomingEntry: {
             show: components["schemas"]["Title"];
@@ -2102,6 +2131,11 @@ export interface components {
             episode_order?: string;
             /** @description Numbered in the show's episode order, with specials last. Episodes the order leaves out aren't listed. */
             seasons?: components["schemas"]["SeasonDetail"][];
+            /**
+             * Format: date-time
+             * @description Set while you're rewatching the show. Only plays after it count towards progress.
+             */
+            rewatch_from?: string;
         };
         /** @description Your rating of the film or show itself. */
         TitleRating: {
@@ -4032,6 +4066,56 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Back in Up next */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    startRewatch: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rewatching */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    stopRewatch: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped */
             204: {
                 headers: {
                     [name: string]: unknown;

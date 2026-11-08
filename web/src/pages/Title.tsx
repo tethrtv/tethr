@@ -120,7 +120,7 @@ function Back() {
 function useRefresh(profileID: number) {
   const queries = useQueryClient()
   return () => {
-    for (const key of ['title', 'history', 'up-next', 'playback', 'watchlist', 'lists']) {
+    for (const key of ['title', 'history', 'up-next', 'upcoming', 'playback', 'watchlist', 'lists']) {
       queries.invalidateQueries({ queryKey: [key, profileID] })
     }
     queries.invalidateQueries({ queryKey: ['list'] })
@@ -193,12 +193,26 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const meta = useDetails('show', d.title.ids.tmdb)
   const group = useGroup(d.title.ids.tmdb, d.episode_order)
   const name = meta?.name ?? d.title.name ?? 'Untitled show'
-  const seasons = d.seasons ?? []
+  const since = d.rewatch_from && Date.parse(d.rewatch_from)
+  const seasons = (d.seasons ?? []).map((s) =>
+    since
+      ? {
+          ...s,
+          episodes: s.episodes.map((e) => ({
+            ...e,
+            watches: e.watches.filter((w) => Date.parse(w.watched_at) > since),
+          })),
+        }
+      : s,
+  )
   const numbered = seasons.filter((s) => s.number > 0)
   const episodes = numbered.flatMap((s) => s.episodes)
   const out = episodes.filter(aired)
   const seen = out.filter((e) => e.watches.length).length
   const left = out.length - seen
+  const everyPlay = (d.seasons ?? []).filter((s) => s.number > 0).flatMap((s) => s.episodes.filter(aired))
+  const rounds = everyPlay.length ? Math.min(...everyPlay.map((e) => e.watches.length)) : 0
+  const rewatching = !!since && left > 0
   const paused = episodes.find((e) => e.resume && !e.watches.length)
   const sizes = d.episode_order
     ? group?.seasons.map((s) => ({ number: s.number, episodes: s.episodes.length }))
@@ -257,10 +271,16 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
                 <>
                   You’ve seen <strong>{seen}</strong> so far. Tethr is fetching the rest of the episode list.
                 </>
+              ) : rewatching ? (
+                <>
+                  Rewatching since {date(d.rewatch_from ?? '')}. You’ve seen <strong>{seen}</strong> of {out.length}{' '}
+                  again. {left} to go
+                  {runtime ? `, about ${duration(left * runtime)}` : ''}.
+                </>
               ) : !out.length ? (
                 'You haven’t started this yet.'
               ) : !left ? (
-                'You’ve seen every episode that’s aired.'
+                `You’ve seen every episode that’s aired.${rounds > 1 ? ` Watched ${rounds === 2 ? 'twice' : `${rounds} times`}.` : ''}`
               ) : (
                 <>
                   You’ve seen <strong>{seen}</strong> of {out.length}. {left} to go
@@ -286,6 +306,9 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               </div>
             )}
           </div>
+          {outlined && (rewatching || (out.length > 0 && !left)) && (
+            <Rewatch show={d} rewatching={rewatching} profileID={profileID} />
+          )}
           <Yours detail={d} profileID={profileID} />
         </div>
       </header>
@@ -316,6 +339,32 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
         </section>
       )}
     </div>
+  )
+}
+
+function Rewatch({ show, rewatching, profileID }: { show: Detail; rewatching: boolean; profileID: number }) {
+  const refresh = useRefresh(profileID)
+  const change = useMutation({
+    mutationFn: async () => {
+      const params = { path: { id: show.title.ids.tethr ?? 0 }, query: { profile_id: profileID } }
+      const { error } = rewatching
+        ? await api.DELETE('/v1/up-next/rewatch/{id}', { params })
+        : await api.PUT('/v1/up-next/rewatch/{id}', { params })
+      if (error) throw error
+    },
+    onSuccess: refresh,
+  })
+  return (
+    <p className={styles.actions}>
+      <Button
+        variant={rewatching ? 'text' : 'plain'}
+        onClick={() => change.mutate()}
+        disabled={change.isPending || !show.title.ids.tethr}
+      >
+        {rewatching ? 'Stop rewatching' : 'Watch again'}
+      </Button>
+      {change.isError && <span className={lists.error}>{problemMessage(change.error)}</span>}
+    </p>
   )
 }
 
