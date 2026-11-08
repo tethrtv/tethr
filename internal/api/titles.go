@@ -133,7 +133,7 @@ func (s *Server) Search(ctx context.Context, req SearchRequestObject) (SearchRes
 func toPlays(entries []core.Entry) []Play {
 	out := make([]Play, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, Play{Id: e.ID, WatchedAt: e.At, Action: PlayAction(e.Action)})
+		out = append(out, Play{Id: e.ID, WatchedAt: e.At, Precision: PlayPrecision(e.Precision), Action: PlayAction(e.Action)})
 	}
 	return out
 }

@@ -84,7 +84,7 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 	plays := map[int64][]Entry{}
 	resume := map[int64]*Entry{}
 	for _, w := range watches {
-		play := Entry{ID: w.ID, At: w.WatchedAt, Action: w.Action}
+		play := Entry{ID: w.ID, At: w.WatchedAt, Precision: w.Precision, Action: w.Action}
 		if w.EpisodeID == nil {
 			s.Watches = append(s.Watches, play)
 		} else {

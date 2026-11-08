@@ -162,7 +162,7 @@ WHERE profile_id = $1 AND section = $2 AND title_id = $3 AND season_number IS NO
 SELECT * FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC;
 
 -- name: TitleWatches :many
-SELECT id, episode_id, watched_at, action FROM watch_events
+SELECT id, episode_id, watched_at, precision, action FROM watch_events
 WHERE profile_id = $1 AND title_id = $2
 ORDER BY watched_at DESC, id DESC;
 

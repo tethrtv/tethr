@@ -218,14 +218,15 @@ type Range struct {
 }
 
 type Entry struct {
-	ID       int64
-	At       time.Time
-	Action   string
-	Progress float64
-	Rank     int32
-	Rating   int16
-	Notes    *string
-	Item     Item
+	ID        int64
+	At        time.Time
+	Precision string
+	Action    string
+	Progress  float64
+	Rank      int32
+	Rating    int16
+	Notes     *string
+	Item      Item
 }
 
 type HistoryFilter struct {
@@ -274,10 +275,12 @@ func History(ctx context.Context, db *pgxpool.Pool, profileID int64, f HistoryFi
 	}
 	entries := make([]Entry, 0, len(events))
 	for _, e := range events {
-		entries = append(entries, Entry{ID: e.ID, At: e.WatchedAt, Action: e.Action, Item: c.item(e.TitleID, nil, e.EpisodeID)})
+		entries = append(entries, Entry{ID: e.ID, At: e.WatchedAt, Precision: e.Precision, Action: e.Action, Item: c.item(e.TitleID, nil, e.EpisodeID)})
 	}
 	return entries, total, nil
 }
+
+var UnknownDate = time.Unix(0, 0).UTC()
 
 type Watch struct {
 	Ref Ref

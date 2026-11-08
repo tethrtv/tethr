@@ -12,7 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/tethrtv/tethr/internal/core"
 	"github.com/tethrtv/tethr/internal/dbtest"
 )
 
@@ -107,6 +109,15 @@ func TestDescribeDevice(t *testing.T) {
 	} {
 		if got := describeDevice(ua); got != want {
 			t.Errorf("describeDevice(%q) = %q, want %q", ua, got, want)
+		}
+	}
+}
+
+func TestWatchedAtInExports(t *testing.T) {
+	at := time.Date(2026, 11, 8, 20, 30, 0, 0, time.UTC)
+	for precision, want := range map[string]string{"time": "2026-11-08T20:30:00Z", "day": "2026-11-08", "none": ""} {
+		if got := watchedAt(core.Entry{At: at, Precision: precision}); got != want {
+			t.Errorf("%s = %q, want %q", precision, got, want)
 		}
 	}
 }

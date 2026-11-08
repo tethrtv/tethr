@@ -271,11 +271,12 @@ func (q *Queries) ImportRating(ctx context.Context, arg ImportRatingParams) (int
 }
 
 const importWatchEvent = `-- name: ImportWatchEvent :execrows
-INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, import_id)
-SELECT $1, $2, $6, $3, $4, $5
+INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, precision, action, import_id)
+SELECT $1, $2, $6, $3, $7, $4, $5
 WHERE NOT EXISTS (
     SELECT 1 FROM watch_events
-    WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM $6 AND watched_at = $3
+    WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM $6
+      AND (watched_at = $3 OR $7 = 'none')
 )
 `
 
@@ -286,6 +287,7 @@ type ImportWatchEventParams struct {
 	Action    string
 	ImportID  *int64
 	EpisodeID *int64
+	Precision string
 }
 
 func (q *Queries) ImportWatchEvent(ctx context.Context, arg ImportWatchEventParams) (int64, error) {
@@ -296,6 +298,7 @@ func (q *Queries) ImportWatchEvent(ctx context.Context, arg ImportWatchEventPara
 		arg.Action,
 		arg.ImportID,
 		arg.EpisodeID,
+		arg.Precision,
 	)
 	if err != nil {
 		return 0, err

@@ -153,3 +153,53 @@ func TestImportNeedsSomething(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestImportPlaysWithoutTimes(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+	profile := caller.ProfileID
+	if _, err := AddHistory(ctx, db, caller, []Watch{{Ref: inception(), At: *at("2024-01-01T20:00:00Z")}}); err != nil {
+		t.Fatal(err)
+	}
+
+	heat := Ref{Kind: "movie", IDs: IDs{TMDB: 949}}
+	matrix := Ref{Kind: "movie", IDs: IDs{TMDB: 603}}
+	parsed, err := CreateImport(ctx, db, profile, "trakt", "trakt.zip", ImportFile{History: []ImportItem{
+		{Ref: inception(), Label: "Inception (2010)"},
+		{Ref: heat, Label: "Heat (1995)"},
+		{Ref: heat, Label: "Heat (1995)"},
+		{Ref: matrix, Label: "The Matrix (1999)", At: at("2026-11-08T12:00:00Z"), Precision: "day"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := QueueImport(ctx, db, profile, parsed.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyNextImport(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	applied, _ := ImportByID(ctx, db, profile, parsed.ID)
+	if h := applied.Summary.History; h.Added != 2 || h.Skipped != 2 {
+		t.Errorf("history = %+v", h)
+	}
+
+	entries, _, err := History(ctx, db, profile, HistoryFilter{}, Page{Page: 1, Limit: 10})
+	if err != nil || len(entries) != 3 {
+		t.Fatalf("history = %+v, %v", entries, err)
+	}
+	want := []struct {
+		tmdb      int32
+		precision string
+	}{{603, "day"}, {27205, "time"}, {949, "none"}}
+	for i, w := range want {
+		e := entries[i]
+		if *e.Item.Title.TmdbID != w.tmdb || e.Precision != w.precision {
+			t.Errorf("entry %d = %d %s, want %d %s", i, *e.Item.Title.TmdbID, e.Precision, w.tmdb, w.precision)
+		}
+	}
+	if !entries[2].At.Equal(UnknownDate) {
+		t.Errorf("undated play at %v", entries[2].At)
+	}
+}
