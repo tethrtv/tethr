@@ -29,3 +29,16 @@ function Poster({ item, size }: { item: Item; size: 's' | 'l' }) {
     />
   )
 }
+
+export function TethrCover({ size = 's' }: { size?: 's' | 'l' }) {
+  return (
+    <span className={`${styles.cover} ${styles[size]} ${styles.tethr}`} aria-hidden="true">
+      <svg viewBox="0 0 32 32" className={styles.glyph} aria-hidden="true">
+        <path d="M9 21c3-9 11-1 14-10" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        <circle cx="9" cy="21" r="3.2" fill="currentColor" />
+        <circle cx="23" cy="11" r="3.2" fill="currentColor" />
+      </svg>
+      {size === 'l' && <span className={styles.made}>Made by Tethr</span>}
+    </span>
+  )
+}
