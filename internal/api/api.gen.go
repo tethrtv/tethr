@@ -60,12 +60,15 @@ func (e ExportFormat) Valid() bool {
 
 // Defines values for ImportSource.
 const (
+	Simkl ImportSource = "simkl"
 	Trakt ImportSource = "trakt"
 )
 
 // Valid indicates whether the value is a known member of the ImportSource enum.
 func (e ImportSource) Valid() bool {
 	switch e {
+	case Simkl:
+		return true
 	case Trakt:
 		return true
 	default:
@@ -2145,7 +2148,7 @@ type ServerInterface interface {
 	// ListImports The last 20 imports
 	// (GET /v1/imports)
 	ListImports(w http.ResponseWriter, r *http.Request, params ListImportsParams)
-	// CreateImport Read a Trakt export before importing it
+	// CreateImport Read a Trakt export or Simkl backup before importing it
 	// (POST /v1/imports)
 	CreateImport(w http.ResponseWriter, r *http.Request, params CreateImportParams)
 	// GetImport One import and its counts
@@ -10637,7 +10640,7 @@ type StrictServerInterface interface {
 	// ListImports The last 20 imports
 	// (GET /v1/imports)
 	ListImports(ctx context.Context, request ListImportsRequestObject) (ListImportsResponseObject, error)
-	// CreateImport Read a Trakt export before importing it
+	// CreateImport Read a Trakt export or Simkl backup before importing it
 	// (POST /v1/imports)
 	CreateImport(ctx context.Context, request CreateImportRequestObject) (CreateImportResponseObject, error)
 	// GetImport One import and its counts

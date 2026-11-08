@@ -78,7 +78,7 @@ func toImport(id int64, source, filename, status string, summary []byte, created
 	return i, json.Unmarshal(summary, &i.Summary)
 }
 
-func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, filename string, f ImportFile) (Import, error) {
+func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, source, filename string, f ImportFile) (Import, error) {
 	summary := ImportSummary{Unmatched: []string{}}
 	keep := func(items []ImportItem, c *ImportCount) []ImportItem {
 		c.Total = len(items)
@@ -126,7 +126,7 @@ func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, filena
 		}
 		row, err = q.CreateImport(ctx, store.CreateImportParams{
 			ProfileID: profileID,
-			Source:    "trakt",
+			Source:    source,
 			Filename:  filename,
 			Payload:   payload,
 			Summary:   summaryJSON,
