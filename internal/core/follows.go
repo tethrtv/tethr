@@ -166,9 +166,9 @@ func BrowseLists(ctx context.Context, db *pgxpool.Pool, viewer int64, query Brow
 
 func ProfilePage(ctx context.Context, db *pgxpool.Pool, viewer int64, username string) (PublicProfile, error) {
 	q := store.New(db)
-	p, err := q.ProfileByUsername(ctx, username)
+	p, err := profileByUsername(ctx, q, username)
 	if err != nil {
-		return PublicProfile{}, notFound(err)
+		return PublicProfile{}, err
 	}
 	home := false
 	if viewer != 0 {

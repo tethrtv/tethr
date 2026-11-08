@@ -109,12 +109,15 @@ func UpdateProfile(ctx context.Context, db *pgxpool.Pool, accountID, profileID i
 	var profile store.Profile
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		if _, err := q.HouseholdProfile(ctx, store.HouseholdProfileParams{ID: profileID, OwnerAccountID: accountID}); err != nil {
+		was, err := q.HouseholdProfile(ctx, store.HouseholdProfileParams{ID: profileID, OwnerAccountID: accountID})
+		if err != nil {
 			return notFound(err)
 		}
-		var err error
 		profile, err = q.UpdateProfile(ctx, store.UpdateProfileParams{ID: profileID, Name: c.Name, Username: c.Username, Private: c.Private})
-		return err
+		if err != nil || profile.Username == was.Username {
+			return err
+		}
+		return q.KeepOldUsername(ctx, store.KeepOldUsernameParams{Username: was.Username, ProfileID: profileID})
 	})
 	if err != nil {
 		return store.Profile{}, taken(err)

@@ -107,11 +107,32 @@ func Lists(ctx context.Context, db *pgxpool.Pool, viewer int64) ([]List, error) 
 
 func ProfileLists(ctx context.Context, db *pgxpool.Pool, viewer int64, username string) ([]List, error) {
 	q := store.New(db)
-	owner, err := q.ProfileByUsername(ctx, username)
+	owner, err := profileByUsername(ctx, q, username)
 	if err != nil {
-		return nil, notFound(err)
+		return nil, err
 	}
 	return visibleLists(ctx, q, viewer, store.VisibleListsParams{Owner: &owner.ID})
+}
+
+func FindList(ctx context.Context, db *pgxpool.Pool, viewer int64, username, slug string) (List, error) {
+	q := store.New(db)
+	owner, err := profileByUsername(ctx, q, username)
+	if err != nil {
+		return List{}, err
+	}
+	id, err := q.ListIDBySlug(ctx, store.ListIDBySlugParams{ProfileID: owner.ID, Slug: strings.ToLower(slug)})
+	if err != nil {
+		return List{}, notFound(err)
+	}
+	return getList(ctx, q, viewer, id)
+}
+
+func profileByUsername(ctx context.Context, q *store.Queries, username string) (store.Profile, error) {
+	p, err := q.ProfileByUsername(ctx, username)
+	if errors.Is(err, pgx.ErrNoRows) {
+		p, err = q.ProfileByOldUsername(ctx, username)
+	}
+	return p, notFound(err)
 }
 
 func GetList(ctx context.Context, db *pgxpool.Pool, viewer, id int64) (List, error) {
@@ -478,6 +499,11 @@ func UpdateList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, c Li
 			slug, err := listSlug(ctx, q, profileID, l.ID, l.Name)
 			if err != nil {
 				return err
+			}
+			if slug != l.Slug {
+				if err := q.KeepOldListSlug(ctx, store.KeepOldListSlugParams{ProfileID: l.ProfileID, Slug: l.Slug, ListID: l.ID}); err != nil {
+					return err
+				}
 			}
 			l.Slug = slug
 		}
