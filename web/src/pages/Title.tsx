@@ -193,9 +193,13 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const meta = useDetails('show', d.title.ids.tmdb)
   const group = useGroup(d.title.ids.tmdb, d.episode_order)
   const name = meta?.name ?? d.title.name ?? 'Untitled show'
-  const since = d.rewatch_from && Date.parse(d.rewatch_from)
+  const since = d.rewatch_from ? Date.parse(d.rewatch_from) : 0
+  const everyPlay = (d.seasons ?? []).filter((s) => s.number > 0).flatMap((s) => s.episodes.filter(aired))
+  const finale = everyPlay[everyPlay.length - 1]
+  const rewatched = !!since && !!finale?.watches.some((w) => Date.parse(w.watched_at) > since)
+  const rewatching = !!since && !rewatched
   const seasons = (d.seasons ?? []).map((s) =>
-    since
+    rewatching
       ? {
           ...s,
           episodes: s.episodes.map((e) => ({
@@ -210,9 +214,14 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   const out = episodes.filter(aired)
   const seen = out.filter((e) => e.watches.length).length
   const left = out.length - seen
-  const everyPlay = (d.seasons ?? []).filter((s) => s.number > 0).flatMap((s) => s.episodes.filter(aired))
-  const rounds = everyPlay.length ? Math.min(...everyPlay.map((e) => e.watches.length)) : 0
-  const rewatching = !!since && left > 0
+  const before = everyPlay
+    .filter((e) => rewatched && e.episode.first_aired && Date.parse(e.episode.first_aired) < since)
+    .map((e) => e.watches.filter((w) => Date.parse(w.watched_at) <= since).length)
+  const rounds = before.length
+    ? Math.min(...before) + 1
+    : everyPlay.length
+      ? Math.min(...everyPlay.map((e) => e.watches.length))
+      : 0
   const paused = episodes.find((e) => e.resume && !e.watches.length)
   const sizes = d.episode_order
     ? group?.seasons.map((s) => ({ number: s.number, episodes: s.episodes.length }))
