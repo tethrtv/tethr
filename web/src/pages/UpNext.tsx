@@ -9,7 +9,7 @@ import { TitleLink } from '../components/TitleLink'
 import { ago, date, ep, plural } from '../format'
 import { useDetails, useEpisode } from '../tmdb'
 import styles from './Lists.module.css'
-import { listPath } from './MyLists'
+import { listParams } from './MyLists'
 
 type Entry = components['schemas']['UpNextEntry']
 type ListEntry = components['schemas']['UpNextListEntry']
@@ -216,8 +216,8 @@ function ListNext({ entry: e, profileID }: { entry: ListEntry; profileID: number
       <ListCover items={e.list.cover} size="s" />
       <div className={styles.main}>
         <Link
-          to="/lists/$list"
-          params={{ list: listPath(e.list) }}
+          to="/@{$username}/lists/$slug"
+          params={listParams(e.list)}
           className={`${styles.rowTitle} ${styles.titleLink}`}
         >
           {e.list.name}

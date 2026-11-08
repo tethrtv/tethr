@@ -12,7 +12,7 @@ import { useDetails } from '../tmdb'
 import { kinds, Option, progressWords, what } from './List'
 import own from './List.module.css'
 import styles from './Lists.module.css'
-import { listPath } from './MyLists'
+import { listParams } from './MyLists'
 
 type Kind = components['schemas']['AutoListKind']
 type Item = components['schemas']['AutoListItem']
@@ -70,7 +70,7 @@ export function AutoListPage({ kind }: { kind: string }) {
     },
     onSuccess: (l) => {
       queries.invalidateQueries({ queryKey: ['lists', profile.id] })
-      navigate({ to: '/lists/$list', params: { list: listPath(l) } })
+      navigate({ to: '/@{$username}/lists/$slug', params: listParams(l) })
     },
   })
 

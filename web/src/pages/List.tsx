@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
-import { type PointerEvent, type ReactNode, useRef, useState } from 'react'
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
+import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
@@ -8,11 +8,12 @@ import { Cover } from '../components/Cover'
 import { Field } from '../components/Field'
 import { ListCover } from '../components/ListCover'
 import { TitleLink } from '../components/TitleLink'
+import { MissingList } from '../components/Trouble'
 import { ep, plural } from '../format'
 import { useDetails } from '../tmdb'
 import own from './List.module.css'
 import styles from './Lists.module.css'
-import { goesOutside, ownerName, privacyWords } from './MyLists'
+import { goesOutside, listParams, ownerName, privacyWords } from './MyLists'
 
 type List = components['schemas']['List']
 type Item = components['schemas']['ListItem']
@@ -50,16 +51,34 @@ function storedView(): 'rows' | 'covers' {
   }
 }
 
-export function ListPage({
-  param,
-  profileID,
-  profileKind,
-}: {
-  param: string
-  profileID?: number
-  profileKind?: string
-}) {
-  const id = Number.parseInt(param, 10) || 0
+type Where = { profileID?: number; profileKind?: string }
+
+const addressKey = (username: string, slug: string, profileID?: number) => [
+  'list address',
+  username.toLowerCase(),
+  slug,
+  profileID ?? 0,
+]
+
+export function ListAt({ username, slug, profileID, profileKind }: { username: string; slug: string } & Where) {
+  const found = useQuery({
+    queryKey: addressKey(username, slug, profileID),
+    queryFn: async () => {
+      const { data, response } = await api.GET('/v1/users/{username}/lists/{slug}', {
+        params: { path: { username, slug }, query: profileID ? { profile_id: profileID } : {} },
+      })
+      if (response.status === 404) return null
+      if (!data) throw new Error('could not find the list')
+      return data.id
+    },
+  })
+  if (found.isError) return <p className={styles.error}>{problemMessage(found.error)}</p>
+  if (found.data === null) return <MissingList signedIn={!!profileID} />
+  if (!found.data) return null
+  return <ListPage key={found.data} id={found.data} profileID={profileID} profileKind={profileKind} />
+}
+
+function ListPage({ id, profileID, profileKind }: { id: number } & Where) {
   const queries = useQueryClient()
   const [kind, setKind] = useState<(typeof kinds)[number]['value']>('all')
   const [hideWatched, setHideWatched] = useState(false)
@@ -106,19 +125,18 @@ export function ListPage({
     onSuccess: refresh,
   })
 
-  if (page.data === null) {
-    return (
-      <div className={styles.page}>
-        <header className={styles.head}>
-          <h1 className={styles.title}>No list here</h1>
-          <p className={styles.lead}>
-            There’s no list at this address, or it isn’t shared with you.
-            {!profileID && ' If it’s yours or your household’s, sign in first.'}
-          </p>
-        </header>
-      </div>
-    )
-  }
+  const navigate = useNavigate()
+  const here = useRouterState({ select: (s) => s.location.pathname })
+  const shown = page.data?.list
+  useEffect(() => {
+    if (!shown) return
+    const params = listParams(shown)
+    if (decodeURIComponent(here) === `/@${params.username}/lists/${params.slug}`) return
+    queries.setQueryData(addressKey(params.username, params.slug, profileID), shown.id)
+    navigate({ to: '/@{$username}/lists/$slug', params, replace: true })
+  }, [shown, here, profileID, queries, navigate])
+
+  if (page.data === null) return <MissingList signedIn={!!profileID} />
   if (!page.data) return null
 
   const list = page.data.list

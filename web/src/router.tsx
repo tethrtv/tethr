@@ -16,7 +16,7 @@ import { Home } from './pages/Home'
 import { Import } from './pages/Import'
 import { Join } from './pages/Join'
 import { Privacy, Terms } from './pages/Legal'
-import { ListPage } from './pages/List'
+import { ListAt } from './pages/List'
 import { MediaServers } from './pages/MediaServers'
 import { MyLists } from './pages/MyLists'
 import { SignIn } from './pages/SignIn'
@@ -50,27 +50,27 @@ function Titled() {
 }
 
 function OneList() {
-  const { list = '' } = useParams({ strict: false })
+  const { username = '', slug = '' } = useParams({ strict: false })
   const me = useMe()
   if (me.isPending) return null
   if (me.data) {
     return (
       <Shell>
-        <WatchingList key={list} param={list} />
+        <WatchingList key={`${username}/${slug}`} username={username} slug={slug} />
       </Shell>
     )
   }
   if (import.meta.env.VITE_COMING_SOON === 'true') return <ComingSoon />
   return (
     <Plain wide>
-      <ListPage key={list} param={list} />
+      <ListAt key={`${username}/${slug}`} username={username} slug={slug} />
     </Plain>
   )
 }
 
-function WatchingList({ param }: { param: string }) {
+function WatchingList({ username, slug }: { username: string; slug: string }) {
   const { profile } = useWatching()
-  return <ListPage param={param} profileID={profile.id} profileKind={profile.kind} />
+  return <ListAt username={username} slug={slug} profileID={profile.id} profileKind={profile.kind} />
 }
 
 function OneUser() {
@@ -142,8 +142,8 @@ const routes = [
       </Shell>
     ),
   }),
-  createRoute({ getParentRoute: () => root, path: '/lists/$list', component: OneList }),
   createRoute({ getParentRoute: () => root, path: '/@{$username}', component: OneUser }),
+  createRoute({ getParentRoute: () => root, path: '/@{$username}/lists/$slug', component: OneList }),
   createRoute({
     getParentRoute: () => root,
     path: '/lists/auto/$kind',
