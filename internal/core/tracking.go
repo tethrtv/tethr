@@ -18,6 +18,7 @@ const (
 	duplicateWindow  = 10 * time.Minute
 	movieWatchWindow = 3 * time.Hour
 	showWatchWindow  = 90 * time.Minute
+	droppedStopGrace = 30 * time.Minute
 )
 
 type AlreadyScrobbled struct {
@@ -50,6 +51,9 @@ func ScrobbleStart(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) 
 		}
 		if s.Duration != nil && *s.Duration > 0 {
 			window = time.Duration(*s.Duration * float64(time.Second))
+		}
+		if err := finishDropped(ctx, q, c.ProfileID, r); err != nil {
+			return ScrobbleResult{}, err
 		}
 		left := time.Duration(float64(window) * (100 - s.Progress) / 100)
 		err := q.SetWatching(ctx, store.SetWatchingParams{
@@ -96,6 +100,63 @@ func ScrobbleStop(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) (
 		}
 		return ScrobbleResult{ID: event.ID, Action: "scrobble"}, q.ClearWatching(ctx, c.ProfileID)
 	})
+}
+
+// Some players move on to the next item without sending a stop for the last one.
+func finishDropped(ctx context.Context, q *store.Queries, profileID int64, next resolved) error {
+	w, err := q.Watching(ctx, profileID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if w.TitleID == next.title.ID && sameID(w.EpisodeID, next.episodeID()) {
+		return nil
+	}
+	now := time.Now()
+	reached := w.StartedAt
+	if w.Progress < watchedProgress {
+		reached = reached.Add(time.Duration(float64(w.ExpiresAt.Sub(w.StartedAt)) * (watchedProgress - w.Progress) / (100 - w.Progress)))
+	}
+	if now.Before(reached) || now.After(w.ExpiresAt.Add(droppedStopGrace)) {
+		return nil
+	}
+	_, err = q.RecentWatchEvent(ctx, store.RecentWatchEventParams{
+		ProfileID: profileID,
+		TitleID:   w.TitleID,
+		EpisodeID: w.EpisodeID,
+		WatchedAt: now.Add(-duplicateWindow),
+	})
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	var last resolved
+	kind := "movie"
+	if w.EpisodeID != nil {
+		kind = "show"
+		e, err := q.EpisodeByID(ctx, *w.EpisodeID)
+		if err != nil {
+			return err
+		}
+		last.episode = &e
+	}
+	if last.title, err = q.TitleByID(ctx, store.TitleByIDParams{ID: w.TitleID, Kind: kind}); err != nil {
+		return err
+	}
+	at := now
+	if w.ExpiresAt.Before(now) {
+		at = w.ExpiresAt
+	}
+	_, err = watched(ctx, q, profileID, w.GrantID, last, at, "scrobble", nil)
+	return err
+}
+
+func sameID(a, b *int64) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
 
 func scrobble(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble, step func(*store.Queries, resolved) (ScrobbleResult, error)) (ScrobbleResult, error) {

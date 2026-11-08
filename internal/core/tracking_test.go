@@ -180,3 +180,62 @@ func TestWatchlist(t *testing.T) {
 		t.Errorf("untyped look up created a title: %+v", found)
 	}
 }
+
+func TestDroppedStops(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+	length := 2700.0
+	start := func(number int32, progress float64) {
+		t.Helper()
+		if _, err := ScrobbleStart(ctx, db, caller, Scrobble{Ref: episode(3, number), Progress: progress, Duration: &length}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rewind := func(by string) {
+		t.Helper()
+		if _, err := db.Exec(ctx, `UPDATE watching SET started_at = started_at - $1::interval, expires_at = expires_at - $1::interval`, by); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plays := func() []Entry {
+		t.Helper()
+		history, _, err := History(ctx, db, caller.ProfileID, HistoryFilter{}, Page{Page: 1, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return history
+	}
+
+	start(8, 0)
+	if _, err := ScrobblePause(ctx, db, caller, Scrobble{Ref: episode(3, 8), Progress: 56, Duration: &length}); err != nil {
+		t.Fatal(err)
+	}
+	start(8, 56)
+	rewind("20 minutes")
+	start(9, 0)
+	got := plays()
+	if len(got) != 1 || got[0].Item.Episode == nil || got[0].Item.Episode.Number != 8 || got[0].Action != "scrobble" {
+		t.Fatalf("plays after moving on = %+v", got)
+	}
+	if playback, _ := Playback(ctx, db, caller.ProfileID, "", Range{}, Page{Page: 1, Limit: 10}); len(playback) != 0 {
+		t.Errorf("paused point kept = %+v", playback)
+	}
+
+	start(10, 0)
+	if got := plays(); len(got) != 1 {
+		t.Errorf("counted an episode left after a minute: %+v", got)
+	}
+
+	rewind("3 hours")
+	start(11, 0)
+	if got := plays(); len(got) != 1 {
+		t.Errorf("counted an episode started hours ago: %+v", got)
+	}
+
+	rewind("40 minutes")
+	start(11, 0)
+	if got := plays(); len(got) != 1 {
+		t.Errorf("counted an episode started again: %+v", got)
+	}
+}

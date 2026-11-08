@@ -89,6 +89,9 @@ ON CONFLICT (profile_id) DO UPDATE SET title_id = excluded.title_id, episode_id 
     grant_id = excluded.grant_id, progress = excluded.progress, started_at = excluded.started_at,
     expires_at = excluded.expires_at;
 
+-- name: Watching :one
+SELECT * FROM watching WHERE profile_id = $1 FOR UPDATE;
+
 -- name: ClearWatching :exec
 DELETE FROM watching WHERE profile_id = $1;
 
