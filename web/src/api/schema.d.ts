@@ -1014,6 +1014,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Episodes coming up for the shows you watch
+         * @description Every episode airing in the next 7 days for shows you've watched any of, whether you're caught up or not, and the next one after that for shows with nothing this week. Shows on your watchlist that you haven't started only appear for the first episode of a season. Specials, episodes you've already watched and hidden shows are left out. Air dates are the date TMDB gives, without a time. Soonest first.
+         */
+        get: operations["getUpcoming"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/titles/{id}": {
         parameters: {
             query?: never;
@@ -2036,6 +2056,12 @@ export interface components {
             /** @description How many of those have been watched. */
             watched: number;
             resume?: components["schemas"]["Resume"];
+        };
+        UpcomingEntry: {
+            show: components["schemas"]["Title"];
+            episode: components["schemas"]["Episode"];
+            /** @description The show is on your watchlist and you haven't started it. */
+            watchlist: boolean;
         };
         UpNextListEntry: {
             list: components["schemas"]["List"];
@@ -4087,6 +4113,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getUpcoming: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per episode */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpcomingEntry"][];
+                };
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

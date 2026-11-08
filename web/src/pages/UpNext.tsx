@@ -14,6 +14,7 @@ import { listParams } from './MyLists'
 type Entry = components['schemas']['UpNextEntry']
 type ListEntry = components['schemas']['UpNextListEntry']
 type ResumePoint = components['schemas']['ResumePoint']
+type Upcoming = components['schemas']['UpcomingEntry']
 
 export function UpNext() {
   const { profile } = useWatching()
@@ -93,7 +94,87 @@ export function UpNext() {
           )
         )}
       </section>
+
+      <ComingUp profileID={profile.id} />
     </div>
+  )
+}
+
+function airsIn(day: string) {
+  const now = new Date()
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((Date.parse(day) - today) / 86400000)
+}
+
+function dayName(days: number, day: string) {
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  if (days <= 7) return new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long' })
+  return 'Later'
+}
+
+function ComingUp({ profileID }: { profileID: number }) {
+  const upcoming = useQuery({
+    queryKey: ['upcoming', profileID],
+    queryFn: async () => (await api.GET('/v1/upcoming', { params: { query: { profile_id: profileID } } })).data ?? [],
+  })
+  const groups: { label: string; items: Upcoming[] }[] = []
+  for (const u of upcoming.data ?? []) {
+    const day = u.episode.first_aired ?? ''
+    const label = dayName(airsIn(day), day)
+    const last = groups[groups.length - 1]
+    if (last?.label === label) last.items.push(u)
+    else groups.push({ label, items: [u] })
+  }
+  if (!groups.length) return null
+
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>Coming up</h2>
+      <div className={styles.diary}>
+        {groups.map((g) => (
+          <section key={g.label}>
+            <h3 className={styles.dayHead}>
+              <span>{g.label}</span>
+              <span className={styles.faint}>{plural(g.items.length, 'episode')}</span>
+            </h3>
+            <ol className={styles.plainList}>
+              {g.items.map((u) => (
+                <Coming key={u.episode.ids.tethr} entry={u} later={g.label === 'Later'} />
+              ))}
+            </ol>
+          </section>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function Coming({ entry: u, later }: { entry: Upcoming; later: boolean }) {
+  const tmdb = u.show.ids.tmdb
+  const show = useDetails('show', tmdb)
+  const episode = useEpisode(tmdb, u.episode.season, u.episode.number)
+  const numbered = u.episode.order ?? u.episode
+  const name = show?.name ?? u.show.name ?? 'Untitled show'
+  const news = u.episode.number === 1 ? (u.episode.season === 1 ? 'New show' : 'New season') : ''
+  const note = [news, u.watchlist && 'on your watchlist'].filter(Boolean).join(', ')
+
+  return (
+    <li className={styles.coming}>
+      <Cover id={u.show.ids.tethr ?? 0} name={name} poster={show?.poster} size="xs" />
+      <span className={styles.main}>
+        <TitleLink type="show" slug={u.show.slug} className={`${styles.entryTitle} ${styles.titleLink}`}>
+          {name}
+        </TitleLink>
+        <span className={styles.quiet}>
+          <span className={styles.code}>{ep(numbered.season, numbered.number)}</span> {episode?.name}
+        </span>
+      </span>
+      <span className={styles.comingMeta}>
+        {later && u.episode.first_aired && <span className={styles.code}>{date(u.episode.first_aired)}</span>}
+        {note && <span className={styles.faint}>{note.charAt(0).toUpperCase() + note.slice(1)}</span>}
+      </span>
+    </li>
   )
 }
 
