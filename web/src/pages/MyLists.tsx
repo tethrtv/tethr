@@ -5,7 +5,7 @@ import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
-import { ListCover } from '../components/ListCover'
+import { ListCover, TethrCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { ago, plural } from '../format'
 import own from './List.module.css'
@@ -127,7 +127,7 @@ export function MyLists() {
           <ol className={styles.rows}>
             {auto.data.map((l) => (
               <li key={l.kind} className={own.list}>
-                <ListCover items={l.cover} />
+                <TethrCover />
                 <div className={styles.main}>
                   <Link
                     to="/lists/auto/$kind"
@@ -139,7 +139,7 @@ export function MyLists() {
                   <span className={styles.quiet}>{l.description}</span>
                 </div>
                 <span className={`${styles.code} ${own.count}`}>{plural(l.item_count, 'thing')}</span>
-                <span className={styles.faint}>Only you</span>
+                <span className={styles.faint}>Made by Tethr</span>
               </li>
             ))}
           </ol>

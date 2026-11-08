@@ -28,6 +28,34 @@
   border-radius: 0;
 }
 
+.tethr {
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  background: #141412;
+  color: #d4fa3c;
+}
+
+.tethr > .glyph {
+  width: 64%;
+  height: auto;
+}
+
+.l > .glyph {
+  width: 46%;
+}
+
+.tethr > .made {
+  width: auto;
+  height: auto;
+  font-stretch: var(--narrow);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
 @media (max-width: 899px) {
   .l {
     width: 88px;

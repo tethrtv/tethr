@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
-import { ListCover } from '../components/ListCover'
+import { TethrCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
 import { ago, plural } from '../format'
@@ -91,12 +91,12 @@ export function AutoListPage({ kind }: { kind: string }) {
   return (
     <div className={styles.page}>
       <header className={own.top}>
-        {list.cover.length > 0 && <ListCover items={list.cover} size="l" />}
+        <TethrCover size="l" />
         <div className={styles.head}>
           <h1 className={styles.title}>{list.name}</h1>
           <p className={styles.lead}>{list.description}</p>
           <p className={styles.small}>
-            Only you can see it. It fills itself from what you watch and rate,{' '}
+            Tethr keeps this list for you, and only you can see it. It fills itself from what you watch and rate,{' '}
             {list.item_count === 0
               ? 'and there’s nothing on it yet.'
               : `and has ${plural(list.item_count, 'thing')} on it now.`}
