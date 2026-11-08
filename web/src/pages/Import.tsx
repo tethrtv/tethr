@@ -48,8 +48,9 @@ export function Import() {
           <h1 className={home.title}>Import your history</h1>
           <p className={home.lead}>
             Bring your plays, watchlist, resume points, ratings and hidden shows across from your old tracker. Download
-            its data export from your settings there, then add the zip here as it is. Nothing is saved until you’ve
-            checked what was found.
+            its data export from your settings there, then add the zip here as it is. If it offers more than one kind,
+            choose the full backup, not a simple CSV. Some trackers only give you one backup a month, so download it
+            when you’re ready to move. Nothing is saved until you’ve checked what was found.
           </p>
         </header>
         <ProfilePicker legend="Import into" profiles={me.profiles} value={profileID} onChange={setProfile} />
