@@ -709,7 +709,7 @@ func TestSimklImport(t *testing.T) {
 	}
 	var imp Import
 	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
-	if imp.Source != Simkl || imp.Summary.History.Total != 2 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Ao Ashi Season 2 (2026) E1" || imp.Summary.Watchlist.Total != 1 || imp.Summary.Ratings.Total != 1 {
+	if imp.Source != ImportSourceSimkl || imp.Summary.History.Total != 2 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Ao Ashi Season 2 (2026) E1" || imp.Summary.Watchlist.Total != 1 || imp.Summary.Ratings.Total != 1 {
 		t.Fatalf("import = %+v", imp)
 	}
 
@@ -723,6 +723,50 @@ func TestSimklImport(t *testing.T) {
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
 	if imp.Status != Applied || imp.Summary.History.Added != 1 || imp.Summary.Watchlist.Added != 1 || imp.Summary.Ratings.Added != 1 {
 		t.Errorf("applied = %+v", imp)
+	}
+}
+
+func TestMatchedImport(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+
+	if rec := do(t, h, "POST", "/v1/imports", `{"source":"letterboxd"}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "empty_export") {
+		t.Errorf("nothing in it = %d %s", rec.Code, rec.Body)
+	}
+	rec := do(t, h, "POST", "/v1/imports?filename=letterboxd.zip", `{"source":"letterboxd",
+		"history":[
+			{"type":"movie","tmdb":27205,"label":"Inception (2010)","at":"2026-11-08T12:00:00Z","precision":"day"},
+			{"type":"movie","tmdb":949,"label":"Heat (1995)"},
+			{"type":"movie","label":"Home video (1998)"}
+		],
+		"watchlist":[{"type":"movie","tmdb":603,"label":"The Matrix (1999)","at":"2026-11-01T12:00:00Z"}],
+		"ratings":[{"type":"movie","tmdb":27205,"label":"Inception (2010)","rating":9,"at":"2026-11-08T12:00:00Z"}]}`, cookie)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", rec.Code, rec.Body)
+	}
+	var imp Import
+	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
+	if imp.Source != ImportSourceLetterboxd || imp.Filename != "letterboxd.zip" || imp.Summary.History.Total != 3 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Home video (1998)" {
+		t.Fatalf("import = %+v", imp)
+	}
+
+	id := strconv.FormatInt(imp.Id, 10)
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", "", cookie); rec.Code != http.StatusAccepted {
+		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
+	}
+	if _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
+	if imp.Summary.History.Added != 2 || imp.Summary.Watchlist.Added != 1 || imp.Summary.Ratings.Added != 1 {
+		t.Errorf("applied = %+v", imp.Summary)
+	}
+	var page HistoryPage
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/history", "", cookie).Body.Bytes(), &page)
+	if len(page.Items) != 2 || page.Items[0].Precision != WatchPrecisionDay || page.Items[1].Precision != WatchPrecisionNone {
+		t.Errorf("history = %+v", page.Items)
 	}
 }
 

@@ -79,6 +79,15 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 	if !ok {
 		return CreateImport401JSONResponse(notConnected), err
 	}
+	if req.JSONBody != nil {
+		if req.JSONBody.Source != NewImportSourceLetterboxd {
+			return CreateImport400JSONResponse{problem("unknown_source", "Only Letterboxd exports are sent as JSON.")}, nil
+		}
+		return s.createImport(ctx, c.ProfileID, string(req.JSONBody.Source), value(req.Params.Filename), matchedImport(*req.JSONBody))
+	}
+	if req.Body == nil {
+		return CreateImport400JSONResponse{problem("not_an_export", "Send the export as a zip, or as JSON once it’s matched.")}, nil
+	}
 	body, err := io.ReadAll(io.LimitReader(req.Body, maxUpload+1))
 	if err != nil {
 		return nil, err
@@ -99,8 +108,11 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 	case err != nil:
 		return nil, err
 	}
-	name := strings.TrimSpace(value(req.Params.Filename))
-	imp, err := core.CreateImport(ctx, s.DB, c.ProfileID, source, name, file)
+	return s.createImport(ctx, c.ProfileID, source, value(req.Params.Filename), file)
+}
+
+func (s *Server) createImport(ctx context.Context, profileID int64, source, filename string, file core.ImportFile) (CreateImportResponseObject, error) {
+	imp, err := core.CreateImport(ctx, s.DB, profileID, source, strings.TrimSpace(filename), file)
 	switch {
 	case errors.Is(err, core.ErrEmptyImport):
 		return CreateImport400JSONResponse{problem("empty_export", "That export has no history, watchlist, resume points, ratings or hidden items Tethr can match.")}, nil
@@ -110,6 +122,24 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 		return nil, err
 	}
 	return CreateImport201JSONResponse(toImport(imp)), nil
+}
+
+func matchedImport(in NewImport) core.ImportFile {
+	items := func(list *[]ImportedItem) []core.ImportItem {
+		var out []core.ImportItem
+		for _, i := range value(list) {
+			item := core.ImportItem{Ref: core.Ref{Kind: string(i.Type)}, Label: i.Label, At: i.At, Rating: int16(value(i.Rating))}
+			if i.Tmdb != nil && *i.Tmdb > 0 {
+				item.Ref.IDs.TMDB = int64(*i.Tmdb)
+			}
+			if i.Precision != nil && *i.Precision == ImportedItemPrecisionDay {
+				item.Precision = "day"
+			}
+			out = append(out, item)
+		}
+		return out
+	}
+	return core.ImportFile{History: items(in.History), Watchlist: items(in.Watchlist), Ratings: items(in.Ratings)}
 }
 
 func readExport(body []byte) (string, core.ImportFile, error) {

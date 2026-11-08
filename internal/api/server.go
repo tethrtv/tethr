@@ -89,6 +89,7 @@ func (s *Server) SignedIn(next func(http.ResponseWriter, *http.Request, int64)) 
 
 func (s *Server) withRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxUpload+1)
 		ctx := context.WithValue(r.Context(), userAgentKey, r.UserAgent())
 		ctx = context.WithValue(ctx, fetchSiteKey, r.Header.Get("Sec-Fetch-Site"))
 		if c, err := r.Cookie(s.Cookie.Name); err == nil {
