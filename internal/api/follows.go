@@ -185,8 +185,8 @@ func (s *Server) reportEmail(r core.Report) mail.Message {
 		note = *r.Note
 	}
 	id := strconv.FormatInt(r.List.ID, 10)
-	text := fmt.Sprintf("%s reported %q by %s for %s.\n\n%s\n\n%s/lists/%s\n\nIt's out of browsing until you decide. On the server:\n\n  tethr report keep %s\n  tethr report remove %s <reason the owner will read>\n",
-		r.Reporter, r.List.Name, r.List.Owner.Username, r.Reason, note, s.AppURL, id, id, id)
+	text := fmt.Sprintf("%s reported %q by %s for %s.\n\n%s\n\n%s%s\n\nIt's out of browsing until you decide. On the server:\n\n  tethr report keep %s\n  tethr report remove %s <reason the owner will read>\n",
+		r.Reporter, r.List.Name, r.List.Owner.Username, r.Reason, note, s.AppURL, r.List.Path(), id, id)
 	return mail.Message{To: s.ReportsTo, Subject: "Report: " + r.List.Name, Text: text}
 }
 
@@ -207,4 +207,22 @@ func RemovedListEmail(appURL string, removed core.RemovedList, reason string) (m
 	}
 	text := fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n", data.Title, data.Lead, data.Note, data.Link)
 	return mail.Message{To: removed.Email, Subject: data.Title, Text: text, HTML: html.String()}, nil
+}
+
+func (s *Server) GetUserList(ctx context.Context, req GetUserListRequestObject) (GetUserListResponseObject, error) {
+	viewer, ok, err := s.reader(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return GetUserList404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return GetUserList401JSONResponse{notConnected}, err
+	}
+	l, err := core.FindList(ctx, s.DB, viewer, req.Username, req.Slug)
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+		return GetUserList404JSONResponse(noSuchList), nil
+	case err != nil:
+		return nil, err
+	}
+	return GetUserList200JSONResponse(s.toList(l)), nil
 }

@@ -101,6 +101,10 @@ func (p ItemProgress) Done() bool {
 	return p.Total > 0 && p.Watched >= p.Total
 }
 
+func (l List) Path() string {
+	return "/@" + l.Owner.Username + "/lists/" + l.Slug
+}
+
 func Lists(ctx context.Context, db *pgxpool.Pool, viewer int64) ([]List, error) {
 	return visibleLists(ctx, store.New(db), viewer, store.VisibleListsParams{})
 }

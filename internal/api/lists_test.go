@@ -30,7 +30,7 @@ func TestListEndpoints(t *testing.T) {
 	var list List
 	_ = json.Unmarshal(rec.Body.Bytes(), &list)
 	path := "/v1/lists/" + strconv.FormatInt(list.Id, 10)
-	if list.Access != ListAccessMine || list.Owner.Username != "nathan" || list.Url != "https://staging.tethr.tv/lists/"+strconv.FormatInt(list.Id, 10)+"-friday-films" || *list.WatchedCount != 0 {
+	if list.Access != ListAccessMine || list.Owner.Username != "nathan" || list.Url != "https://staging.tethr.tv/@nathan/lists/friday-films" || *list.WatchedCount != 0 {
 		t.Errorf("created = %+v", list)
 	}
 	if rec := do(t, h, "POST", "/v1/lists", `{"name":""}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_name") {

@@ -985,7 +985,7 @@ type List struct {
 	SortHow   ListSortHow `json:"sort_how"`
 	UpdatedAt time.Time   `json:"updated_at"`
 
-	// Url The list's page on the website.
+	// Url The list's page on the website, made from its owner's username and its slug.
 	Url string `json:"url"`
 
 	// WatchedCount How many items the profile reading the list has finished. Left out when signed out.
@@ -1906,6 +1906,12 @@ type GetUserParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// GetUserListParams defines parameters for GetUserList.
+type GetUserListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // ListWatchlistParams defines parameters for ListWatchlist.
 type ListWatchlistParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -2263,6 +2269,9 @@ type ServerInterface interface {
 	// GetUser Someone's public page
 	// (GET /v1/users/{username})
 	GetUser(w http.ResponseWriter, r *http.Request, username string, params GetUserParams)
+	// GetUserList One list by its address
+	// (GET /v1/users/{username}/lists/{slug})
+	GetUserList(w http.ResponseWriter, r *http.Request, username string, slug string, params GetUserListParams)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(w http.ResponseWriter, r *http.Request, params ListWatchlistParams)
@@ -5175,6 +5184,57 @@ func (siw *ServerInterfaceWrapper) GetUser(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// GetUserList operation middleware
+func (siw *ServerInterfaceWrapper) GetUserList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "username" -------------
+	var username string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "username", r.PathValue("username"), &username, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "username", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "slug" -------------
+	var slug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "slug", r.PathValue("slug"), &slug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUserListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUserList(w, r, username, slug, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWatchlist operation middleware
 func (siw *ServerInterfaceWrapper) ListWatchlist(w http.ResponseWriter, r *http.Request) {
 
@@ -5474,6 +5534,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/followed-lists/{id}", wrapper.FollowList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/public-lists", wrapper.BrowseLists)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/users/{username}", wrapper.GetUser)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/users/{username}/lists/{slug}", wrapper.GetUserList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.GetActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/up-next", wrapper.GetUpNext)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/hidden/{id}", wrapper.ShowInUpNext)
@@ -10062,6 +10123,58 @@ func (response GetUser404JSONResponse) VisitGetUserResponse(w http.ResponseWrite
 	return err
 }
 
+type GetUserListRequestObject struct {
+	Username string `json:"username"`
+	Slug     string `json:"slug"`
+	Params   GetUserListParams
+}
+
+type GetUserListResponseObject interface {
+	VisitGetUserListResponse(w http.ResponseWriter) error
+}
+
+type GetUserList200JSONResponse List
+
+func (response GetUserList200JSONResponse) VisitGetUserListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserList401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetUserList401JSONResponse) VisitGetUserListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserList404JSONResponse Problem
+
+func (response GetUserList404JSONResponse) VisitGetUserListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListWatchlistRequestObject struct {
 	Params ListWatchlistParams
 }
@@ -10476,6 +10589,9 @@ type StrictServerInterface interface {
 	// GetUser Someone's public page
 	// (GET /v1/users/{username})
 	GetUser(ctx context.Context, request GetUserRequestObject) (GetUserResponseObject, error)
+	// GetUserList One list by its address
+	// (GET /v1/users/{username}/lists/{slug})
+	GetUserList(ctx context.Context, request GetUserListRequestObject) (GetUserListResponseObject, error)
 	// ListWatchlist The watchlist, in order
 	// (GET /v1/watchlist)
 	ListWatchlist(ctx context.Context, request ListWatchlistRequestObject) (ListWatchlistResponseObject, error)
@@ -12871,6 +12987,34 @@ func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, usernam
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetUserResponseObject); ok {
 		if err := validResponse.VisitGetUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUserList operation middleware
+func (sh *strictHandler) GetUserList(w http.ResponseWriter, r *http.Request, username string, slug string, params GetUserListParams) {
+	var request GetUserListRequestObject
+
+	request.Username = username
+	request.Slug = slug
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUserList(ctx, request.(GetUserListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUserList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUserListResponseObject); ok {
+		if err := validResponse.VisitGetUserListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

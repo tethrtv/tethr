@@ -40,6 +40,25 @@ func TestFollowAndReportEndpoints(t *testing.T) {
 		t.Fatalf("add = %d %s", rec.Code, rec.Body)
 	}
 
+	if list.Url != "https://staging.tethr.tv/@nathan/lists/slow-films" {
+		t.Errorf("url = %s", list.Url)
+	}
+	if rec := do(t, h, "PATCH", "/v1/lists/"+id, `{"name":"Slower films"}`, nathan); rec.Code != http.StatusOK {
+		t.Fatalf("rename = %d %s", rec.Code, rec.Body)
+	}
+	rec = do(t, h, "GET", "/v1/users/nathan/lists/slow-films", "")
+	var found List
+	_ = json.Unmarshal(rec.Body.Bytes(), &found)
+	if rec.Code != http.StatusOK || found.Id != list.Id || found.Url != "https://staging.tethr.tv/@nathan/lists/slower-films" {
+		t.Errorf("by an old address = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "GET", "/v1/users/nathan/lists/nothing", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("an address with no list = %d", rec.Code)
+	}
+	if rec := do(t, h, "PATCH", "/v1/lists/"+id, `{"name":"Slow films"}`, nathan); rec.Code != http.StatusOK {
+		t.Fatalf("rename back = %d %s", rec.Code, rec.Body)
+	}
+
 	rec = do(t, h, "GET", "/v1/public-lists?order=popular&q=slow", "", sam)
 	var page ListsPage
 	_ = json.Unmarshal(rec.Body.Bytes(), &page)
