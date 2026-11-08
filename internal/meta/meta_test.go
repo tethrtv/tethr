@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/tethrtv/tethr/internal/tmdb"
@@ -17,8 +18,11 @@ import (
 func server(t *testing.T) (http.Handler, *[]string) {
 	t.Helper()
 	var asked []string
+	var mu sync.Mutex
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		asked = append(asked, r.URL.Path)
+		mu.Unlock()
 		if r.Header.Get("Authorization") != "Bearer secret" {
 			t.Errorf("authorization = %q", r.Header.Get("Authorization"))
 		}
@@ -45,6 +49,19 @@ func server(t *testing.T) (http.Handler, *[]string) {
 				results = append(results, fmt.Sprintf(`{"media_type":"tv","id":%d,"name":"Show %d","first_air_date":"2008-01-20","poster_path":"/p.jpg"}`, i+1, i+1))
 			}
 			_, _ = fmt.Fprintf(w, `{"results":[{"media_type":"person","id":9,"name":"Someone"},{"media_type":"movie","id":27205,"title":"Inception","release_date":""},%s]}`, strings.Join(results, ","))
+		case "/3/search/movie":
+			films := map[string]string{
+				"Harry Potter and the Prisoner of Azkaban 2004": `{"id":673,"title":"Harry Potter and the Prisoner of Azkaban","original_title":"Harry Potter and the Prisoner of Azkaban","release_date":"2004-05-31","poster_path":"/hp.jpg"}`,
+				"Amélie 2001": `{"id":194,"title":"Amelie","original_title":"Le Fabuleux Destin d'Amélie Poulain","release_date":"2001-04-25"}`,
+				"Ted Lasso: The Missing Christmas Mustache ": `{"id":890,"title":"The Missing Christmas Mustache","original_title":"The Missing Christmas Mustache","release_date":"2021-12-10"}`,
+				"Heat 1995": `{"id":949,"title":"Heat","original_title":"Heat","release_date":"1995-12-15"},{"id":12345,"title":"Heat","original_title":"Heat","release_date":"1995-03-01"}`,
+				"Lola ":     `{"id":777,"title":"Lola","original_title":"Lola","release_date":"2022-11-04"}`,
+			}
+			q := r.URL.Query()
+			if q.Get("include_adult") != "false" {
+				t.Errorf("film search = %s", r.URL.RawQuery)
+			}
+			_, _ = fmt.Fprintf(w, `{"results":[%s]}`, films[q.Get("query")+" "+q.Get("primary_release_year")])
 		case "/3/tv/1396/season/1":
 			_, _ = w.Write([]byte(`{"overview":"Season one","episodes":[{"episode_number":1,"name":"Pilot","air_date":"2008-01-20","overview":"x","runtime":58,"still_path":"/s.jpg"},{"episode_number":2,"name":"Cat's in the Bag...","air_date":""}]}`))
 		case "/3/tv/1396/episode_groups":
@@ -188,6 +205,70 @@ func TestSearch(t *testing.T) {
 	}
 	if rec := search("bad b", "2"); rec.Code != http.StatusOK {
 		t.Errorf("another account = %d", rec.Code)
+	}
+}
+
+func TestMatch(t *testing.T) {
+	h, _ := server(t)
+	match := func(body, account string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/meta/match", strings.NewReader(body))
+		if account != "" {
+			req.Header.Set("Account", account)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	films := `{"films":[
+		{"name":"Harry Potter and the Prisoner of Azkaban","year":2004},
+		{"name":"Amélie","year":2001},
+		{"name":"Ted Lasso: The Missing Christmas Mustache","year":2021},
+		{"name":"Heat","year":1995},
+		{"name":"Lola","year":2023},
+		{"name":"Nothing like it","year":1980}
+	]}`
+	if rec := match(films, ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("signed out = %d", rec.Code)
+	}
+	rec := match(films, "1")
+	var found struct {
+		Results []struct {
+			Match      *result  `json:"match"`
+			Candidates []result `json:"candidates"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &found); err != nil || rec.Code != http.StatusOK || len(found.Results) != 6 {
+		t.Fatalf("match = %d %s", rec.Code, rec.Body)
+	}
+	matched := []int32{673, 194, 0, 0, 777, 0}
+	for i, want := range matched {
+		got := found.Results[i].Match
+		switch {
+		case want == 0 && got != nil:
+			t.Errorf("film %d matched %d, want it left to the person", i, got.TMDB)
+		case want != 0 && (got == nil || got.TMDB != want):
+			t.Errorf("film %d = %+v, want %d", i, got, want)
+		}
+	}
+	if c := found.Results[2].Candidates; len(c) != 1 || c[0].TMDB != 890 || c[0].Type != "movie" || *c[0].Year != 2021 {
+		t.Errorf("candidates for a near miss = %+v", c)
+	}
+	if c := found.Results[3].Candidates; len(c) != 2 {
+		t.Errorf("candidates for two films with one name = %+v", c)
+	}
+	if c := found.Results[5].Candidates; c == nil || len(c) != 0 {
+		t.Errorf("candidates for nothing = %+v", c)
+	}
+	if found.Results[0].Match.Poster == nil || *found.Results[0].Match.Poster != "/hp.jpg" {
+		t.Errorf("match = %+v", found.Results[0].Match)
+	}
+
+	if rec := match(`{"films":[]}`, "1"); rec.Code != http.StatusBadRequest {
+		t.Errorf("no films = %d", rec.Code)
+	}
+	if rec := match(`{"films":[`+strings.Repeat(`{"name":"x","year":1},`, matchBatch)+`{"name":"x","year":1}]}`, "1"); rec.Code != http.StatusBadRequest {
+		t.Errorf("too many films = %d", rec.Code)
 	}
 }
 

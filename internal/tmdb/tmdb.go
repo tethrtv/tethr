@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -98,11 +99,12 @@ type SeasonCount struct {
 }
 
 type Result struct {
-	Kind   string
-	ID     int32
-	Name   string
-	Year   int
-	Poster string
+	Kind     string
+	ID       int32
+	Name     string
+	Original string
+	Year     int
+	Poster   string
 }
 
 type Certificate struct {
@@ -306,6 +308,30 @@ func (c *Client) Search(ctx context.Context, query string) ([]Result, error) {
 		case "tv":
 			out = append(out, Result{Kind: "show", ID: r.ID, Name: r.Name, Year: year(r.FirstAir), Poster: r.Poster})
 		}
+	}
+	return out, nil
+}
+
+func (c *Client) SearchFilms(ctx context.Context, query string, released int) ([]Result, error) {
+	var page struct {
+		Results []struct {
+			ID       int32  `json:"id"`
+			Title    string `json:"title"`
+			Original string `json:"original_title"`
+			Release  string `json:"release_date"`
+			Poster   string `json:"poster_path"`
+		} `json:"results"`
+	}
+	path := "/3/search/movie?language=en-GB&include_adult=false&query=" + url.QueryEscape(query)
+	if released > 0 {
+		path += "&primary_release_year=" + strconv.Itoa(released)
+	}
+	if err := c.get(ctx, path, &page); err != nil {
+		return nil, err
+	}
+	out := make([]Result, 0, len(page.Results))
+	for _, r := range page.Results {
+		out = append(out, Result{Kind: "movie", ID: r.ID, Name: r.Title, Original: r.Original, Year: year(r.Release), Poster: r.Poster})
 	}
 	return out, nil
 }
