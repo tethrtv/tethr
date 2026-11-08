@@ -550,6 +550,26 @@ func TestUpNextEndpoints(t *testing.T) {
 	if len(next) != 1 || next[0].Next.Number != 2 || next[0].Next.FirstAired == nil || next[0].Aired != 2 || next[0].Watched != 1 || *next[0].Show.Ids.Tmdb != 1396 {
 		t.Fatalf("up next = %+v", next)
 	}
+	rewatch := "/v1/up-next/rewatch/" + strconv.FormatInt(show, 10)
+	if rec := do(t, h, "PUT", rewatch, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("start a rewatch = %d %s", rec.Code, rec.Body)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/up-next", "", cookie).Body.Bytes(), &next)
+	if len(next) != 1 || next[0].RewatchFrom == nil || next[0].Next.Number != 1 || next[0].Watched != 0 {
+		t.Errorf("up next while rewatching = %+v", next)
+	}
+	var detail TitleDetail
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/titles/"+strconv.FormatInt(show, 10), "", cookie).Body.Bytes(), &detail)
+	if detail.RewatchFrom == nil {
+		t.Errorf("title while rewatching = %+v", detail)
+	}
+	if rec := do(t, h, "DELETE", rewatch, "", cookie); rec.Code != http.StatusNoContent {
+		t.Errorf("stop a rewatch = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "DELETE", rewatch, "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("stop twice = %d", rec.Code)
+	}
+
 	path := "/v1/up-next/hidden/" + strconv.FormatInt(show, 10)
 	if rec := do(t, h, "PUT", path, "", cookie); rec.Code != http.StatusNoContent {
 		t.Errorf("hide = %d %s", rec.Code, rec.Body)

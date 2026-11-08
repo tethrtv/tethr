@@ -432,6 +432,7 @@ func (s *Server) GetUpNext(ctx context.Context, req GetUpNextRequestObject) (Get
 		if e.Resume != nil {
 			entry.Resume = &Resume{Id: e.Resume.ID, Progress: e.Resume.Progress}
 		}
+		entry.RewatchFrom = e.RewatchFrom
 		out = append(out, entry)
 	}
 	return out, nil
@@ -469,6 +470,42 @@ func (s *Server) HideFromUpNext(ctx context.Context, req HideFromUpNextRequestOb
 		return nil, err
 	}
 	return HideFromUpNext204Response{}, nil
+}
+
+func (s *Server) StartRewatch(ctx context.Context, req StartRewatchRequestObject) (StartRewatchResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return StartRewatch404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return StartRewatch401JSONResponse{notConnected}, err
+	}
+	err = core.StartRewatch(ctx, s.DB, c.ProfileID, req.Id)
+	if errors.Is(err, core.ErrNotFound) {
+		return StartRewatch404JSONResponse(problem("not_found", "There’s no show with that ID.")), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return StartRewatch204Response{}, nil
+}
+
+func (s *Server) StopRewatch(ctx context.Context, req StopRewatchRequestObject) (StopRewatchResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return StopRewatch404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return StopRewatch401JSONResponse{notConnected}, err
+	}
+	err = core.StopRewatch(ctx, s.DB, c.ProfileID, req.Id)
+	if errors.Is(err, core.ErrNotFound) {
+		return StopRewatch404JSONResponse(problem("not_found", "You’re not rewatching that show.")), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return StopRewatch204Response{}, nil
 }
 
 func (s *Server) ShowInUpNext(ctx context.Context, req ShowInUpNextRequestObject) (ShowInUpNextResponseObject, error) {
