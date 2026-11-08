@@ -52,10 +52,10 @@ func server(t *testing.T) (http.Handler, *[]string) {
 		case "/3/search/movie":
 			films := map[string]string{
 				"Harry Potter and the Prisoner of Azkaban 2004": `{"id":673,"title":"Harry Potter and the Prisoner of Azkaban","original_title":"Harry Potter and the Prisoner of Azkaban","release_date":"2004-05-31","poster_path":"/hp.jpg"}`,
-				"Amélie 2001": `{"id":194,"title":"Amelie","original_title":"Le Fabuleux Destin d'Amélie Poulain","release_date":"2001-04-25"}`,
-				"Ted Lasso: The Missing Christmas Mustache ": `{"id":890,"title":"The Missing Christmas Mustache","original_title":"The Missing Christmas Mustache","release_date":"2021-12-10"}`,
-				"Heat 1995": `{"id":949,"title":"Heat","original_title":"Heat","release_date":"1995-12-15"},{"id":12345,"title":"Heat","original_title":"Heat","release_date":"1995-03-01"}`,
-				"Lola ":     `{"id":777,"title":"Lola","original_title":"Lola","release_date":"2022-11-04"}`,
+				"Amélie 2001":                        `{"id":194,"title":"Amelie","original_title":"Le Fabuleux Destin d'Amélie Poulain","release_date":"2001-04-25"}`,
+				"Doctor Who: The Day of the Doctor ": `{"id":890,"title":"The Day of the Doctor","original_title":"The Day of the Doctor","release_date":"2013-11-23"}`,
+				"Heat 1995":                          `{"id":949,"title":"Heat","original_title":"Heat","release_date":"1995-12-15"},{"id":12345,"title":"Heat","original_title":"Heat","release_date":"1995-03-01"}`,
+				"Lola ":                              `{"id":777,"title":"Lola","original_title":"Lola","release_date":"2022-11-04"}`,
 			}
 			q := r.URL.Query()
 			if q.Get("include_adult") != "false" {
@@ -223,7 +223,7 @@ func TestMatch(t *testing.T) {
 	films := `{"films":[
 		{"name":"Harry Potter and the Prisoner of Azkaban","year":2004},
 		{"name":"Amélie","year":2001},
-		{"name":"Ted Lasso: The Missing Christmas Mustache","year":2021},
+		{"name":"Doctor Who: The Day of the Doctor","year":2013},
 		{"name":"Heat","year":1995},
 		{"name":"Lola","year":2023},
 		{"name":"Nothing like it","year":1980}
@@ -251,7 +251,7 @@ func TestMatch(t *testing.T) {
 			t.Errorf("film %d = %+v, want %d", i, got, want)
 		}
 	}
-	if c := found.Results[2].Candidates; len(c) != 1 || c[0].TMDB != 890 || c[0].Type != "movie" || *c[0].Year != 2021 {
+	if c := found.Results[2].Candidates; len(c) != 1 || c[0].TMDB != 890 || c[0].Type != "movie" || *c[0].Year != 2013 {
 		t.Errorf("candidates for a near miss = %+v", c)
 	}
 	if c := found.Results[3].Candidates; len(c) != 2 {
