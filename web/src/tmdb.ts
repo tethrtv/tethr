@@ -120,3 +120,22 @@ export function useGroup(show?: number, group?: string) {
     queryFn: () => meta<Group>(`/tv/${show}/order/${group}`),
   }).data
 }
+
+export type Matched = { match: Found | null; candidates: Found[] }
+
+export async function matchFilms(films: { name: string; year?: number }[]): Promise<Matched[]> {
+  for (;;) {
+    const res = await fetch(`${apiURL}/meta/match`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ films: films.map((f) => ({ name: f.name, year: f.year ?? 0 })) }),
+    })
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, Number(res.headers.get('Retry-After') ?? 30) * 1000))
+      continue
+    }
+    if (!res.ok) throw new Error('Matching isn’t working right now. Try again in a moment.')
+    return (await res.json()).results
+  }
+}

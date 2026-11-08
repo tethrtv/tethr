@@ -6,9 +6,11 @@ import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Plain } from '../components/Plain'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
+import { type Film, isLetterboxd, readLetterboxd, unzip } from '../letterboxd'
 import { ProfilePicker, useSignedIn } from './connect'
 import home from './Home.module.css'
 import styles from './Import.module.css'
+import { MatchFilms } from './MatchFilms'
 
 type Import = components['schemas']['Import']
 
@@ -84,10 +86,21 @@ function Imports({ profileID }: { profileID: number }) {
     onSuccess: refresh,
   })
 
+  const [letterboxd, setLetterboxd] = useState<{ films: Film[]; filename: string } | null>(null)
+  const read = useMutation({
+    mutationFn: async (file: File) => {
+      const files = await unzip(file).catch(() => null)
+      if (files && isLetterboxd(files)) setLetterboxd({ films: readLetterboxd(files), filename: file.name })
+      else upload.mutate(file)
+    },
+  })
+
   const choose = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (file) upload.mutate(file)
+    upload.reset()
+    setLetterboxd(null)
+    if (file) read.mutate(file)
   }
 
   const waiting = imports.data?.find((i) => i.status === 'parsed')
@@ -97,19 +110,32 @@ function Imports({ profileID }: { profileID: number }) {
   return (
     <>
       <section>
-        <h2 className={home.sectionTitle}>{waiting ? 'Check what was found' : 'Add your export'}</h2>
+        <h2 className={home.sectionTitle}>
+          {waiting ? 'Check what was found' : letterboxd ? 'Match your films' : 'Add your export'}
+        </h2>
         <input ref={input} type="file" accept=".zip,application/zip" hidden onChange={choose} />
         {waiting ? (
           <Review imp={waiting} profileID={profileID} onAnother={() => input.current?.click()} onDone={refresh} />
+        ) : letterboxd ? (
+          <MatchFilms
+            films={letterboxd.films}
+            filename={letterboxd.filename}
+            profileID={profileID}
+            onDone={() => {
+              setLetterboxd(null)
+              refresh()
+            }}
+            onAnother={() => input.current?.click()}
+          />
         ) : (
           <div className={styles.pick}>
             <Button
               variant="primary"
               onClick={() => input.current?.click()}
-              aria-busy={upload.isPending}
-              disabled={upload.isPending || running}
+              aria-busy={upload.isPending || read.isPending}
+              disabled={upload.isPending || read.isPending || running}
             >
-              {upload.isPending ? 'Reading the export…' : 'Choose the zip'}
+              {upload.isPending || read.isPending ? 'Reading the export…' : 'Choose the zip'}
             </Button>
             <span className={home.note}>
               {running ? 'An import is running. You can add another when it’s done.' : 'Up to 100 MB.'}
@@ -178,7 +204,9 @@ function Review({
           ))}
         </tbody>
       </table>
-      {unmatched > 0 && <Unmatched names={imp.summary.unmatched} total={unmatched} />}
+      {unmatched > 0 && (
+        <Unmatched names={imp.summary.unmatched} total={unmatched} leftOut={imp.source === 'letterboxd'} />
+      )}
       <p className={home.note}>
         Plays already in your history are skipped, so importing the same file twice is safe. You can undo the whole
         import for 30 days.
@@ -196,14 +224,17 @@ function Review({
   )
 }
 
-function Unmatched({ names, total }: { names: string[]; total: number }) {
+function Unmatched({ names, total, leftOut }: { names: string[]; total: number; leftOut: boolean }) {
   return (
     <details className={styles.unmatched}>
       <summary>
-        {total === 1
-          ? '1 item has no TMDB, IMDb or TVDB ID, so it'
-          : `${total.toLocaleString('en-GB')} items have no TMDB, IMDb or TVDB ID, so they`}{' '}
-        won’t come across
+        {leftOut
+          ? `${count(total, 'item', 'items')} from films you left out won’t come across`
+          : `${
+              total === 1
+                ? '1 item has no TMDB, IMDb or TVDB ID, so it'
+                : `${total.toLocaleString('en-GB')} items have no TMDB, IMDb or TVDB ID, so they`
+            } won’t come across`}
       </summary>
       <ul>
         {names.map((name, i) => (

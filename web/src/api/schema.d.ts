@@ -1128,6 +1128,8 @@ export interface paths {
          * @description Send the zip from Trakt's data export, or the zip from Simkl's "Download backup", as the body. Tethr reads history, the watchlist, resume points, ratings and hidden items, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
          *
          *     Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
+         *
+         *     Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched.
          */
         post: operations["createImport"];
         delete?: never;
@@ -2179,7 +2181,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            source: "trakt" | "simkl";
+            source: "trakt" | "simkl" | "letterboxd";
             filename: string;
             /** @enum {string} */
             status: "parsed" | "queued" | "applied" | "failed" | "undone";
@@ -2199,6 +2201,32 @@ export interface components {
             hidden: components["schemas"]["ImportCount"];
             /** @description Up to 100 of the items that couldn't be matched, as the file names them. */
             unmatched: string[];
+        };
+        NewImport: {
+            /** @enum {string} */
+            source: "letterboxd";
+            history?: components["schemas"]["ImportedItem"][];
+            watchlist?: components["schemas"]["ImportedItem"][];
+            ratings?: components["schemas"]["ImportedItem"][];
+        };
+        ImportedItem: {
+            /** @enum {string} */
+            type: "movie";
+            /** Format: int32 */
+            tmdb?: number;
+            /** @description The name the export gave it, shown if it can't be matched. */
+            label: string;
+            /**
+             * Format: date-time
+             * @description When it was watched, listed or rated. Leave it out for a play with no date.
+             */
+            at?: string;
+            /**
+             * @description Set `day` when only the date of `at` is known.
+             * @enum {string}
+             */
+            precision?: "time" | "day";
+            rating?: number;
         };
         /** @description Added and skipped are filled in once the import is applied. Skipped items were already there. */
         ImportCount: {
@@ -4297,6 +4325,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/zip": string;
+                "application/json": components["schemas"]["NewImport"];
             };
         };
         responses: {
