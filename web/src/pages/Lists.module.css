@@ -289,6 +289,22 @@ a.titleLink:hover {
   border-bottom: 1px solid var(--rule);
 }
 
+.coming {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.comingMeta {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+  font-size: 0.875rem;
+}
+
 .time {
   color: var(--ink-2);
   font-size: 1.0625rem;
