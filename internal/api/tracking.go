@@ -437,6 +437,25 @@ func (s *Server) GetUpNext(ctx context.Context, req GetUpNextRequestObject) (Get
 	return out, nil
 }
 
+func (s *Server) GetUpcoming(ctx context.Context, req GetUpcomingRequestObject) (GetUpcomingResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return GetUpcoming404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return GetUpcoming401JSONResponse{notConnected}, err
+	}
+	entries, err := core.Upcoming(ctx, s.DB, c.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(GetUpcoming200JSONResponse, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, UpcomingEntry{Show: toItem(e.Show).Title, Episode: toEpisode(e.Episode), Watchlist: e.Watchlist})
+	}
+	return out, nil
+}
+
 func (s *Server) HideFromUpNext(ctx context.Context, req HideFromUpNextRequestObject) (HideFromUpNextResponseObject, error) {
 	c, ok, err := s.caller(ctx)
 	if !ok {

@@ -534,8 +534,15 @@ func TestUpNextEndpoints(t *testing.T) {
 	if err := core.SaveOutline(context.Background(), s.DB, show, []core.OutlineEpisode{
 		{TMDBID: 1, Season: 1, Number: 1, FirstAired: day(20)},
 		{TMDBID: 2, Season: 1, Number: 2, FirstAired: day(13)},
+		{TMDBID: 3, Season: 1, Number: 3, FirstAired: day(-3)},
 	}); err != nil {
 		t.Fatal(err)
+	}
+
+	var upcoming []UpcomingEntry
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/upcoming", "", cookie).Body.Bytes(), &upcoming)
+	if len(upcoming) != 1 || upcoming[0].Episode.Number != 3 || upcoming[0].Episode.FirstAired == nil || upcoming[0].Watchlist || *upcoming[0].Show.Ids.Tmdb != 1396 {
+		t.Errorf("upcoming = %+v", upcoming)
 	}
 
 	var next []UpNextEntry
