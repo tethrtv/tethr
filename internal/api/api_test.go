@@ -686,6 +686,46 @@ func TestImports(t *testing.T) {
 	}
 }
 
+func TestSimklImport(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	w, _ := z.Create("SimklBackup.json")
+	_, _ = w.Write([]byte(`{"movies":[
+		{"status":"completed","last_watched_at":"2024-01-01T20:00:00Z","user_rating":9,"user_rated_at":"2024-01-02T10:00:00Z","movie":{"title":"Inception","year":2010,"ids":{"simkl":1,"imdb":"tt1375666","tmdb":"27205"}}},
+		{"status":"plantowatch","added_to_watchlist_at":"2024-01-03T10:00:00Z","movie":{"title":"Heat","year":1995,"ids":{"simkl":2,"tmdb":"949"}}}
+	],"anime":[
+		{"status":"watching","show":{"title":"Ao Ashi Season 2","year":2026,"ids":{"simkl":3,"mal":"61603"}},"seasons":[{"number":1,"episodes":[{"number":1,"watched_at":"2026-11-08T08:00:00Z"}]}]}
+	]}`))
+	_ = z.Close()
+
+	rec := upload(t, h, "/v1/imports?filename=SimklBackup.zip", buf.String(), cookie)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", rec.Code, rec.Body)
+	}
+	var imp Import
+	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
+	if imp.Source != Simkl || imp.Summary.History.Total != 2 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Ao Ashi Season 2 (2026) E1" || imp.Summary.Watchlist.Total != 1 || imp.Summary.Ratings.Total != 1 {
+		t.Fatalf("import = %+v", imp)
+	}
+
+	id := strconv.FormatInt(imp.Id, 10)
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", "", cookie); rec.Code != http.StatusAccepted {
+		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
+	}
+	if _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
+	if imp.Status != Applied || imp.Summary.History.Added != 1 || imp.Summary.Watchlist.Added != 1 || imp.Summary.Ratings.Added != 1 {
+		t.Errorf("applied = %+v", imp)
+	}
+}
+
 func TestRatingEndpoints(t *testing.T) {
 	h, mail := newTestServer(t)
 	cookie := signIn(t, h, mail)

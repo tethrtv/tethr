@@ -56,7 +56,7 @@ func TestImport(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	parsed, err := CreateImport(ctx, db, profile, "trakt.zip", traktFile())
+	parsed, err := CreateImport(ctx, db, profile, "trakt", "trakt.zip", traktFile())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestImport(t *testing.T) {
 	if err != nil || queued.Status != "queued" {
 		t.Fatalf("queue = %+v, %v", queued, err)
 	}
-	if _, err := CreateImport(ctx, db, profile, "again.zip", traktFile()); !errors.Is(err, ErrImportBusy) {
+	if _, err := CreateImport(ctx, db, profile, "trakt", "again.zip", traktFile()); !errors.Is(err, ErrImportBusy) {
 		t.Errorf("second import while one is queued: %v", err)
 	}
 	if found, err := ApplyNextImport(ctx, db); !found || err != nil {
@@ -148,7 +148,7 @@ func TestImport(t *testing.T) {
 func TestImportNeedsSomething(t *testing.T) {
 	db := dbtest.New(t)
 	caller, _, _ := connectedProfile(t, db)
-	_, err := CreateImport(context.Background(), db, caller.ProfileID, "empty.zip", ImportFile{History: []ImportItem{{Ref: Ref{Kind: "movie"}}}})
+	_, err := CreateImport(context.Background(), db, caller.ProfileID, "trakt", "empty.zip", ImportFile{History: []ImportItem{{Ref: Ref{Kind: "movie"}}}})
 	if !errors.Is(err, ErrEmptyImport) {
 		t.Errorf("err = %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/internal/simklexport"
 	"github.com/tethrtv/tethr/internal/traktexport"
 )
 
@@ -85,18 +86,21 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 	if len(body) > maxUpload {
 		return CreateImport413JSONResponse(problem("too_big", "Exports up to 100 MB can be imported.")), nil
 	}
-	file, err := traktexport.Read(bytes.NewReader(body), int64(len(body)))
-	var bad traktexport.BadFileError
+	source, file, err := readExport(body)
+	var traktBad traktexport.BadFileError
+	var simklBad simklexport.BadFileError
 	switch {
-	case errors.Is(err, traktexport.ErrNotAnExport):
+	case errors.Is(err, simklexport.ErrNotAnExport):
 		return CreateImport400JSONResponse{problem("not_an_export", "That isn’t an export file Tethr can read. Download the zip from your old tracker’s settings and send it as it is.")}, nil
-	case errors.As(err, &bad):
-		return CreateImport400JSONResponse{problem("unreadable_export", bad.Name+" in that export couldn’t be read. Try downloading the export again.")}, nil
+	case errors.As(err, &traktBad):
+		return CreateImport400JSONResponse{problem("unreadable_export", traktBad.Name+" in that export couldn’t be read. Try downloading the export again.")}, nil
+	case errors.As(err, &simklBad):
+		return CreateImport400JSONResponse{problem("unreadable_export", simklBad.Name+" in that backup couldn’t be read. Try downloading the backup again.")}, nil
 	case err != nil:
 		return nil, err
 	}
 	name := strings.TrimSpace(value(req.Params.Filename))
-	imp, err := core.CreateImport(ctx, s.DB, c.ProfileID, name, file)
+	imp, err := core.CreateImport(ctx, s.DB, c.ProfileID, source, name, file)
 	switch {
 	case errors.Is(err, core.ErrEmptyImport):
 		return CreateImport400JSONResponse{problem("empty_export", "That export has no history, watchlist, resume points, ratings or hidden items Tethr can match.")}, nil
@@ -106,6 +110,15 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 		return nil, err
 	}
 	return CreateImport201JSONResponse(toImport(imp)), nil
+}
+
+func readExport(body []byte) (string, core.ImportFile, error) {
+	file, err := traktexport.Read(bytes.NewReader(body), int64(len(body)))
+	if !errors.Is(err, traktexport.ErrNotAnExport) {
+		return "trakt", file, err
+	}
+	file, err = simklexport.Read(bytes.NewReader(body), int64(len(body)))
+	return "simkl", file, err
 }
 
 func (s *Server) GetImport(ctx context.Context, req GetImportRequestObject) (GetImportResponseObject, error) {
