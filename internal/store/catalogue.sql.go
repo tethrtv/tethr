@@ -362,7 +362,8 @@ const dueOutlines = `-- name: DueOutlines :many
 SELECT t.id, t.tmdb_id
 FROM titles t
 WHERE t.kind = 'show' AND t.tmdb_id IS NOT NULL
-  AND EXISTS (SELECT 1 FROM watch_events w WHERE w.title_id = t.id)
+  AND (EXISTS (SELECT 1 FROM watch_events w WHERE w.title_id = t.id)
+    OR EXISTS (SELECT 1 FROM list_items i JOIN lists l ON l.id = i.list_id WHERE i.title_id = t.id AND l.kind = 'watchlist'))
   AND (t.outline_refreshed_at IS NULL
     OR t.outline_refreshed_at < now() - CASE
       WHEN EXISTS (
@@ -370,7 +371,7 @@ WHERE t.kind = 'show' AND t.tmdb_id IS NOT NULL
         WHERE e.show_id = t.id AND e.removed_at IS NULL
           AND (e.first_aired IS NULL OR e.first_aired > current_date - 90)
       ) THEN interval '7 days'
-      ELSE interval '90 days'
+      ELSE interval '30 days'
     END)
 ORDER BY t.outline_refreshed_at NULLS FIRST
 LIMIT $1

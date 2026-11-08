@@ -999,3 +999,31 @@ func (q *Queries) Watchlist(ctx context.Context, profileID int64) (List, error) 
 	)
 	return i, err
 }
+
+const watchlistShows = `-- name: WatchlistShows :many
+SELECT DISTINCT i.title_id
+FROM list_items i
+JOIN lists l ON l.id = i.list_id
+JOIN titles t ON t.id = i.title_id
+WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND t.kind = 'show'
+`
+
+func (q *Queries) WatchlistShows(ctx context.Context, profileID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, watchlistShows, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var title_id int64
+		if err := rows.Scan(&title_id); err != nil {
+			return nil, err
+		}
+		items = append(items, title_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
