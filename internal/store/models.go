@@ -265,6 +265,19 @@ type OauthToken struct {
 	RevokedAt        *time.Time
 }
 
+type OldListSlug struct {
+	ProfileID int64
+	Slug      string
+	ListID    int64
+	ChangedAt time.Time
+}
+
+type OldUsername struct {
+	Username  string
+	ProfileID int64
+	ChangedAt time.Time
+}
+
 type Passkey struct {
 	ID           int64
 	AccountID    int64
