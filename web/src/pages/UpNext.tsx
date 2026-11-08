@@ -237,7 +237,9 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
           <span style={{ transform: `scaleX(${e.aired ? e.watched / e.aired : 0})` }} />
         </span>
         <span className={styles.faint}>
-          {e.watched} of {e.aired} watched, {left === 1 ? 'the last one' : `${left} to go`}
+          {e.rewatch_from ? 'Rewatching, ' : ''}
+          {e.watched} of {e.aired} {e.rewatch_from ? 'again' : 'watched'},{' '}
+          {left === 1 ? 'the last one' : `${left} to go`}
         </span>
       </div>
       <div className={styles.meta}>
