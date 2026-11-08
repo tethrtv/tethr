@@ -56,6 +56,8 @@ func server(t *testing.T) (http.Handler, *[]string) {
 				"Doctor Who: The Day of the Doctor ": `{"id":890,"title":"The Day of the Doctor","original_title":"The Day of the Doctor","release_date":"2013-11-23"}`,
 				"Heat 1995":                          `{"id":949,"title":"Heat","original_title":"Heat","release_date":"1995-12-15"},{"id":12345,"title":"Heat","original_title":"Heat","release_date":"1995-03-01"}`,
 				"Lola ":                              `{"id":777,"title":"Lola","original_title":"Lola","release_date":"2022-11-04"}`,
+				"Heat 1990":                          `{"id":555,"title":"Heat Wave","original_title":"Heat Wave","release_date":"1990-07-01"}`,
+				"Heat ":                              `{"id":949,"title":"Heat","original_title":"Heat","release_date":"1995-12-15"},{"id":12345,"title":"Heat","original_title":"Heat","release_date":"1995-03-01"},{"id":555,"title":"Heat Wave","original_title":"Heat Wave","release_date":"1990-07-01"}`,
 			}
 			q := r.URL.Query()
 			if q.Get("include_adult") != "false" {
@@ -226,7 +228,8 @@ func TestMatch(t *testing.T) {
 		{"name":"Doctor Who: The Day of the Doctor","year":2013},
 		{"name":"Heat","year":1995},
 		{"name":"Lola","year":2023},
-		{"name":"Nothing like it","year":1980}
+		{"name":"Nothing like it","year":1980},
+		{"name":"Heat","year":1990}
 	]}`
 	if rec := match(films, ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("signed out = %d", rec.Code)
@@ -238,10 +241,10 @@ func TestMatch(t *testing.T) {
 			Candidates []result `json:"candidates"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &found); err != nil || rec.Code != http.StatusOK || len(found.Results) != 6 {
+	if err := json.Unmarshal(rec.Body.Bytes(), &found); err != nil || rec.Code != http.StatusOK || len(found.Results) != 7 {
 		t.Fatalf("match = %d %s", rec.Code, rec.Body)
 	}
-	matched := []int32{673, 194, 0, 0, 777, 0}
+	matched := []int32{673, 194, 0, 0, 777, 0, 0}
 	for i, want := range matched {
 		got := found.Results[i].Match
 		switch {
@@ -254,11 +257,14 @@ func TestMatch(t *testing.T) {
 	if c := found.Results[2].Candidates; len(c) != 1 || c[0].TMDB != 890 || c[0].Type != "movie" || *c[0].Year != 2013 {
 		t.Errorf("candidates for a near miss = %+v", c)
 	}
-	if c := found.Results[3].Candidates; len(c) != 2 {
+	if c := found.Results[3].Candidates; len(c) != 3 || c[0].TMDB != 949 || c[1].TMDB != 12345 {
 		t.Errorf("candidates for two films with one name = %+v", c)
 	}
 	if c := found.Results[5].Candidates; c == nil || len(c) != 0 {
 		t.Errorf("candidates for nothing = %+v", c)
+	}
+	if c := found.Results[6].Candidates; len(c) != 3 || c[0].TMDB != 949 || c[1].TMDB != 12345 || c[2].TMDB != 555 {
+		t.Errorf("films with the name come before films from the year: %+v", c)
 	}
 	if found.Results[0].Match.Poster == nil || *found.Results[0].Match.Poster != "/hp.jpg" {
 		t.Errorf("match = %+v", found.Results[0].Match)
