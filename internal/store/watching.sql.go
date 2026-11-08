@@ -783,6 +783,23 @@ func (q *Queries) SetWatching(ctx context.Context, arg SetWatchingParams) error 
 	return err
 }
 
+const startRewatch = `-- name: StartRewatch :exec
+INSERT INTO hidden_items (profile_id, section, title_id, hidden_at)
+VALUES ($1, 'progress_watched_reset', $2, $3)
+ON CONFLICT (profile_id, section, title_id, season_number) DO UPDATE SET hidden_at = excluded.hidden_at
+`
+
+type StartRewatchParams struct {
+	ProfileID int64
+	TitleID   int64
+	HiddenAt  time.Time
+}
+
+func (q *Queries) StartRewatch(ctx context.Context, arg StartRewatchParams) error {
+	_, err := q.db.Exec(ctx, startRewatch, arg.ProfileID, arg.TitleID, arg.HiddenAt)
+	return err
+}
+
 const titleListing = `-- name: TitleListing :one
 SELECT i.id, i.listed_at
 FROM list_items i
