@@ -990,6 +990,25 @@ func (q *Queries) WatchEventExists(ctx context.Context, arg WatchEventExistsPara
 	return exists, err
 }
 
+const watching = `-- name: Watching :one
+SELECT profile_id, title_id, episode_id, grant_id, progress, started_at, expires_at FROM watching WHERE profile_id = $1 FOR UPDATE
+`
+
+func (q *Queries) Watching(ctx context.Context, profileID int64) (Watching, error) {
+	row := q.db.QueryRow(ctx, watching, profileID)
+	var i Watching
+	err := row.Scan(
+		&i.ProfileID,
+		&i.TitleID,
+		&i.EpisodeID,
+		&i.GrantID,
+		&i.Progress,
+		&i.StartedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const watchlist = `-- name: Watchlist :one
 INSERT INTO lists (profile_id, kind, name, slug)
 VALUES ($1, 'watchlist', 'Watchlist', 'watchlist')
