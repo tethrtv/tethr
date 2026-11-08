@@ -1881,6 +1881,8 @@ paths:
         Send the zip from Trakt's data export, or the zip from Simkl's "Download backup", as the body. Tethr reads history, the watchlist, resume points, ratings and hidden items, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
 
         Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
+
+        Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched.
       security:
         - session: []
         - bearer: []
@@ -1898,6 +1900,9 @@ paths:
             schema:
               type: string
               format: binary
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewImport'
       responses:
         '201':
           description: The import, ready to apply
@@ -3663,7 +3668,7 @@ components:
           format: int64
         source:
           type: string
-          enum: [trakt, simkl]
+          enum: [trakt, simkl, letterboxd]
         filename:
           type: string
         status:
@@ -3699,6 +3704,54 @@ components:
           description: Up to 100 of the items that couldn't be matched, as the file names them.
           items:
             type: string
+    NewImport:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: string
+          enum: [letterboxd]
+        history:
+          type: array
+          maxItems: 50000
+          items:
+            $ref: '#/components/schemas/ImportedItem'
+        watchlist:
+          type: array
+          maxItems: 50000
+          items:
+            $ref: '#/components/schemas/ImportedItem'
+        ratings:
+          type: array
+          maxItems: 50000
+          items:
+            $ref: '#/components/schemas/ImportedItem'
+    ImportedItem:
+      type: object
+      required: [type, label]
+      properties:
+        type:
+          type: string
+          enum: [movie]
+        tmdb:
+          type: integer
+          format: int32
+        label:
+          type: string
+          maxLength: 300
+          description: The name the export gave it, shown if it can't be matched.
+        at:
+          type: string
+          format: date-time
+          description: When it was watched, listed or rated. Leave it out for a play with no date.
+        precision:
+          type: string
+          enum: [time, day]
+          description: Set `day` when only the date of `at` is known.
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 10
     ImportCount:
       type: object
       required: [total, added, skipped, unmatched]

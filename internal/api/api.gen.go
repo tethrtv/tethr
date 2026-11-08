@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/oapi-codegen/runtime"
@@ -60,16 +61,19 @@ func (e ExportFormat) Valid() bool {
 
 // Defines values for ImportSource.
 const (
-	Simkl ImportSource = "simkl"
-	Trakt ImportSource = "trakt"
+	ImportSourceLetterboxd ImportSource = "letterboxd"
+	ImportSourceSimkl      ImportSource = "simkl"
+	ImportSourceTrakt      ImportSource = "trakt"
 )
 
 // Valid indicates whether the value is a known member of the ImportSource enum.
 func (e ImportSource) Valid() bool {
 	switch e {
-	case Simkl:
+	case ImportSourceLetterboxd:
 		return true
-	case Trakt:
+	case ImportSourceSimkl:
+		return true
+	case ImportSourceTrakt:
 		return true
 	default:
 		return false
@@ -97,6 +101,39 @@ func (e ImportStatus) Valid() bool {
 	case Queued:
 		return true
 	case Undone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImportedItemPrecision.
+const (
+	ImportedItemPrecisionDay  ImportedItemPrecision = "day"
+	ImportedItemPrecisionTime ImportedItemPrecision = "time"
+)
+
+// Valid indicates whether the value is a known member of the ImportedItemPrecision enum.
+func (e ImportedItemPrecision) Valid() bool {
+	switch e {
+	case ImportedItemPrecisionDay:
+		return true
+	case ImportedItemPrecisionTime:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImportedItemType.
+const (
+	ImportedItemTypeMovie ImportedItemType = "movie"
+)
+
+// Valid indicates whether the value is a known member of the ImportedItemType enum.
+func (e ImportedItemType) Valid() bool {
+	switch e {
+	case ImportedItemTypeMovie:
 		return true
 	default:
 		return false
@@ -250,6 +287,21 @@ func (e MediaServerKind) Valid() bool {
 	case MediaServerKindJellyfin:
 		return true
 	case MediaServerKindPlex:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewImportSource.
+const (
+	NewImportSourceLetterboxd NewImportSource = "letterboxd"
+)
+
+// Valid indicates whether the value is a known member of the NewImportSource enum.
+func (e NewImportSource) Valid() bool {
+	switch e {
+	case NewImportSourceLetterboxd:
 		return true
 	default:
 		return false
@@ -959,6 +1011,27 @@ type ImportSummary struct {
 	Watchlist ImportCount `json:"watchlist"`
 }
 
+// ImportedItem defines model for ImportedItem.
+type ImportedItem struct {
+	// At When it was watched, listed or rated. Leave it out for a play with no date.
+	At *time.Time `json:"at,omitempty"`
+
+	// Label The name the export gave it, shown if it can't be matched.
+	Label string `json:"label"`
+
+	// Precision Set `day` when only the date of `at` is known.
+	Precision *ImportedItemPrecision `json:"precision,omitempty"`
+	Rating    *int                   `json:"rating,omitempty"`
+	Tmdb      *int32                 `json:"tmdb,omitempty"`
+	Type      ImportedItemType       `json:"type"`
+}
+
+// ImportedItemPrecision Set `day` when only the date of `at` is known.
+type ImportedItemPrecision string
+
+// ImportedItemType defines model for ImportedItem.Type.
+type ImportedItemType string
+
 // Invite defines model for Invite.
 type Invite struct {
 	Code      string    `json:"code"`
@@ -1204,6 +1277,17 @@ type NewApp struct {
 	// RedirectUris Where browser sign-in returns to. https, a custom scheme like `myplayer://callback`, or http on localhost.
 	RedirectUris *[]string `json:"redirect_uris,omitempty"`
 }
+
+// NewImport defines model for NewImport.
+type NewImport struct {
+	History   *[]ImportedItem `json:"history,omitempty"`
+	Ratings   *[]ImportedItem `json:"ratings,omitempty"`
+	Source    NewImportSource `json:"source"`
+	Watchlist *[]ImportedItem `json:"watchlist,omitempty"`
+}
+
+// NewImportSource defines model for NewImport.Source.
+type NewImportSource string
 
 // NewList defines model for NewList.
 type NewList struct {
@@ -2055,6 +2139,9 @@ type ApproveDeviceJSONRequestBody = ProfileChoice
 
 // AddHistoryJSONRequestBody defines body for AddHistory for application/json ContentType.
 type AddHistoryJSONRequestBody = NewWatches
+
+// CreateImportJSONRequestBody defines body for CreateImport for application/json ContentType.
+type CreateImportJSONRequestBody = NewImport
 
 // CreateListJSONRequestBody defines body for CreateList for application/json ContentType.
 type CreateListJSONRequestBody = NewList
@@ -7312,8 +7399,9 @@ func (response ListImports404JSONResponse) VisitListImportsResponse(w http.Respo
 }
 
 type CreateImportRequestObject struct {
-	Params CreateImportParams
-	Body   io.Reader
+	Params   CreateImportParams
+	JSONBody *CreateImportJSONRequestBody
+	Body     io.Reader
 }
 
 type CreateImportResponseObject interface {
@@ -11779,8 +11867,19 @@ func (sh *strictHandler) CreateImport(w http.ResponseWriter, r *http.Request, pa
 	var request CreateImportRequestObject
 
 	request.Params = params
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 
-	request.Body = r.Body
+		var body CreateImportJSONRequestBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+		request.JSONBody = &body
+
+	}
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/zip") {
+		request.Body = r.Body
+	}
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.CreateImport(ctx, request.(CreateImportRequestObject))
