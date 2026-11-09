@@ -421,7 +421,7 @@ function Telly({ watch, label }: { watch: Watch; label: string }) {
   return (
     <figure className={styles.telly}>
       <svg viewBox="0 0 240 230" className={styles.tellySet} role="img" aria-label={`${name} on an old television`}>
-        <Television poster={poster} name={name} on={seen} />
+        <Television still={image(meta?.backdrop, 'w300')} poster={poster} name={name} on={seen} />
       </svg>
       <figcaption>
         <span className={styles.faint}>{label}</span>

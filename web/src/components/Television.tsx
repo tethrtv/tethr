@@ -1,7 +1,17 @@
 import { useId } from 'react'
 import styles from './Television.module.css'
 
-export function Television({ poster, name, on }: { poster?: string; name: string; on: boolean }) {
+export function Television({
+  still,
+  poster,
+  name,
+  on,
+}: {
+  still?: string
+  poster?: string
+  name: string
+  on: boolean
+}) {
   const clip = `tv-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   return (
     <g className={on ? `${styles.set} ${styles.on}` : styles.set}>
@@ -20,7 +30,9 @@ export function Television({ poster, name, on }: { poster?: string; name: string
       <rect x="34" y="62" width="128" height="104" rx="14" className={styles.glass} />
       <g clipPath={`url(#${clip})`}>
         <g className={styles.picture}>
-          {poster ? (
+          {still ? (
+            <image href={still} x="34" y="62" width="128" height="104" preserveAspectRatio="xMidYMid slice" />
+          ) : poster ? (
             <image href={poster} x="34" y="40" width="128" height="192" preserveAspectRatio="xMidYMid slice" />
           ) : (
             <>

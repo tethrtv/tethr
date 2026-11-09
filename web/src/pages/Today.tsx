@@ -242,7 +242,7 @@ function Room({ pick }: { pick?: Pick }) {
         <path d="M239 200v56M150 228h70M258 228h70M146 256l-4 16M332 256l4 16" />
       </g>
       <g transform="translate(150 38) scale(0.75)">
-        <Television poster={image(meta?.poster, 'w342')} name={name} on={on} />
+        <Television still={image(meta?.backdrop, 'w300')} poster={image(meta?.poster, 'w342')} name={name} on={on} />
       </g>
     </svg>
   )
