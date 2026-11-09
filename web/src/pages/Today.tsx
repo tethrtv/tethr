@@ -493,7 +493,10 @@ function TopTen({ profileID }: { profileID: number }) {
   })
   if (!popular.data?.length) return null
   return (
-    <Shelf title="Top 10 on Tethr this week" note="What the most households played in the last seven days.">
+    <Shelf
+      title={`Top ${popular.data.length} on Tethr this week`}
+      note="What the most households played in the last seven days."
+    >
       <ol className={styles.chart}>
         {popular.data.map((p, i) => (
           <Ranked
