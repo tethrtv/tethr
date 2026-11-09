@@ -1067,7 +1067,7 @@ export interface paths {
         };
         /**
          * What people on Tethr are watching this week
-         * @description Films and shows played by the most households in the last 7 days, up to 10. A title is only listed once at least 10 households have played it, so nobody's viewing can be picked out. Only person profiles that haven't opted out are counted, and each household counts once.
+         * @description Films and shows played by the most households in the last 7 days, up to 10. A title is only listed once at least 10 households have played it, and counts are rounded down to a multiple of 5. Each household counts once, and only once it's been on Tethr for two weeks. Kids' and guest profiles and profiles that have opted out aren't counted, and kids' and guest profiles can't see the list.
          */
         get: operations["getPopular"];
         put?: never;
@@ -4374,6 +4374,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

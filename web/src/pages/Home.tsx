@@ -243,7 +243,7 @@ function EditProfile({
               <span>
                 Count {profile.kind === 'owner' ? 'your' : 'their'} plays in Popular on Tethr
                 <span className={styles.checkNote}>
-                  A title only shows once 10 households have played it that week, so nobody’s viewing can be picked out.
+                  A title only shows once 10 households have played it in the last week, and it never says who.
                 </span>
               </span>
             </label>
