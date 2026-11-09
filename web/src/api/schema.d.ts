@@ -1058,6 +1058,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/years/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A year of watching, added up
+         * @description Everything you played in a calendar year, counted by day in the time zone you give. For the current year it runs up to today. Plays with no known date are left out, and plays known only to the day count towards that day but not towards any hour.
+         */
+        get: operations["getYear"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/titles/{id}": {
         parameters: {
             query?: never;
@@ -2091,6 +2111,74 @@ export interface components {
             episode: components["schemas"]["Episode"];
             /** @description The show is on your watchlist and you haven't started it. */
             watchlist: boolean;
+        };
+        Year: {
+            year: number;
+            /**
+             * Format: date
+             * @description The last day counted. Today for the current year, otherwise 31 December.
+             */
+            through: string;
+            plays: number;
+            episodes: number;
+            films: number;
+            /** @description Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise. Plays of titles with no known runtime add nothing. */
+            minutes: number;
+            /** @description Shows you played for the first time this year. */
+            new_shows: number;
+            /** @description Plays of an episode or film you'd already seen. */
+            rewatched: number;
+            /** @description One entry per day from 1 January to `through`. */
+            days: components["schemas"]["YearDay"][];
+            /** @description Plays that started in each hour of the day, from midnight. */
+            hours: number[];
+            /** @description Every show you played, most episodes first. */
+            shows: components["schemas"]["YearShow"][];
+            /** @description Every film you played, in the order you played them. */
+            film_plays: components["schemas"]["YearFilm"][];
+            run: components["schemas"]["YearRun"];
+            busiest?: components["schemas"]["BusiestDay"];
+            first?: components["schemas"]["Watch"];
+            latest?: components["schemas"]["Watch"];
+            /** @description Every year with a dated play, newest first. */
+            years: number[];
+        };
+        YearDay: {
+            plays: number;
+            minutes: number;
+        };
+        YearShow: {
+            show: components["schemas"]["Title"];
+            episodes: number;
+            minutes: number;
+            /** @description The first time you played this show was this year. */
+            new: boolean;
+        };
+        YearFilm: {
+            film: components["schemas"]["Title"];
+            /** Format: date-time */
+            watched_at: string;
+            /** @enum {string} */
+            precision: "time" | "day";
+            /** @description The first time you played this film was this year. */
+            new: boolean;
+            /** @description You'd played this film before. */
+            again: boolean;
+        };
+        /** @description The longest stretch of days in a row with at least one play. */
+        YearRun: {
+            days: number;
+            /** Format: date */
+            from?: string;
+        };
+        /** @description The day with the most time spent, and what you played most that day. */
+        BusiestDay: {
+            /** Format: date */
+            date: string;
+            plays: number;
+            minutes: number;
+            item: components["schemas"]["Item"];
+            item_plays: number;
         };
         UpNextListEntry: {
             list: components["schemas"]["List"];
@@ -4223,6 +4311,36 @@ export interface operations {
                     "application/json": components["schemas"]["UpcomingEntry"][];
                 };
             };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getYear: {
+        parameters: {
+            query?: {
+                /** @description An IANA time zone such as `Europe/London`. Left out, days run in UTC. */
+                tz?: string;
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year so far */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Year"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };

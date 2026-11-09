@@ -146,7 +146,7 @@
     bottom: 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     background: var(--paper);
     border-top: 2px solid var(--ink);
     padding-bottom: env(safe-area-inset-bottom);
@@ -157,7 +157,8 @@
     place-items: center;
     height: 54px;
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
     color: var(--ink-2);
     text-decoration: none;
   }

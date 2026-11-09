@@ -9,6 +9,7 @@ import styles from './Shell.module.css'
 const links = [
   { to: '/', label: 'Up next' },
   { to: '/history', label: 'History' },
+  { to: '/year', label: String(new Date().getFullYear()) },
   { to: '/lists', label: 'Lists' },
   { to: '/account', label: 'Account' },
 ] as const
@@ -31,7 +32,11 @@ function stored() {
 }
 
 const section = (path: string) =>
-  path === '/watchlist' || path.startsWith('/lists/') || /^\/@[^/]+\/lists\//.test(path) ? '/lists' : path
+  path === '/year' || path.startsWith('/year/')
+    ? '/year'
+    : path === '/watchlist' || path.startsWith('/lists/') || /^\/@[^/]+\/lists\//.test(path)
+      ? '/lists'
+      : path
 
 export function Shell({ children }: { children: ReactNode }) {
   const me = useSignedIn()
