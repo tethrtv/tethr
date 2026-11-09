@@ -267,7 +267,7 @@ func (s *Server) me(ctx context.Context, accountID int64) (Me, error) {
 }
 
 func toProfile(p store.Profile) Profile {
-	return Profile{Id: p.ID, Username: p.Username, Name: p.Name, Kind: ProfileKind(p.Kind), Private: p.Private}
+	return Profile{Id: p.ID, Username: p.Username, Name: p.Name, Kind: ProfileKind(p.Kind), Private: p.Private, InPopular: p.InPopular}
 }
 
 func (s *Server) cookie(value string, expires time.Time) string {
