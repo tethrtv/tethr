@@ -123,18 +123,26 @@ export function useGroup(show?: number, group?: string) {
 
 export type Matched = { match: Found | null; candidates: Found[] }
 
-export async function matchFilms(films: { name: string; year?: number }[]): Promise<Matched[]> {
+export async function matchFilms(
+  films: { name: string; year?: number }[],
+  signal: AbortSignal,
+  onWait: (waiting: boolean) => void,
+): Promise<Matched[]> {
   for (;;) {
     const res = await fetch(`${apiURL}/meta/match`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ films: films.map((f) => ({ name: f.name, year: f.year ?? 0 })) }),
+      signal,
     })
     if (res.status === 429) {
+      onWait(true)
       await new Promise((r) => setTimeout(r, Number(res.headers.get('Retry-After') ?? 30) * 1000))
+      signal.throwIfAborted()
       continue
     }
+    onWait(false)
     if (!res.ok) throw new Error('Matching isn’t working right now. Try again in a moment.')
     return (await res.json()).results
   }

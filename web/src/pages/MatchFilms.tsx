@@ -30,22 +30,21 @@ export function MatchFilms({
   const [matched, setMatched] = useState<Matched[]>([])
   const [failed, setFailed] = useState<string>()
   const [tries, setTries] = useState(0)
+  const [waiting, setWaiting] = useState(false)
   const [picks, setPicks] = useState<Record<number, Found | null>>({})
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tries restarts matching after a failure
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tries carries on matching after a failure
   useEffect(() => {
-    let stopped = false
+    const stop = new AbortController()
     setFailed(undefined)
     ;(async () => {
-      const done: Matched[] = []
-      for (let i = 0; i < films.length && !stopped; i += batch) {
-        done.push(...(await matchFilms(films.slice(i, i + batch))))
-        if (!stopped) setMatched([...done])
+      const done = [...matched]
+      for (let i = done.length; i < films.length; i += batch) {
+        done.push(...(await matchFilms(films.slice(i, i + batch), stop.signal, setWaiting)))
+        setMatched([...done])
       }
-    })().catch((e: Error) => !stopped && setFailed(e.message))
-    return () => {
-      stopped = true
-    }
+    })().catch((e: Error) => !stop.signal.aborted && setFailed(e.message))
+    return () => stop.abort()
   }, [films, tries])
 
   const send = useMutation({
@@ -90,6 +89,7 @@ export function MatchFilms({
       <div className={styles.review}>
         <p>
           Matching {matched.length.toLocaleString('en-GB')} of {plural(films.length, 'film')} from Letterboxd…
+          {waiting && ' Tethr has matched a lot of films this hour, so it’s waiting a moment before carrying on.'}
         </p>
         <span className={styles.meter}>
           <span style={{ transform: `scaleX(${matched.length / films.length})` }} />
