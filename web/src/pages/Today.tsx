@@ -454,7 +454,7 @@ function PopularOnTethr({ profileID }: { profileID: number }) {
           key={p.item.title.ids.tethr}
           kind={kindOf(p.item)}
           title={p.item.title}
-          detail={`${plural(p.households, 'household')} watched`}
+          detail={`${p.households}+ households watched`}
         />
       ))}
     </Block>
@@ -467,7 +467,7 @@ function ListsPeopleFollow({ profileID }: { profileID: number }) {
   const lists = useQuery({
     queryKey: ['public-lists', profileID, 'popular'],
     queryFn: () =>
-      load(api.GET('/v1/public-lists', { params: { query: { profile_id: profileID, order: 'popular', limit: 6 } } })),
+      load(api.GET('/v1/public-lists', { params: { query: { profile_id: profileID, order: 'popular', limit: 20 } } })),
   })
   const followed = (lists.data?.lists ?? []).filter((l) => l.follower_count > 1 && l.access !== 'mine')
   if (followed.length < listFloor) return null

@@ -421,9 +421,9 @@ export function Privacy() {
         </p>
         <p>
           <strong>Everyone on Tethr, as a count.</strong> Popular on Tethr shows the films and shows the most households
-          played in the last week, with how many. A title only appears once at least 10 households have played it, and
-          it never says who. Kids’ and guest profiles aren’t counted, and you can leave any other profile out by editing
-          it on your account page.
+          played in the last week, with a rough count. A title only appears once at least 10 households have played it,
+          households only count once they’ve been here two weeks, and it never says who. Kids’ and guest profiles aren’t
+          counted, and the account owner can leave any other profile out by editing it on the account page.
         </p>
         <p>
           <strong>Reports.</strong> If you report a list, only we see that you did. The list’s owner is never told who
