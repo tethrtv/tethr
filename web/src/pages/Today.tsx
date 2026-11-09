@@ -20,6 +20,12 @@ type Pick = { key: string; kind: 'movie' | 'show'; title: Title; detail: string 
 const kindOf = (t: { type?: string }) => (t.type === 'movie' ? 'movie' : 'show')
 const hourName = (h: number) => (h === 0 ? 'midnight' : h === 12 ? 'noon' : h < 12 ? `${h}am` : `${h - 12}pm`)
 
+async function load<T>(request: Promise<{ data?: T; error?: unknown }>) {
+  const { data, error } = await request
+  if (error) throw error
+  return data as T
+}
+
 function airsIn(day: string) {
   const now = new Date()
   return Math.round((Date.parse(day) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000)
@@ -36,31 +42,31 @@ export function Today() {
   const params = { query: { profile_id: profile.id } }
   const paused = useQuery({
     queryKey: ['playback', profile.id],
-    queryFn: async () => (await api.GET('/v1/playback', { params })).data ?? [],
+    queryFn: () => load(api.GET('/v1/playback', { params })),
   })
   const next = useQuery({
     queryKey: ['up-next', profile.id],
-    queryFn: async () => (await api.GET('/v1/up-next', { params })).data ?? [],
+    queryFn: () => load(api.GET('/v1/up-next', { params })),
   })
   const lists = useQuery({
     queryKey: ['up-next-lists', profile.id],
-    queryFn: async () => (await api.GET('/v1/up-next/lists', { params })).data ?? [],
+    queryFn: () => load(api.GET('/v1/up-next/lists', { params })),
   })
   const upcoming = useQuery({
     queryKey: ['upcoming', profile.id],
-    queryFn: async () => (await api.GET('/v1/upcoming', { params })).data ?? [],
+    queryFn: () => load(api.GET('/v1/upcoming', { params })),
   })
   const recent = useQuery({
     queryKey: ['history', profile.id, 'today'],
-    queryFn: async () =>
-      (await api.GET('/v1/history', { params: { query: { profile_id: profile.id, limit: 200 } } })).data,
+    queryFn: () => load(api.GET('/v1/history', { params: { query: { profile_id: profile.id, limit: 200 } } })),
   })
   const now = new Date()
   const year = useYear(profile.id, now.getFullYear())
 
   const heading = `Today, ${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`
   const loading = paused.isPending || next.isPending || recent.isPending
-  const fresh = !loading && recent.data?.total === 0 && !paused.data?.length && !next.data?.length
+  const failed = paused.isError || next.isError || recent.isError
+  const fresh = !loading && !failed && recent.data?.total === 0 && !paused.data?.length && !next.data?.length
 
   const picks: Pick[] = []
   const seen = new Set<number>()
@@ -105,7 +111,9 @@ export function Today() {
           <h1 className={styles.title}>{heading}</h1>
           {!loading && (
             <p className={styles.lead}>
-              {fresh ? (
+              {failed ? (
+                'Tethr couldn’t load everything for today. Try again in a moment.'
+              ) : fresh ? (
                 'Nothing on yet. Bring your history over or connect a player, and this page fills up with what to watch next.'
               ) : picks[0] ? (
                 <Tonight pick={picks[0]} peak={peak} />
@@ -165,7 +173,7 @@ export function Today() {
         </Block>
       )}
 
-      {year.data && year.data.plays > 0 && <Month y={year.data} recent={recent.data?.items ?? []} />}
+      {year.data && year.data.plays > 0 && recent.data && <Month y={year.data} recent={recent.data} />}
     </div>
   )
 }
@@ -278,13 +286,13 @@ function Housemate({ profile }: { profile: Profile }) {
   const last = useQuery({
     queryKey: ['history', profile.id, 'latest'],
     queryFn: async () =>
-      (await api.GET('/v1/history', { params: { query: { profile_id: profile.id, limit: 1 } } })).data?.items[0] ??
+      (await load(api.GET('/v1/history', { params: { query: { profile_id: profile.id, limit: 1 } } }))).items[0] ??
       null,
   })
   const w = last.data
   const kind = w ? kindOf(w.item) : 'show'
   const meta = useDetails(kind, w?.item.title.ids.tmdb)
-  if (last.isPending) return null
+  if (last.isPending || last.isError) return null
   if (!w) {
     return (
       <li className={styles.row}>
@@ -314,35 +322,41 @@ function Housemate({ profile }: { profile: Profile }) {
   )
 }
 
-function Month({ y, recent }: { y: components['schemas']['Year']; recent: components['schemas']['Watch'][] }) {
+function Month({
+  y,
+  recent,
+}: {
+  y: components['schemas']['Year']
+  recent: { items: components['schemas']['Watch'][]; total: number }
+}) {
   const now = new Date()
   const first = Math.round(
     (Date.UTC(now.getFullYear(), now.getMonth(), 1) - Date.UTC(now.getFullYear(), 0, 1)) / 86400000,
   )
   const days = y.days.slice(first)
   const plays = days.reduce((n, d) => n + d.plays, 0)
-  const minutes = days.reduce((n, d) => n + d.minutes, 0)
   const counts = new Map<number, { n: number; watch: components['schemas']['Watch'] }>()
-  for (const w of recent) {
+  for (const w of recent.items) {
     const at = new Date(w.watched_at)
     if (w.precision === 'none' || at.getMonth() !== now.getMonth() || at.getFullYear() !== now.getFullYear()) continue
     const id = w.item.title.ids.tethr ?? 0
     const c = counts.get(id)
     counts.set(id, { n: (c?.n ?? 0) + 1, watch: c?.watch ?? w })
   }
-  const top = [...counts.values()].sort((a, b) => b.n - a.n)[0]?.watch
+  const oldest = recent.items[recent.items.length - 1]
+  const whole =
+    recent.total <= recent.items.length || (!!oldest && new Date(oldest.watched_at).getMonth() !== now.getMonth())
+  const leader = [...counts.values()].sort((a, b) => b.n - a.n)[0]
+  const top = whole && leader && leader.n > 1 && leader.n * 3 >= plays ? leader.watch : undefined
   const kind = top ? kindOf(top.item) : 'show'
   const meta = useDetails(kind, top?.item.title.ids.tmdb)
   if (plays === 0) return null
-  const timed = minutes > 0 && y.plays_without_length * 2 <= y.plays
-  const hours = Math.round(minutes / 60)
-  const amount = timed && hours >= 2 ? `${hours} hours` : plural(plays, 'play')
   const month = now.toLocaleDateString('en-GB', { month: 'long' })
   return (
     <section className={styles.section}>
       <h2 className={styles.sectionTitle}>{month} so far</h2>
       <p className={styles.month}>
-        <strong>{amount}</strong> this month
+        <strong>{plural(plays, 'play')}</strong> this month
         {top && (
           <>
             , mostly{' '}
