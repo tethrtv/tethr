@@ -131,6 +131,7 @@ function StationTelly() {
 const slot = (i: number) => `${String(18 + i).padStart(2, '0')}:00`
 
 export function Station({ user }: { user: User }) {
+  const onAir = user.lists.filter((l) => l.privacy === 'public' && l.item_count > 0)
   return (
     <div className={styles.page}>
       <title>Tethr One · Tethr</title>
@@ -148,11 +149,11 @@ export function Station({ user }: { user: User }) {
 
       <section>
         <h2 className={styles.sectionTitle}>Tonight on Tethr</h2>
-        {user.lists.length === 0 ? (
+        {onAir.length === 0 ? (
           <p className={styles.quiet}>Nothing on yet. The first lists are coming soon.</p>
         ) : (
           <ol className={styles.schedule}>
-            {user.lists.map((l, i) => (
+            {onAir.map((l, i) => (
               <li key={l.id} className={styles.slot} style={{ '--i': i } as CSSProperties}>
                 <span className={styles.time}>{slot(i)}</span>
                 <ListCover items={l.cover} />
@@ -169,7 +170,7 @@ export function Station({ user }: { user: User }) {
               </li>
             ))}
             <li className={`${styles.slot} ${styles.closedown}`}>
-              <span className={styles.time}>{slot(user.lists.length)}</span>
+              <span className={styles.time}>{slot(onAir.length)}</span>
               <span />
               <span className={styles.programme}>Closedown</span>
               <span className={styles.meta}>Back tomorrow</span>
