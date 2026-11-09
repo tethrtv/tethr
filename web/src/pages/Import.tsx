@@ -89,7 +89,10 @@ function Imports({ profileID }: { profileID: number }) {
   const [letterboxd, setLetterboxd] = useState<{ films: Film[]; filename: string } | null>(null)
   const read = useMutation({
     mutationFn: async (file: File) => {
-      const files = await unzip(file).catch(() => null)
+      const files = await unzip(file).catch((e) => {
+        if (e instanceof Error && e.message === 'not a zip') return null
+        throw e
+      })
       if (files && isLetterboxd(files)) setLetterboxd({ films: readLetterboxd(files), filename: file.name })
       else upload.mutate(file)
     },
@@ -99,6 +102,7 @@ function Imports({ profileID }: { profileID: number }) {
     const file = e.target.files?.[0]
     e.target.value = ''
     upload.reset()
+    read.reset()
     setLetterboxd(null)
     if (file) read.mutate(file)
   }
@@ -143,6 +147,9 @@ function Imports({ profileID }: { profileID: number }) {
           </div>
         )}
         {upload.isError && <p className={home.error}>{problemMessage(upload.error)}</p>}
+        {read.isError && (
+          <p className={home.error}>This browser couldn’t open the export. Try again in an up-to-date browser.</p>
+        )}
       </section>
 
       {past.length > 0 && (
