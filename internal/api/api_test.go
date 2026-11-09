@@ -735,6 +735,9 @@ func TestMatchedImport(t *testing.T) {
 	if rec := do(t, h, "POST", "/v1/imports", `{"source":"letterboxd"}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "empty_export") {
 		t.Errorf("nothing in it = %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(t, h, "POST", "/v1/imports", `{"source":"letterboxd","ratings":[{"type":"movie","tmdb":27205,"label":"Inception (2010)","rating":5}, {"type":"movie","tmdb":603,"label":"The Matrix (1999)","rating":0}]}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_rating") {
+		t.Errorf("rating of 0 = %d %s", rec.Code, rec.Body)
+	}
 	rec := do(t, h, "POST", "/v1/imports?filename=letterboxd.zip", `{"source":"letterboxd",
 		"history":[
 			{"type":"movie","tmdb":27205,"label":"Inception (2010)","at":"2026-11-08T12:00:00Z","precision":"day"},
