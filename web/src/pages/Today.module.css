@@ -131,6 +131,10 @@
   border-bottom: 1px solid var(--rule);
 }
 
+.listRow {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
 .name {
   font-weight: 700;
   color: inherit;
@@ -243,6 +247,9 @@ a.name:hover {
   }
   .row > :first-child {
     grid-row: span 2;
+  }
+  .listRow {
+    grid-template-columns: 44px minmax(0, 1fr);
   }
   .detail {
     text-align: left;
