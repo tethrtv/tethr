@@ -64,6 +64,8 @@ func server(t *testing.T) (http.Handler, *[]string) {
 				t.Errorf("film search = %s", r.URL.RawQuery)
 			}
 			_, _ = fmt.Fprintf(w, `{"results":[%s]}`, films[q.Get("query")+" "+q.Get("primary_release_year")])
+		case "/3/trending/all/week":
+			_, _ = w.Write([]byte(`{"results":[{"media_type":"person","id":9,"name":"Someone"},{"media_type":"movie","id":27205,"title":"Inception","release_date":"2010-07-15","poster_path":"/i.jpg","backdrop_path":"/i-wide.jpg"},{"media_type":"movie","id":1,"title":"Grown-ups only","adult":true},{"media_type":"tv","id":1396,"name":"Breaking Bad","first_air_date":"2008-01-20"}]}`))
 		case "/3/tv/1396/season/1":
 			_, _ = w.Write([]byte(`{"overview":"Season one","episodes":[{"episode_number":1,"name":"Pilot","air_date":"2008-01-20","overview":"x","runtime":58,"still_path":"/s.jpg"},{"episode_number":2,"name":"Cat's in the Bag...","air_date":""}]}`))
 		case "/3/tv/1396/episode_groups":
@@ -300,5 +302,17 @@ func TestNotFound(t *testing.T) {
 	}
 	if len(*asked) != 1 {
 		t.Errorf("only the real lookup should reach TMDB: %v", *asked)
+	}
+}
+
+func TestTrending(t *testing.T) {
+	h, _ := server(t)
+	if rec := get(h, "/meta/trending", ""); rec.Code != http.StatusForbidden {
+		t.Errorf("trending from another site = %d", rec.Code)
+	}
+	rec := get(h, "/meta/trending", "same-site")
+	want := `{"results":[{"type":"movie","tmdb":27205,"name":"Inception","year":2010,"poster":"/i.jpg","backdrop":"/i-wide.jpg"},{"type":"show","tmdb":1396,"name":"Breaking Bad","year":2008,"poster":null}]}` + "\n"
+	if rec.Code != http.StatusOK || rec.Body.String() != want {
+		t.Errorf("trending = %d %s", rec.Code, rec.Body)
 	}
 }

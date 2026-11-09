@@ -23,6 +23,7 @@ const (
 	showCache   = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400"
 	seasonCache = "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400"
 	searchCache = "private, max-age=300"
+	trendCache  = "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
 
 	searchResults = 10
 )
@@ -94,11 +95,12 @@ type aired struct {
 }
 
 type result struct {
-	Type   string  `json:"type"`
-	TMDB   int32   `json:"tmdb"`
-	Name   string  `json:"name"`
-	Year   *int    `json:"year"`
-	Poster *string `json:"poster"`
+	Type     string  `json:"type"`
+	TMDB     int32   `json:"tmdb"`
+	Name     string  `json:"name"`
+	Year     *int    `json:"year"`
+	Poster   *string `json:"poster"`
+	Backdrop string  `json:"backdrop,omitempty"`
 }
 
 type certificate struct {
@@ -121,6 +123,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /meta/tv/{id}/season/{season}", s.ownSite(s.season))
 	mux.HandleFunc("GET /meta/tv/{id}/orders", s.ownSite(s.orders))
 	mux.HandleFunc("GET /meta/tv/{id}/order/{group}", s.ownSite(s.order))
+	mux.HandleFunc("GET /meta/trending", s.ownSite(s.trending))
 	mux.Handle("GET /meta/search", s.SignedIn(s.search))
 	mux.Handle("POST /meta/match", s.SignedIn(s.match))
 	mux.Handle("OPTIONS /meta/match", s.SignedIn(s.match))
@@ -268,6 +271,22 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64)
 		out = append(out, res)
 	}
 	write(w, searchCache, map[string]any{"results": out})
+}
+
+func (s *Server) trending(w http.ResponseWriter, r *http.Request) {
+	found, err := s.TMDB.Trending(r.Context())
+	if !s.found(w, r, err) {
+		return
+	}
+	out := make([]result, 0, searchResults)
+	for _, f := range found[:min(searchResults, len(found))] {
+		res := result{Type: f.Kind, TMDB: f.ID, Name: f.Name, Poster: optional(f.Poster), Backdrop: f.Backdrop}
+		if f.Year > 0 {
+			res.Year = &f.Year
+		}
+		out = append(out, res)
+	}
+	write(w, trendCache, map[string]any{"results": out})
 }
 
 func (s *Server) limits() {

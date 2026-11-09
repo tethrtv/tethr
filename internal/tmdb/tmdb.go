@@ -106,6 +106,7 @@ type Result struct {
 	Original string
 	Year     int
 	Poster   string
+	Backdrop string
 }
 
 type Certificate struct {
@@ -284,6 +285,38 @@ func (c *Client) Season(ctx context.Context, showID, season int32) (Season, erro
 	out := Season{Overview: s.Overview, Episodes: make([]SeasonEpisode, 0, len(s.Episodes))}
 	for _, e := range s.Episodes {
 		out.Episodes = append(out.Episodes, SeasonEpisode{Number: e.Number, Name: e.Name, AirDate: e.AirDate, Overview: e.Overview, Runtime: e.Runtime})
+	}
+	return out, nil
+}
+
+func (c *Client) Trending(ctx context.Context) ([]Result, error) {
+	var page struct {
+		Results []struct {
+			MediaType string `json:"media_type"`
+			ID        int32  `json:"id"`
+			Title     string `json:"title"`
+			Name      string `json:"name"`
+			Release   string `json:"release_date"`
+			FirstAir  string `json:"first_air_date"`
+			Poster    string `json:"poster_path"`
+			Backdrop  string `json:"backdrop_path"`
+			Adult     bool   `json:"adult"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, "/3/trending/all/week?language=en-GB", &page); err != nil {
+		return nil, err
+	}
+	var out []Result
+	for _, r := range page.Results {
+		if r.Adult {
+			continue
+		}
+		switch r.MediaType {
+		case "movie":
+			out = append(out, Result{Kind: "movie", ID: r.ID, Name: r.Title, Year: year(r.Release), Poster: r.Poster, Backdrop: r.Backdrop})
+		case "tv":
+			out = append(out, Result{Kind: "show", ID: r.ID, Name: r.Name, Year: year(r.FirstAir), Poster: r.Poster, Backdrop: r.Backdrop})
+		}
 	}
 	return out, nil
 }
