@@ -238,4 +238,17 @@ func TestDroppedStops(t *testing.T) {
 	if got := plays(); len(got) != 1 {
 		t.Errorf("counted an episode started again: %+v", got)
 	}
+
+	rewind("60 minutes")
+	start(12, 0)
+	if got := plays(); len(got) != 2 {
+		t.Fatalf("plays after the last one ran out = %+v", got)
+	}
+	_, err := ScrobbleStop(ctx, db, caller, Scrobble{Ref: episode(3, 11), Progress: 100})
+	if _, ok := errors.AsType[AlreadyScrobbled](err); !ok {
+		t.Errorf("late stop = %v", err)
+	}
+	if got := plays(); len(got) != 2 {
+		t.Errorf("late stop counted again: %+v", got)
+	}
 }

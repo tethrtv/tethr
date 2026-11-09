@@ -53,7 +53,7 @@ func ScrobbleStart(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) 
 			window = time.Duration(*s.Duration * float64(time.Second))
 		}
 		if err := finishDropped(ctx, q, c.ProfileID, r); err != nil {
-			return ScrobbleResult{}, err
+			return ScrobbleResult{}, fmt.Errorf("finishing the last item: %w", err)
 		}
 		left := time.Duration(float64(window) * (100 - s.Progress) / 100)
 		err := q.SetWatching(ctx, store.SetWatchingParams{
@@ -82,14 +82,18 @@ func ScrobbleStop(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) (
 		if s.Progress < watchedProgress {
 			return pause(ctx, q, c, s, r)
 		}
+		// Taking the same lock as a start keeps a stop and a start sent together from both counting the play.
+		if _, err := q.Watching(ctx, c.ProfileID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return ScrobbleResult{}, err
+		}
 		recent, err := q.RecentWatchEvent(ctx, store.RecentWatchEventParams{
 			ProfileID: c.ProfileID,
 			TitleID:   r.title.ID,
 			EpisodeID: r.episodeID(),
-			WatchedAt: time.Now().Add(-duplicateWindow),
+			CreatedAt: time.Now().Add(-duplicateWindow),
 		})
 		if err == nil {
-			return ScrobbleResult{}, AlreadyScrobbled{WatchedAt: recent.WatchedAt, ExpiresAt: recent.WatchedAt.Add(duplicateWindow)}
+			return ScrobbleResult{}, AlreadyScrobbled{WatchedAt: recent.WatchedAt, ExpiresAt: recent.CreatedAt.Add(duplicateWindow)}
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return ScrobbleResult{}, err
@@ -126,7 +130,7 @@ func finishDropped(ctx context.Context, q *store.Queries, profileID int64, next 
 		ProfileID: profileID,
 		TitleID:   w.TitleID,
 		EpisodeID: w.EpisodeID,
-		WatchedAt: now.Add(-duplicateWindow),
+		CreatedAt: now.Add(-duplicateWindow),
 	})
 	if err == nil {
 		return nil
