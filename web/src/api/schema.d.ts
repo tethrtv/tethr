@@ -2122,11 +2122,13 @@ export interface components {
             plays: number;
             episodes: number;
             films: number;
-            /** @description Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise. Plays of titles with no known runtime add nothing. */
+            /** @description Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise. */
             minutes: number;
+            /** @description Plays with no known length, which add nothing to `minutes`. */
+            plays_without_length: number;
             /** @description Shows you played for the first time this year. */
             new_shows: number;
-            /** @description Plays of an episode or film you'd already seen. */
+            /** @description Shows and films you went back to, with a play of an episode or film you'd already seen. */
             rewatched: number;
             /** @description One entry per day from 1 January to `through`. */
             days: components["schemas"]["YearDay"][];
@@ -2171,7 +2173,7 @@ export interface components {
             /** Format: date */
             from?: string;
         };
-        /** @description The day with the most time spent, and what you played most that day. */
+        /** @description The day with the most plays, and what you played most that day. */
         BusiestDay: {
             /** Format: date */
             date: string;
