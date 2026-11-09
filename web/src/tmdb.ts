@@ -93,7 +93,11 @@ export function useTrending() {
   return useQuery({
     queryKey: ['meta', 'trending'],
     staleTime: 60 * 60 * 1000,
-    queryFn: async () => (await meta<{ results: Trend[] }>('/trending'))?.results ?? [],
+    queryFn: async () => {
+      const found = await meta<{ results: Trend[] }>('/trending')
+      if (!found) throw new Error('Trending isn’t available right now.')
+      return found.results
+    },
   })
 }
 
