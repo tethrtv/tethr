@@ -106,7 +106,7 @@ function Back() {
   if (!useCanGoBack()) {
     return (
       <Link to="/" className={`${lists.textButton} ${styles.back}`}>
-        Up next
+        Today
       </Link>
     )
   }

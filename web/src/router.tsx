@@ -22,6 +22,7 @@ import { MediaServers } from './pages/MediaServers'
 import { MyLists } from './pages/MyLists'
 import { SignIn } from './pages/SignIn'
 import { TitlePage } from './pages/Title'
+import { Today } from './pages/Today'
 import { UpNext } from './pages/UpNext'
 import { UserPage } from './pages/User'
 import { Verify } from './pages/Verify'
@@ -44,6 +45,12 @@ const root = createRootRoute({ component: Root })
 const upNext = () => (
   <Shell>
     <UpNext />
+  </Shell>
+)
+
+const today = () => (
+  <Shell>
+    <Today />
   </Shell>
 )
 
@@ -105,7 +112,7 @@ function WatchingUser({ username }: { username: string }) {
 }
 
 function Front() {
-  return useMe().data ? upNext() : <ComingSoon />
+  return useMe().data ? today() : <ComingSoon />
 }
 
 function OneYear() {
@@ -123,8 +130,9 @@ const routes = [
   createRoute({
     getParentRoute: () => root,
     path: '/',
-    component: import.meta.env.VITE_COMING_SOON === 'true' ? Front : upNext,
+    component: import.meta.env.VITE_COMING_SOON === 'true' ? Front : today,
   }),
+  createRoute({ getParentRoute: () => root, path: '/up-next', component: upNext }),
   createRoute({
     getParentRoute: () => root,
     path: '/history',

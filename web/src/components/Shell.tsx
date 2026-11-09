@@ -5,9 +5,11 @@ import { useSignedIn } from '../pages/connect'
 import { Mark } from './Mark'
 import { Search } from './Search'
 import styles from './Shell.module.css'
+import { Slip, SlipBody } from './Slip'
 
 const links = [
-  { to: '/', label: 'Up next' },
+  { to: '/', label: 'Today' },
+  { to: '/up-next', label: 'Up next' },
   { to: '/history', label: 'History' },
   { to: '/year', label: String(new Date().getFullYear()) },
   { to: '/lists', label: 'Lists' },
@@ -42,6 +44,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const me = useSignedIn()
   const path = section(useRouterState({ select: (s) => s.location.pathname }))
   const [chosen, setChosen] = useState(stored)
+  const [more, setMore] = useState(false)
 
   if (!me) return null
   const profile = me.profiles.find((p) => p.id === chosen) ?? me.profiles[0]
@@ -57,7 +60,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className={styles.shell}>
         <header className={styles.topbar}>
           <div className={styles.row}>
-            <Link to="/" className={styles.wordmark} aria-label="Tethr, up next">
+            <Link to="/" className={styles.wordmark} aria-label="Tethr, today">
               <Mark />
               tethr
             </Link>
@@ -110,12 +113,32 @@ export function Shell({ children }: { children: ReactNode }) {
         </footer>
 
         <nav className={styles.tabbar} aria-label="Main">
-          {links.map((l) => (
+          {links.slice(0, 3).map((l) => (
             <Link key={l.to} to={l.to} className={path === l.to ? `${styles.tab} ${styles.active}` : styles.tab}>
               {l.label}
             </Link>
           ))}
+          <button
+            type="button"
+            className={links.slice(3).some((l) => l.to === path) ? `${styles.tab} ${styles.active}` : styles.tab}
+            onClick={() => setMore(true)}
+          >
+            More
+          </button>
         </nav>
+        <Slip open={more} onClose={() => setMore(false)} title="More">
+          <SlipBody>
+            <ul className={styles.moreLinks}>
+              {links.slice(3).map((l) => (
+                <li key={l.to}>
+                  <Link to={l.to} onClick={() => setMore(false)}>
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </SlipBody>
+        </Slip>
       </div>
     </WatchingContext.Provider>
   )

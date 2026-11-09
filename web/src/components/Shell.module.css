@@ -146,12 +146,16 @@
     bottom: 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     background: var(--paper);
     border-top: 2px solid var(--ink);
     padding-bottom: env(safe-area-inset-bottom);
   }
   .tab {
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
     position: relative;
     display: grid;
     place-items: center;
@@ -176,4 +180,24 @@
     background: #d4fa3c;
     box-shadow: inset 0 0 0 1px #141412;
   }
+}
+
+.moreLinks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.moreLinks a {
+  display: block;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rule);
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.moreLinks li:last-child a {
+  border-bottom: 0;
 }
