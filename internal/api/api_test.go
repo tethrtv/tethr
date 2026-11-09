@@ -545,6 +545,19 @@ func TestUpNextEndpoints(t *testing.T) {
 		t.Errorf("upcoming = %+v", upcoming)
 	}
 
+	thisYear := strconv.Itoa(time.Now().Year())
+	var year Year
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/years/"+thisYear+"?tz=Europe/London", "", cookie).Body.Bytes(), &year)
+	if year.Plays != 1 || year.Episodes != 1 || len(year.Shows) != 1 || !year.Shows[0].New || len(year.Hours) != 24 || year.First == nil || year.Busiest == nil {
+		t.Errorf("year = %+v", year)
+	}
+	if rec := do(t, h, "GET", "/v1/years/"+thisYear+"?tz=Nowhere/Special", "", cookie); rec.Code != http.StatusBadRequest {
+		t.Errorf("made-up time zone = %d", rec.Code)
+	}
+	if rec := do(t, h, "GET", "/v1/years/3000", "", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("a year to come = %d", rec.Code)
+	}
+
 	var next []UpNextEntry
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/up-next", "", cookie).Body.Bytes(), &next)
 	if len(next) != 1 || next[0].Next.Number != 2 || next[0].Next.FirstAired == nil || next[0].Aired != 2 || next[0].Watched != 1 || *next[0].Show.Ids.Tmdb != 1396 {

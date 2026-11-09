@@ -545,6 +545,24 @@ func (e WatchPrecision) Valid() bool {
 	}
 }
 
+// Defines values for YearFilmPrecision.
+const (
+	YearFilmPrecisionDay  YearFilmPrecision = "day"
+	YearFilmPrecisionTime YearFilmPrecision = "time"
+)
+
+// Valid indicates whether the value is a known member of the YearFilmPrecision enum.
+func (e YearFilmPrecision) Valid() bool {
+	switch e {
+	case YearFilmPrecisionDay:
+		return true
+	case YearFilmPrecisionTime:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAutoListItemsParamsType.
 const (
 	ListAutoListItemsParamsTypeMovie ListAutoListItemsParamsType = "movie"
@@ -827,6 +845,15 @@ type AutoListItemsPage struct {
 
 // AutoListKind `stopped` is shows you started and haven't watched for 90 days, or took out of Up next. `favourites` is films and shows you rated 9 or 10. `rewatch` is ones you rated 8 or more and last watched over a year ago. `household` is anything someone in the household rated 9 or 10, never counting guests, and counting only kids profiles when a kids profile asks.
 type AutoListKind string
+
+// BusiestDay The day with the most time spent, and what you played most that day.
+type BusiestDay struct {
+	Date      openapi_types.Date `json:"date"`
+	Item      Item               `json:"item"`
+	ItemPlays int                `json:"item_plays"`
+	Minutes   int                `json:"minutes"`
+	Plays     int                `json:"plays"`
+}
 
 // Connection defines model for Connection.
 type Connection struct {
@@ -1728,6 +1755,85 @@ type WatchAction string
 // WatchPrecision How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
 type WatchPrecision string
 
+// Year defines model for Year.
+type Year struct {
+	// Busiest The day with the most time spent, and what you played most that day.
+	Busiest *BusiestDay `json:"busiest,omitempty"`
+
+	// Days One entry per day from 1 January to `through`.
+	Days     []YearDay `json:"days"`
+	Episodes int       `json:"episodes"`
+
+	// FilmPlays Every film you played, in the order you played them.
+	FilmPlays []YearFilm `json:"film_plays"`
+	Films     int        `json:"films"`
+	First     *Watch     `json:"first,omitempty"`
+
+	// Hours Plays that started in each hour of the day, from midnight.
+	Hours  []int  `json:"hours"`
+	Latest *Watch `json:"latest,omitempty"`
+
+	// Minutes Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise. Plays of titles with no known runtime add nothing.
+	Minutes int `json:"minutes"`
+
+	// NewShows Shows you played for the first time this year.
+	NewShows int `json:"new_shows"`
+	Plays    int `json:"plays"`
+
+	// Rewatched Plays of an episode or film you'd already seen.
+	Rewatched int `json:"rewatched"`
+
+	// Run The longest stretch of days in a row with at least one play.
+	Run YearRun `json:"run"`
+
+	// Shows Every show you played, most time spent first.
+	Shows []YearShow `json:"shows"`
+
+	// Through The last day counted. Today for the current year, otherwise 31 December.
+	Through openapi_types.Date `json:"through"`
+	Year    int                `json:"year"`
+
+	// Years Every year with a dated play, newest first.
+	Years []int `json:"years"`
+}
+
+// YearDay defines model for YearDay.
+type YearDay struct {
+	Minutes int `json:"minutes"`
+	Plays   int `json:"plays"`
+}
+
+// YearFilm defines model for YearFilm.
+type YearFilm struct {
+	// Again You'd played this film before.
+	Again bool  `json:"again"`
+	Film  Title `json:"film"`
+
+	// New The first time you played this film was this year.
+	New       bool              `json:"new"`
+	Precision YearFilmPrecision `json:"precision"`
+	WatchedAt time.Time         `json:"watched_at"`
+}
+
+// YearFilmPrecision defines model for YearFilm.Precision.
+type YearFilmPrecision string
+
+// YearRun The longest stretch of days in a row with at least one play.
+type YearRun struct {
+	Days int                 `json:"days"`
+	From *openapi_types.Date `json:"from,omitempty"`
+}
+
+// YearShow defines model for YearShow.
+type YearShow struct {
+	Episodes int `json:"episodes"`
+	Minutes  int `json:"minutes"`
+
+	// New The first time you played this show was this year.
+	New  bool  `json:"new"`
+	Show Title `json:"show"`
+}
+
 // DeviceCode defines model for DeviceCode.
 type DeviceCode = string
 
@@ -2154,6 +2260,15 @@ type RemoveFromWatchlistParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// GetYearParams defines parameters for GetYear.
+type GetYearParams struct {
+	// Tz An IANA time zone such as `Europe/London`. Left out, days run in UTC.
+	Tz *string `form:"tz,omitempty" json:"tz,omitempty"`
+
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = SignUp
 
@@ -2522,6 +2637,9 @@ type ServerInterface interface {
 	// RemoveFromWatchlist Take one entry off the watchlist
 	// (DELETE /v1/watchlist/{id})
 	RemoveFromWatchlist(w http.ResponseWriter, r *http.Request, id Id, params RemoveFromWatchlistParams)
+	// GetYear A year of watching, added up
+	// (GET /v1/years/{year})
+	GetYear(w http.ResponseWriter, r *http.Request, year int, params GetYearParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -5781,6 +5899,61 @@ func (siw *ServerInterfaceWrapper) RemoveFromWatchlist(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// GetYear operation middleware
+func (siw *ServerInterfaceWrapper) GetYear(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "year" -------------
+	var year int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "year", r.PathValue("year"), &year, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetYearParams
+
+	// ------------- Optional query parameter "tz" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tz", r.URL.Query(), &params.Tz, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tz"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tz", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetYear(w, r, year, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -5973,6 +6146,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.RemoveListFromUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.AddListToUpNext)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/upcoming", wrapper.GetUpcoming)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/years/{year}", wrapper.GetYear)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/titles/{id}", wrapper.GetTitle)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.UseAiredOrder)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.PickEpisodeOrder)
@@ -11027,6 +11201,71 @@ func (response RemoveFromWatchlist404JSONResponse) VisitRemoveFromWatchlistRespo
 	return err
 }
 
+type GetYearRequestObject struct {
+	Year   int `json:"year"`
+	Params GetYearParams
+}
+
+type GetYearResponseObject interface {
+	VisitGetYearResponse(w http.ResponseWriter) error
+}
+
+type GetYear200JSONResponse Year
+
+func (response GetYear200JSONResponse) VisitGetYearResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetYear400JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetYear400JSONResponse) VisitGetYearResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetYear401JSONResponse Problem
+
+func (response GetYear401JSONResponse) VisitGetYearResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetYear404JSONResponse Problem
+
+func (response GetYear404JSONResponse) VisitGetYearResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// CreateAccount Start a sign-up by emailing a sign-in link
@@ -11311,6 +11550,9 @@ type StrictServerInterface interface {
 	// RemoveFromWatchlist Take one entry off the watchlist
 	// (DELETE /v1/watchlist/{id})
 	RemoveFromWatchlist(ctx context.Context, request RemoveFromWatchlistRequestObject) (RemoveFromWatchlistResponseObject, error)
+	// GetYear A year of watching, added up
+	// (GET /v1/years/{year})
+	GetYear(ctx context.Context, request GetYearRequestObject) (GetYearResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -13976,6 +14218,33 @@ func (sh *strictHandler) RemoveFromWatchlist(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RemoveFromWatchlistResponseObject); ok {
 		if err := validResponse.VisitRemoveFromWatchlistResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetYear operation middleware
+func (sh *strictHandler) GetYear(w http.ResponseWriter, r *http.Request, year int, params GetYearParams) {
+	var request GetYearRequestObject
+
+	request.Year = year
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetYear(ctx, request.(GetYearRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetYear")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetYearResponseObject); ok {
+		if err := validResponse.VisitGetYearResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

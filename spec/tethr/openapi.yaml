@@ -1719,6 +1719,39 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/years/{year}:
+    get:
+      operationId: getYear
+      summary: A year of watching, added up
+      description: Everything you played in a calendar year, counted by day in the time zone you give. For the current year it runs up to today. Plays with no known date are left out, and plays known only to the day count towards that day but not towards any hour.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: tz
+          in: query
+          description: An IANA time zone such as `Europe/London`. Left out, days run in UTC.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: The year so far
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Year'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/titles/{id}:
     get:
       operationId: getTitle
@@ -3475,6 +3508,129 @@ components:
         watchlist:
           type: boolean
           description: The show is on your watchlist and you haven't started it.
+    Year:
+      type: object
+      required: [year, through, plays, episodes, films, minutes, new_shows, rewatched, days, hours, shows, film_plays, run, years]
+      properties:
+        year:
+          type: integer
+        through:
+          type: string
+          format: date
+          description: The last day counted. Today for the current year, otherwise 31 December.
+        plays:
+          type: integer
+        episodes:
+          type: integer
+        films:
+          type: integer
+        minutes:
+          type: integer
+          description: Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise. Plays of titles with no known runtime add nothing.
+        new_shows:
+          type: integer
+          description: Shows you played for the first time this year.
+        rewatched:
+          type: integer
+          description: Plays of an episode or film you'd already seen.
+        days:
+          type: array
+          description: One entry per day from 1 January to `through`.
+          items:
+            $ref: '#/components/schemas/YearDay'
+        hours:
+          type: array
+          description: Plays that started in each hour of the day, from midnight.
+          items:
+            type: integer
+        shows:
+          type: array
+          description: Every show you played, most time spent first.
+          items:
+            $ref: '#/components/schemas/YearShow'
+        film_plays:
+          type: array
+          description: Every film you played, in the order you played them.
+          items:
+            $ref: '#/components/schemas/YearFilm'
+        run:
+          $ref: '#/components/schemas/YearRun'
+        busiest:
+          $ref: '#/components/schemas/BusiestDay'
+        first:
+          $ref: '#/components/schemas/Watch'
+        latest:
+          $ref: '#/components/schemas/Watch'
+        years:
+          type: array
+          description: Every year with a dated play, newest first.
+          items:
+            type: integer
+    YearDay:
+      type: object
+      required: [plays, minutes]
+      properties:
+        plays:
+          type: integer
+        minutes:
+          type: integer
+    YearShow:
+      type: object
+      required: [show, episodes, minutes, new]
+      properties:
+        show:
+          $ref: '#/components/schemas/Title'
+        episodes:
+          type: integer
+        minutes:
+          type: integer
+        new:
+          type: boolean
+          description: The first time you played this show was this year.
+    YearFilm:
+      type: object
+      required: [film, watched_at, precision, new, again]
+      properties:
+        film:
+          $ref: '#/components/schemas/Title'
+        watched_at:
+          type: string
+          format: date-time
+        precision:
+          type: string
+          enum: [time, day]
+        new:
+          type: boolean
+          description: The first time you played this film was this year.
+        again:
+          type: boolean
+          description: You'd played this film before.
+    YearRun:
+      type: object
+      description: The longest stretch of days in a row with at least one play.
+      required: [days]
+      properties:
+        days:
+          type: integer
+        from:
+          type: string
+          format: date
+    BusiestDay:
+      type: object
+      description: The day with the most time spent, and what you played most that day.
+      required: [date, plays, minutes, item, item_plays]
+      properties:
+        date:
+          type: string
+          format: date
+        plays:
+          type: integer
+        minutes:
+          type: integer
+        item:
+          $ref: '#/components/schemas/Item'
+        item_plays:
+          type: integer
     UpNextListEntry:
       type: object
       required: [list, item_id, position, next]
