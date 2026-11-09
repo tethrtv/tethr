@@ -786,7 +786,7 @@ func (q *Queries) SetWatching(ctx context.Context, arg SetWatchingParams) error 
 const startRewatch = `-- name: StartRewatch :exec
 INSERT INTO hidden_items (profile_id, section, title_id, hidden_at)
 VALUES ($1, 'progress_watched_reset', $2, $3)
-ON CONFLICT (profile_id, section, title_id, season_number) DO UPDATE SET hidden_at = excluded.hidden_at
+ON CONFLICT (profile_id, section, title_id, season_number) DO UPDATE SET hidden_at = excluded.hidden_at, import_id = NULL
 `
 
 type StartRewatchParams struct {
