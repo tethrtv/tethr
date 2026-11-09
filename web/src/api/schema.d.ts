@@ -1862,6 +1862,8 @@ export interface components {
         };
         ListOwner: {
             username: string;
+            /** @description The list is made by Tethr itself. */
+            official: boolean;
             /** @description Left out when the owner's profile is private and you're outside their household. */
             name?: string;
         };
@@ -3898,7 +3900,7 @@ export interface operations {
             query?: {
                 /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
                 profile_id?: components["parameters"]["ProfileId"];
-                /** @description Most followed first, or newest first. Newest by default. */
+                /** @description Most followed first, or newest first. Newest by default. Lists made by Tethr come first either way. */
                 order?: "popular" | "newest";
                 /** @description Only lists whose name contains this, ignoring case. */
                 q?: string;

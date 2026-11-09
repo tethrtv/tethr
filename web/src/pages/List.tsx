@@ -15,7 +15,7 @@ import { ep, plural } from '../format'
 import { useDetails } from '../tmdb'
 import own from './List.module.css'
 import styles from './Lists.module.css'
-import { goesOutside, listParams, ownerName, privacyWords } from './MyLists'
+import { goesOutside, listParams, MadeByTethr, ownerName, privacyWords } from './MyLists'
 
 type List = components['schemas']['List']
 type Item = components['schemas']['ListItem']
@@ -308,6 +308,10 @@ function Head({
   const by =
     list.access === 'mine' ? null : list.access === 'household' ? (
       `${ownerName(list)}’s list. `
+    ) : list.owner.official ? (
+      <>
+        <MadeByTethr />.{' '}
+      </>
     ) : (
       <>
         A list by{' '}
