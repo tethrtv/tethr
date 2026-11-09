@@ -8825,6 +8825,20 @@ func (response ReportList401JSONResponse) VisitReportListResponse(w http.Respons
 	return err
 }
 
+type ReportList403JSONResponse Problem
+
+func (response ReportList403JSONResponse) VisitReportListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReportList404JSONResponse Problem
 
 func (response ReportList404JSONResponse) VisitReportListResponse(w http.ResponseWriter) error {
