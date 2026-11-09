@@ -19,8 +19,8 @@ func (s *Server) GetYear(ctx context.Context, req GetYearRequestObject) (GetYear
 	}
 	loc := time.UTC
 	if tz := req.Params.Tz; tz != nil && *tz != "" {
-		named, err := time.LoadLocation(*tz)
-		if err != nil || *tz == "Local" {
+		named, known := zone(*tz)
+		if !known {
 			return GetYear400JSONResponse{problem("invalid_time_zone", "Give a time zone by name, such as Europe/London.")}, nil
 		}
 		loc = named
@@ -75,4 +75,9 @@ func (s *Server) GetYear(ctx context.Context, req GetYearRequestObject) (GetYear
 		}
 	}
 	return out, nil
+}
+
+func zone(name string) (*time.Location, bool) {
+	loc, err := time.LoadLocation(name)
+	return loc, err == nil && name != "Local"
 }
