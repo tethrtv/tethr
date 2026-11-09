@@ -864,7 +864,7 @@ export interface paths {
         };
         /**
          * Browse public lists
-         * @description Public lists with at least one item, from anyone. Lists with a report waiting to be looked at are left out. Kids and guest profiles can't browse.
+         * @description Public lists with at least one item, from anyone. Lists with a report waiting to be looked at are left out. Kids and guest profiles can't browse. Fetch a list's items a page at a time from `/v1/lists/{id}/items`, and compare `updated_at` to skip lists that haven't changed.
          */
         get: operations["browseLists"];
         put?: never;
@@ -1857,7 +1857,10 @@ export interface components {
             url: string;
             /** Format: date-time */
             created_at: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Changes when the list's details change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on. Your watched progress, a title's name or year, and an episode's number can change without it.
+             */
             updated_at: string;
         };
         ListOwner: {

@@ -1136,10 +1136,12 @@ type List struct {
 	Privacy ListPrivacy `json:"privacy"`
 
 	// Slug Made from the name, and changes with it.
-	Slug      string      `json:"slug"`
-	SortBy    ListSortBy  `json:"sort_by"`
-	SortHow   ListSortHow `json:"sort_how"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	Slug    string      `json:"slug"`
+	SortBy  ListSortBy  `json:"sort_by"`
+	SortHow ListSortHow `json:"sort_how"`
+
+	// UpdatedAt Changes when the list's details change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on. Your watched progress, a title's name or year, and an episode's number can change without it.
+	UpdatedAt time.Time `json:"updated_at"`
 
 	// Url The list's page on the website, made from its owner's username and its slug.
 	Url string `json:"url"`
