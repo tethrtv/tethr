@@ -11,14 +11,19 @@ import (
 )
 
 const playYears = `-- name: PlayYears :many
-SELECT DISTINCT extract(year FROM watched_at AT TIME ZONE 'UTC')::int AS year
+SELECT DISTINCT extract(year FROM watched_at AT TIME ZONE CASE precision WHEN 'day' THEN 'UTC' ELSE $2::text END)::int AS year
 FROM watch_events
 WHERE profile_id = $1 AND precision <> 'none'
 ORDER BY year DESC
 `
 
-func (q *Queries) PlayYears(ctx context.Context, profileID int64) ([]int32, error) {
-	rows, err := q.db.Query(ctx, playYears, profileID)
+type PlayYearsParams struct {
+	ProfileID int64
+	Tz        string
+}
+
+func (q *Queries) PlayYears(ctx context.Context, arg PlayYearsParams) ([]int32, error) {
+	rows, err := q.db.Query(ctx, playYears, arg.ProfileID, arg.Tz)
 	if err != nil {
 		return nil, err
 	}

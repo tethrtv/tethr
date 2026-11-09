@@ -89,6 +89,28 @@ func TestYear(t *testing.T) {
 		t.Errorf("years = %v", y.Years)
 	}
 
+	if y.Unknown != 0 {
+		t.Errorf("plays without a length = %d", y.Unknown)
+	}
+
+	if _, err := db.Exec(ctx, `UPDATE titles SET runtime_minutes = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddHistory(ctx, db, caller, []Watch{{Ref: episode(1, 7), At: when("2025-12-31 12:00")}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE watch_events SET precision = 'day' WHERE watched_at = $1`, when("2025-12-31 12:00")); err != nil {
+		t.Fatal(err)
+	}
+	kiritimati, err := time.LoadLocation("Pacific/Kiritimati")
+	if err != nil {
+		t.Fatal(err)
+	}
+	far, err := Year(ctx, db, profile, 2025, kiritimati, when("2026-02-01 12:00"))
+	if err != nil || far.Days[364].Plays != 1 || far.Unknown != far.Plays-1 {
+		t.Errorf("the last day far east = %+v, %d unknown of %d, %v", far.Days[364], far.Unknown, far.Plays, err)
+	}
+
 	now, err := Year(ctx, db, profile, 2026, london, when("2026-02-01 12:00"))
 	if err != nil || len(now.Days) != 32 || now.Plays != 1 || now.NewShows != 0 {
 		t.Errorf("year so far = %d days, %d plays, %v", len(now.Days), now.Plays, err)

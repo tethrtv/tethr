@@ -13,7 +13,7 @@ WHERE w.profile_id = $1 AND w.precision <> 'none'
 ORDER BY w.watched_at, w.id;
 
 -- name: PlayYears :many
-SELECT DISTINCT extract(year FROM watched_at AT TIME ZONE 'UTC')::int AS year
+SELECT DISTINCT extract(year FROM watched_at AT TIME ZONE CASE precision WHEN 'day' THEN 'UTC' ELSE sqlc.arg(tz)::text END)::int AS year
 FROM watch_events
 WHERE profile_id = $1 AND precision <> 'none'
 ORDER BY year DESC;

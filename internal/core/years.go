@@ -51,6 +51,7 @@ type YearInReview struct {
 	Episodes  int
 	Films     int
 	Minutes   int
+	Unknown   int
 	NewShows  int
 	Rewatched int
 	Days      []YearDay
@@ -79,14 +80,15 @@ func Year(ctx context.Context, db *pgxpool.Pool, profileID int64, year int, loc 
 	y := YearInReview{Year: year, Through: through, Days: make([]YearDay, int(through.Sub(first).Hours()/24)+1)}
 
 	q := store.New(db)
-	years, err := q.PlayYears(ctx, profileID)
+	years, err := q.PlayYears(ctx, store.PlayYearsParams{ProfileID: profileID, Tz: loc.String()})
 	if err != nil {
 		return y, err
 	}
 	for _, n := range years {
 		y.Years = append(y.Years, int(n))
 	}
-	plays, err := q.YearPlays(ctx, store.YearPlaysParams{ProfileID: profileID, StartAt: start, EndAt: end})
+	// Plays known only by their date sit at noon UTC, which can fall outside the local year at its edges.
+	plays, err := q.YearPlays(ctx, store.YearPlaysParams{ProfileID: profileID, StartAt: start.AddDate(0, 0, -1), EndAt: end.AddDate(0, 0, 1)})
 	if err != nil {
 		return y, err
 	}
@@ -104,6 +106,7 @@ func Year(ctx context.Context, db *pgxpool.Pool, profileID int64, year int, loc 
 
 	shows := map[int64]*YearShow{}
 	perDay := map[int]map[int64]int{}
+	again := map[int64]bool{}
 	for _, p := range plays {
 		local := p.WatchedAt.In(loc)
 		date := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC)
@@ -124,6 +127,9 @@ func Year(ctx context.Context, db *pgxpool.Pool, profileID int64, year int, loc 
 			minutes = int(*title.RuntimeMinutes)
 		}
 		isNew := !p.FirstSeen.Before(start)
+		if minutes == 0 {
+			y.Unknown++
+		}
 
 		y.Plays++
 		y.Minutes += minutes
@@ -132,7 +138,8 @@ func Year(ctx context.Context, db *pgxpool.Pool, profileID int64, year int, loc 
 		if p.Precision == "time" {
 			y.Hours[local.Hour()]++
 		}
-		if p.Again {
+		if p.Again && !again[p.TitleID] {
+			again[p.TitleID] = true
 			y.Rewatched++
 		}
 		if perDay[day] == nil {
@@ -192,7 +199,7 @@ func Year(ctx context.Context, db *pgxpool.Pool, profileID int64, year int, loc 
 
 	busiest := -1
 	for i, d := range y.Days {
-		if d.Plays > 0 && (busiest < 0 || d.Minutes > y.Days[busiest].Minutes || d.Minutes == y.Days[busiest].Minutes && d.Plays > y.Days[busiest].Plays) {
+		if d.Plays > 0 && (busiest < 0 || d.Plays > y.Days[busiest].Plays || d.Plays == y.Days[busiest].Plays && d.Minutes > y.Days[busiest].Minutes) {
 			busiest = i
 		}
 	}
