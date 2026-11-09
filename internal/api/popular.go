@@ -17,6 +17,9 @@ func (s *Server) GetPopular(ctx context.Context, req GetPopularRequestObject) (G
 		return GetPopular401JSONResponse{notConnected}, err
 	}
 	titles, err := core.Popular(ctx, s.DB, c.ProfileID, time.Now())
+	if errors.Is(err, core.ErrOutsideHousehold) {
+		return GetPopular403JSONResponse(outsideHousehold), nil
+	}
 	if err != nil {
 		return nil, err
 	}

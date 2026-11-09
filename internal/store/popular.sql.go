@@ -14,16 +14,19 @@ const popularTitles = `-- name: PopularTitles :many
 SELECT w.title_id, count(DISTINCT p.household_id)::int AS households
 FROM watch_events w
 JOIN profiles p ON p.id = w.profile_id
+JOIN households h ON h.id = p.household_id
 WHERE w.watched_at >= $1 AND w.watched_at <= now() AND w.precision <> 'none'
   AND p.kind IN ('owner', 'person') AND p.in_popular
+  AND h.created_at <= $2
 GROUP BY w.title_id
-HAVING count(DISTINCT p.household_id) >= $2::int
+HAVING count(DISTINCT p.household_id) >= $3::int
 ORDER BY households DESC, w.title_id
-LIMIT $3
+LIMIT $4
 `
 
 type PopularTitlesParams struct {
 	Since     time.Time
+	Settled   time.Time
 	Floor     int32
 	MaxTitles int32
 }
@@ -34,7 +37,12 @@ type PopularTitlesRow struct {
 }
 
 func (q *Queries) PopularTitles(ctx context.Context, arg PopularTitlesParams) ([]PopularTitlesRow, error) {
-	rows, err := q.db.Query(ctx, popularTitles, arg.Since, arg.Floor, arg.MaxTitles)
+	rows, err := q.db.Query(ctx, popularTitles,
+		arg.Since,
+		arg.Settled,
+		arg.Floor,
+		arg.MaxTitles,
+	)
 	if err != nil {
 		return nil, err
 	}
