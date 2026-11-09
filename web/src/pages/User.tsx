@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import styles from './Lists.module.css'
 import { ListRow } from './MyLists'
+import { Station } from './Station'
 
 export function UserPage({ username, profileID }: { username: string; profileID?: number }) {
   const user = useQuery({
@@ -28,6 +29,7 @@ export function UserPage({ username, profileID }: { username: string; profileID?
   }
   if (!user.data) return null
   const u = user.data
+  if (u.username === 'tethr') return <Station user={u} />
 
   return (
     <div className={styles.page}>
