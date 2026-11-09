@@ -1196,8 +1196,11 @@ type ListItemsPage struct {
 // ListOwner defines model for ListOwner.
 type ListOwner struct {
 	// Name Left out when the owner's profile is private and you're outside their household.
-	Name     *string `json:"name,omitempty"`
-	Username string  `json:"username"`
+	Name *string `json:"name,omitempty"`
+
+	// Official The list is made by Tethr itself.
+	Official bool   `json:"official"`
+	Username string `json:"username"`
 }
 
 // ListPrivacy `household` lets every profile in the household read it. `public` lets anyone with the link.
@@ -1995,7 +1998,7 @@ type BrowseListsParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 
-	// Order Most followed first, or newest first. Newest by default.
+	// Order Most followed first, or newest first. Newest by default. Lists made by Tethr come first either way.
 	Order *BrowseListsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
 
 	// Q Only lists whose name contains this, ignoring case.

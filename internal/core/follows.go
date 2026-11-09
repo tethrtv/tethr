@@ -141,10 +141,11 @@ func BrowseLists(ctx context.Context, db *pgxpool.Pool, viewer int64, query Brow
 		search = &s
 	}
 	rows, err := q.BrowseLists(ctx, store.BrowseListsParams{
-		Search:  search,
-		Popular: query.Popular,
-		Lim:     int32(query.Page.Limit),
-		Off:     query.Page.offset(),
+		Search:   search,
+		Official: OfficialUsername,
+		Popular:  query.Popular,
+		Lim:      int32(query.Page.Limit),
+		Off:      query.Page.offset(),
 	})
 	if err != nil {
 		return nil, 0, err

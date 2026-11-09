@@ -38,20 +38,22 @@ func (q *Queries) AddListReport(ctx context.Context, arg AddListReportParams) (i
 const browseLists = `-- name: BrowseLists :many
 SELECT l.id, count(*) OVER ()::bigint AS total
 FROM lists l
+JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN (SELECT list_id, count(*) AS n FROM list_follows GROUP BY list_id) f ON f.list_id = l.id
 WHERE l.kind = 'custom' AND l.privacy = 'public'
   AND EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id)
   AND NOT EXISTS (SELECT 1 FROM list_reports r WHERE r.list_id = l.id AND r.resolved_at IS NULL)
   AND ($1::text IS NULL OR l.name ILIKE '%' || $1::text || '%')
-ORDER BY CASE WHEN $2::boolean THEN coalesce(f.n, 0) END DESC, l.created_at DESC, l.id DESC
-LIMIT $4 OFFSET $3
+ORDER BY o.username = $2::text DESC, CASE WHEN $3::boolean THEN coalesce(f.n, 0) END DESC, l.created_at DESC, l.id DESC
+LIMIT $5 OFFSET $4
 `
 
 type BrowseListsParams struct {
-	Search  *string
-	Popular bool
-	Off     int32
-	Lim     int32
+	Search   *string
+	Official string
+	Popular  bool
+	Off      int32
+	Lim      int32
 }
 
 type BrowseListsRow struct {
@@ -62,6 +64,7 @@ type BrowseListsRow struct {
 func (q *Queries) BrowseLists(ctx context.Context, arg BrowseListsParams) ([]BrowseListsRow, error) {
 	rows, err := q.db.Query(ctx, browseLists,
 		arg.Search,
+		arg.Official,
 		arg.Popular,
 		arg.Off,
 		arg.Lim,
