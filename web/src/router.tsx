@@ -26,6 +26,7 @@ import { UpNext } from './pages/UpNext'
 import { UserPage } from './pages/User'
 import { Verify } from './pages/Verify'
 import { Watchlist } from './pages/Watchlist'
+import { YearPage } from './pages/Year'
 import { useLostSignal } from './signal'
 
 function Root() {
@@ -107,6 +108,17 @@ function Front() {
   return useMe().data ? upNext() : <ComingSoon />
 }
 
+function OneYear() {
+  const { year = '' } = useParams({ strict: false })
+  const n = Number(year)
+  if (!Number.isInteger(n) || n <= 1900) return <NotFound />
+  return (
+    <Shell>
+      <YearPage key={n} year={n} />
+    </Shell>
+  )
+}
+
 const routes = [
   createRoute({
     getParentRoute: () => root,
@@ -122,6 +134,16 @@ const routes = [
       </Shell>
     ),
   }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/year',
+    component: () => (
+      <Shell>
+        <YearPage year={new Date().getFullYear()} />
+      </Shell>
+    ),
+  }),
+  createRoute({ getParentRoute: () => root, path: '/year/$year', component: OneYear }),
   createRoute({
     getParentRoute: () => root,
     path: '/watchlist',
