@@ -420,6 +420,12 @@ export function Privacy() {
           they’ve joined.
         </p>
         <p>
+          <strong>Everyone on Tethr, as a count.</strong> Popular on Tethr shows the films and shows the most households
+          played in the last week, with how many. A title only appears once at least 10 households have played it, and
+          it never says who. Kids’ and guest profiles aren’t counted, and you can leave any other profile out by editing
+          it on your account page.
+        </p>
+        <p>
           <strong>Reports.</strong> If you report a list, only we see that you did. The list’s owner is never told who
           reported it.
         </p>
@@ -433,8 +439,8 @@ export function Privacy() {
           do, it’s protected the way UK law requires.
         </p>
         <p>
-          <strong>TMDB.</strong> Posters load straight from TMDB’s image servers, so TMDB sees your IP address when your
-          browser fetches one. We never send TMDB anything about you.
+          <strong>TMDB.</strong> Posters and stills load straight from TMDB’s image servers, so TMDB sees your IP
+          address when your browser fetches one. We never send TMDB anything about you.
         </p>
         <p>Nobody else. We don’t sell your data or share it for advertising.</p>
       </Section>
