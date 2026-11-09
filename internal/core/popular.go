@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	popularDays  = 7
-	popularFloor = 10
-	popularMax   = 10
+	popularDays   = 7
+	popularSettle = 14
+	popularFloor  = 10
+	popularRound  = 5
+	popularMax    = 10
 )
 
 type PopularTitle struct {
@@ -19,10 +21,17 @@ type PopularTitle struct {
 	Households int
 }
 
-// Titles only show once enough households have played them that no one person's viewing can be picked out.
 func Popular(ctx context.Context, db *pgxpool.Pool, profileID int64, now time.Time) ([]PopularTitle, error) {
 	q := store.New(db)
-	rows, err := q.PopularTitles(ctx, store.PopularTitlesParams{Since: now.AddDate(0, 0, -popularDays), Floor: popularFloor, MaxTitles: popularMax})
+	if err := checkOutside(ctx, q, profileID); err != nil {
+		return nil, err
+	}
+	rows, err := q.PopularTitles(ctx, store.PopularTitlesParams{
+		Since:     now.AddDate(0, 0, -popularDays),
+		Settled:   now.AddDate(0, 0, -popularSettle),
+		Floor:     popularFloor,
+		MaxTitles: popularMax,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +45,8 @@ func Popular(ctx context.Context, db *pgxpool.Pool, profileID int64, now time.Ti
 	}
 	out := make([]PopularTitle, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, PopularTitle{Item: c.item(r.TitleID, nil, nil), Households: int(r.Households)})
+		n := int(r.Households)
+		out = append(out, PopularTitle{Item: c.item(r.TitleID, nil, nil), Households: n - n%popularRound})
 	}
 	return out, nil
 }

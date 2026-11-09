@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestPopular(t *testing.T) {
 		var accountID, profileID int64
 		err := db.QueryRow(ctx, `
 			WITH a AS (INSERT INTO accounts (email, name) VALUES ('h' || gen_random_uuid() || '@example.com', 'Viewer') RETURNING id),
-			h AS (INSERT INTO households (owner_account_id) SELECT id FROM a RETURNING id, owner_account_id)
+			h AS (INSERT INTO households (owner_account_id, created_at) SELECT id, now() - interval '30 days' FROM a RETURNING id, owner_account_id)
 			INSERT INTO profiles (household_id, account_id, username, name, kind)
 			SELECT h.id, h.owner_account_id, 'v' || replace(gen_random_uuid()::text, '-', ''), 'Viewer', 'owner' FROM h
 			RETURNING account_id, id`).Scan(&accountID, &profileID)
@@ -59,6 +60,11 @@ func TestPopular(t *testing.T) {
 	watch(kids.ID, episode(1, 1), now.Add(-time.Hour))
 	_, late := household()
 	watch(late, episode(1, 1), now.AddDate(0, 0, -8))
+	_, newcomer := household()
+	if _, err := db.Exec(ctx, `UPDATE households SET created_at = now() WHERE id = (SELECT household_id FROM profiles WHERE id = $1)`, newcomer); err != nil {
+		t.Fatal(err)
+	}
+	watch(newcomer, episode(1, 1), now.Add(-time.Hour))
 
 	got, err := Popular(ctx, db, first, now)
 	if err != nil {
@@ -68,11 +74,22 @@ func TestPopular(t *testing.T) {
 		t.Fatalf("popular = %+v", got)
 	}
 
+	if _, err := Popular(ctx, db, kids.ID, now); !errors.Is(err, ErrOutsideHousehold) {
+		t.Errorf("popular for a kids profile = %v", err)
+	}
 	out := false
 	if _, err := UpdateProfile(ctx, db, firstAccount, first, ProfileChanges{InPopular: &out}); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := Popular(ctx, db, first, now); err != nil || len(got) != 0 {
 		t.Errorf("popular after one household left = %+v, %v", got, err)
+	}
+
+	for range 5 {
+		_, extra := household()
+		watch(extra, inception(), now.Add(-time.Hour))
+	}
+	if got, err := Popular(ctx, db, first, now); err != nil || len(got) != 1 || got[0].Households != popularFloor {
+		t.Errorf("popular with 14 households = %+v, %v", got, err)
 	}
 }
