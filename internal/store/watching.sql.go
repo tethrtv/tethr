@@ -649,15 +649,15 @@ func (q *Queries) ProfileByID(ctx context.Context, id int64) (Profile, error) {
 const recentWatchEvent = `-- name: RecentWatchEvent :one
 SELECT id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id, precision FROM watch_events
 WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM $4
-  AND action = 'scrobble' AND watched_at > $3
-ORDER BY watched_at DESC
+  AND action = 'scrobble' AND created_at > $3
+ORDER BY created_at DESC
 LIMIT 1
 `
 
 type RecentWatchEventParams struct {
 	ProfileID int64
 	TitleID   int64
-	WatchedAt time.Time
+	CreatedAt time.Time
 	EpisodeID *int64
 }
 
@@ -665,7 +665,7 @@ func (q *Queries) RecentWatchEvent(ctx context.Context, arg RecentWatchEventPara
 	row := q.db.QueryRow(ctx, recentWatchEvent,
 		arg.ProfileID,
 		arg.TitleID,
-		arg.WatchedAt,
+		arg.CreatedAt,
 		arg.EpisodeID,
 	)
 	var i WatchEvent

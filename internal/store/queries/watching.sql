@@ -6,8 +6,8 @@ RETURNING *;
 -- name: RecentWatchEvent :one
 SELECT * FROM watch_events
 WHERE profile_id = $1 AND title_id = $2 AND episode_id IS NOT DISTINCT FROM sqlc.narg(episode_id)
-  AND action = 'scrobble' AND watched_at > $3
-ORDER BY watched_at DESC
+  AND action = 'scrobble' AND created_at > $3
+ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: History :many
