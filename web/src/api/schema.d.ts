@@ -3900,8 +3900,10 @@ export interface operations {
             query?: {
                 /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
                 profile_id?: components["parameters"]["ProfileId"];
-                /** @description Most followed first, or newest first. Newest by default. Lists made by Tethr come first either way. */
-                order?: "popular" | "newest";
+                /** @description Most followed first, most new followers in the last 7 days first (only lists with some), or newest first. Newest by default. Lists made by Tethr come first. */
+                order?: "popular" | "rising" | "newest";
+                /** @description True for only lists made by Tethr, false to leave them out. Left out, both are listed. */
+                official?: boolean;
                 /** @description Only lists whose name contains this, ignoring case. */
                 q?: string;
                 page?: number;
