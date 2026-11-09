@@ -19,27 +19,13 @@ export function Browse() {
   const [order, setOrder] = useState<(typeof orders)[number]['value']>('newest')
   const [search, setSearch] = useState('')
   const q = search.trim()
-  const lists = useInfiniteQuery({
-    queryKey: ['public-lists', profile.id, order, q],
-    enabled: goesOutside(profile.kind),
-    placeholderData: keepPreviousData,
-    initialPageParam: 1,
-    queryFn: async ({ pageParam }) => {
-      const { data, error } = await api.GET('/v1/public-lists', {
-        params: { query: { profile_id: profile.id, order, official: false, q: q || undefined, page: pageParam } },
-      })
-      if (error) throw error
-      return data
-    },
-    getNextPageParam: (last) => (last.page * last.limit < last.total ? last.page + 1 : undefined),
-  })
   const shelf = (key: string, query: { official?: boolean; order?: 'rising' }) =>
     ({
       queryKey: ['public-lists', profile.id, key],
       enabled: goesOutside(profile.kind),
       queryFn: async () => {
         const { data, error } = await api.GET('/v1/public-lists', {
-          params: { query: { profile_id: profile.id, limit: 8, ...query } },
+          params: { query: { profile_id: profile.id, limit: 20, ...query } },
         })
         if (error) throw error
         return data.lists
@@ -47,6 +33,29 @@ export function Browse() {
     }) as const
   const official = useQuery(shelf('official', { official: true }))
   const rising = useQuery(shelf('rising', { official: false, order: 'rising' }))
+  const shelves = !q && official.isSuccess
+  const lists = useInfiniteQuery({
+    queryKey: ['public-lists', profile.id, order, q, shelves],
+    enabled: goesOutside(profile.kind) && !official.isPending,
+    placeholderData: keepPreviousData,
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
+      const { data, error } = await api.GET('/v1/public-lists', {
+        params: {
+          query: {
+            profile_id: profile.id,
+            order,
+            official: shelves ? false : undefined,
+            q: q || undefined,
+            page: pageParam,
+          },
+        },
+      })
+      if (error) throw error
+      return data
+    },
+    getNextPageParam: (last) => (last.page * last.limit < last.total ? last.page + 1 : undefined),
+  })
   const found = lists.data?.pages.flatMap((p) => p.lists) ?? []
   const total = lists.data?.pages[0]?.total
 
@@ -70,7 +79,7 @@ export function Browse() {
         </p>
       </header>
 
-      {!!official.data?.length && (
+      {shelves && !!official.data?.length && (
         <section>
           <h2 className={styles.sectionTitle}>Made by Tethr</h2>
           <p className={styles.quiet}>Lists Tethr makes and keeps up to date.</p>
@@ -78,7 +87,7 @@ export function Browse() {
         </section>
       )}
 
-      {!!rising.data?.length && (
+      {!q && !!rising.data?.length && (
         <section>
           <h2 className={styles.sectionTitle}>Rising this week</h2>
           <p className={styles.quiet}>Lists picking up the most new followers in the last seven days.</p>
