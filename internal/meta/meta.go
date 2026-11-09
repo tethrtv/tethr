@@ -279,6 +279,7 @@ func (s *Server) found(w http.ResponseWriter, r *http.Request, err error) bool {
 	case errors.Is(err, tmdb.ErrNotFound):
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		http.NotFound(w, r)
+	case errors.Is(err, context.Canceled) && r.Context().Err() != nil:
 	case err != nil:
 		s.Log.Error("tmdb lookup failed", "path", r.URL.Path, "err", err)
 		w.Header().Set("Cache-Control", "no-store")
