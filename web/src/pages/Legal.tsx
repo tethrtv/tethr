@@ -241,7 +241,7 @@ export function DeveloperTerms() {
       <Section title="What you can’t do">
         <ul className={styles.list}>
           <li>sell or license data from Tethr</li>
-          <li>build or add to another database of films, shows or viewing from it</li>
+          <li>build a catalogue or dataset from Tethr to offer to others</li>
           <li>scrape the site, or get round rate limits</li>
           <li>train AI models on data from Tethr</li>
           <li>send data from Tethr to an AI service, except to show a person their own things in your app</li>
@@ -262,9 +262,9 @@ export function DeveloperTerms() {
           suspend your app’s access.
         </p>
         <p>
-          For anything serious, such as scraping, selling data from Tethr, building another database from it, putting
-          people’s privacy at risk or straining the service, we can suspend access straight away. Either way, we can ask
-          you to delete data from Tethr that you hold, and you must.
+          For anything serious, such as scraping, selling data from Tethr, building a catalogue or dataset from it to
+          offer to others, putting people’s privacy at risk or straining the service, we can suspend access straight
+          away. Either way, we can ask you to delete data from Tethr that you hold, and you must.
         </p>
         <p>
           The API comes as it is, with no promise that it will always be there or never make a mistake. As far as the

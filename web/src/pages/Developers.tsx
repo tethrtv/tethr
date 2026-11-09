@@ -133,8 +133,8 @@ function Register({ onRegistered }: { onRegistered: (name: string, secret: strin
     <section>
       <h2 className={home.sectionTitle}>Register an app</h2>
       <p className={home.note}>
-        Registering or using an app means agreeing to the <Link to="/developer-terms">developer terms</Link>. The API is
-        free for any app, paid or not, with a few rules about people’s data.
+        Registering an app or using the API means agreeing to the <Link to="/developer-terms">developer terms</Link>.
+        The API is free for any app, paid or not, with a few rules about how it’s used.
       </p>
       <form className={styles.form} onSubmit={submit}>
         <Field label="Name people will see" value={name} onChange={setName} placeholder="My Player" />
