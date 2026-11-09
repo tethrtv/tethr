@@ -90,6 +90,13 @@ func TestUpcoming(t *testing.T) {
 		t.Errorf("air date = %v", got[0].Episode.FirstAired)
 	}
 
+	if _, err := Hide(ctx, db, profile, "progress_watched", []Ref{{Kind: "season", Show: IDs{TMDB: 1399}, Season: ptr(int32(2))}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := Upcoming(ctx, db, profile); len(got) != 2 || got[1].Show.Title.ID == caughtUp {
+		t.Errorf("upcoming with a hidden season = %+v", got)
+	}
+
 	due, err := DueOutlines(ctx, db, 10)
 	if err != nil {
 		t.Fatal(err)
