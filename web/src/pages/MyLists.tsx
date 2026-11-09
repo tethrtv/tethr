@@ -6,6 +6,7 @@ import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
 import { ListCover, TethrCover } from '../components/ListCover'
+import { Mark } from '../components/Mark'
 import { useWatching } from '../components/Shell'
 import { ago, plural } from '../format'
 import own from './List.module.css'
@@ -171,6 +172,15 @@ export function MyLists() {
   )
 }
 
+export function MadeByTethr() {
+  return (
+    <Link to="/@{$username}" params={{ username: 'tethr' }} className={own.made}>
+      <Mark />
+      Made by Tethr
+    </Link>
+  )
+}
+
 export function ListRow({ list: l }: { list: List }) {
   return (
     <li className={own.list}>
@@ -190,10 +200,16 @@ export function ListRow({ list: l }: { list: List }) {
             `From ${ownerName(l)}`
           ) : (
             <>
-              From{' '}
-              <Link to="/@{$username}" params={{ username: l.owner.username }} className={styles.titleLink}>
-                {ownerName(l)}
-              </Link>
+              {l.owner.official ? (
+                <MadeByTethr />
+              ) : (
+                <>
+                  From{' '}
+                  <Link to="/@{$username}" params={{ username: l.owner.username }} className={styles.titleLink}>
+                    {ownerName(l)}
+                  </Link>
+                </>
+              )}
               {l.follower_count > 0 && `, ${plural(l.follower_count, 'follower')}`}
             </>
           )}
