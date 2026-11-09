@@ -311,9 +311,6 @@
 }
 
 .made {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   font-weight: 700;
   color: var(--ink);
   text-decoration: none;
@@ -322,10 +319,4 @@
 .made:hover {
   text-decoration: underline;
   text-underline-offset: 0.18em;
-}
-
-.made svg {
-  width: 1.1em;
-  height: 1.1em;
-  flex: none;
 }

@@ -8,7 +8,7 @@ import buttons from '../components/Button.module.css'
 import { Field } from '../components/Field'
 import { ListCover, TethrCover } from '../components/ListCover'
 import { ListTiles } from '../components/ListTiles'
-import { Mark } from '../components/Mark'
+import { Made } from '../components/Mark'
 import { useWatching } from '../components/Shell'
 import { ago, plural } from '../format'
 import own from './List.module.css'
@@ -200,8 +200,7 @@ function FindLists({ profileID }: { profileID: number }) {
 export function MadeByTethr() {
   return (
     <Link to="/@{$username}" params={{ username: 'tethr' }} className={own.made}>
-      <Mark />
-      Made by Tethr
+      <Made />
     </Link>
   )
 }
