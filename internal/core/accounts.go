@@ -73,6 +73,36 @@ func (in SignUp) clean() (SignUp, error) {
 	return in, ValidUsername(in.Username)
 }
 
+// The username is reserved, so only this command can claim it and nobody can pass themselves off as Tethr.
+const OfficialUsername = "tethr"
+
+var ErrOfficialExists = errors.New("tethr's own account already exists")
+
+func CreateOfficialAccount(ctx context.Context, db *pgxpool.Pool, email string) (store.Account, error) {
+	in := SignUp{Email: strings.TrimSpace(email), Name: "Tethr", Username: OfficialUsername}
+	if !validEmail(in.Email) {
+		return store.Account{}, ErrInvalidEmail
+	}
+	var account store.Account
+	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		created, owner, err := createAccount(ctx, q, in)
+		if err != nil {
+			return err
+		}
+		account = created
+		public := false
+		_, err = q.UpdateProfile(ctx, store.UpdateProfileParams{ID: owner.ID, Private: &public})
+		return err
+	})
+	if err := taken(err); errors.Is(err, ErrUsernameTaken) {
+		return store.Account{}, ErrOfficialExists
+	} else if err != nil {
+		return store.Account{}, err
+	}
+	return account, nil
+}
+
 func validEmail(s string) bool {
 	at := strings.Index(s, "@")
 	return at > 0 && at < len(s)-1 && !strings.ContainsAny(s, " \t\n")

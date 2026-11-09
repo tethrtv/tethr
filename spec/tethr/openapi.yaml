@@ -1428,7 +1428,7 @@ paths:
         - $ref: '#/components/parameters/ProfileId'
         - name: order
           in: query
-          description: Most followed first, or newest first. Newest by default.
+          description: Most followed first, or newest first. Newest by default. Lists made by Tethr come first either way.
           schema:
             type: string
             enum: [popular, newest]
@@ -3077,10 +3077,13 @@ components:
           format: date-time
     ListOwner:
       type: object
-      required: [username]
+      required: [username, official]
       properties:
         username:
           type: string
+        official:
+          type: boolean
+          description: The list is made by Tethr itself.
         name:
           type: string
           description: Left out when the owner's profile is private and you're outside their household.
