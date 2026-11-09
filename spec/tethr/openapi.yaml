@@ -3545,7 +3545,7 @@ components:
             type: integer
         shows:
           type: array
-          description: Every show you played, most time spent first.
+          description: Every show you played, most episodes first.
           items:
             $ref: '#/components/schemas/YearShow'
         film_plays:

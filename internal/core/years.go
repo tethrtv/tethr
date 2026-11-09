@@ -172,7 +172,7 @@ func Year(ctx context.Context, db *pgxpool.Pool, profileID int64, year int, loc 
 		y.Shows = append(y.Shows, *s)
 	}
 	slices.SortFunc(y.Shows, func(a, b YearShow) int {
-		return cmp.Or(cmp.Compare(b.Minutes, a.Minutes), cmp.Compare(b.Episodes, a.Episodes), cmp.Compare(a.Show.Title.ID, b.Show.Title.ID))
+		return cmp.Or(cmp.Compare(b.Episodes, a.Episodes), cmp.Compare(b.Minutes, a.Minutes), cmp.Compare(a.Show.Title.ID, b.Show.Title.ID))
 	})
 
 	run := YearRun{}
