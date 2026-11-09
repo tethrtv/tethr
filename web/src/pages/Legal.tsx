@@ -6,7 +6,8 @@ import trouble from '../components/Trouble.module.css'
 import home from './Home.module.css'
 import styles from './Legal.module.css'
 
-const updated = '7 November 2026'
+const termsChanged = '9 November 2026'
+const privacyChanged = '7 November 2026'
 const contact = (
   <a href="mailto:legal@tethr.tv" className={home.inline}>
     legal@tethr.tv
@@ -21,12 +22,14 @@ const reports = (
 function Page({
   title,
   lead,
+  updated,
   drawing,
   other,
   children,
 }: {
   title: string
   lead: ReactNode
+  updated: string
   drawing: ReactNode
   other: ReactNode
   children: ReactNode
@@ -66,6 +69,7 @@ export function Terms() {
   return (
     <Page
       title="Terms of use"
+      updated={termsChanged}
       lead="The deal for using Tethr, in plain words. It’s free, your history is yours, and there are a few things you can’t do."
       drawing={<SmallPrint />}
       other={
@@ -108,6 +112,10 @@ export function Terms() {
           disconnect any of them from your account page, which stops them logging and never touches your history. Apps
           are made by other people, and once an app has your data, what it does with it is up to that app’s own terms.
         </p>
+        <p>
+          Building an app of your own? It needs registering, and our <Link to="/developer-terms">developer terms</Link>{' '}
+          apply to it.
+        </p>
       </Section>
 
       <Section title="What you can’t do">
@@ -125,8 +133,8 @@ export function Terms() {
           <li>advertise, spam, or link to scams</li>
         </ul>
         <p>
-          And don’t try to get into accounts that aren’t yours, get round rate limits, overload the service, or copy out
-          other people’s data in bulk.
+          And don’t try to get into accounts that aren’t yours, get round rate limits, overload the service, scrape the
+          site, or copy out other people’s data in bulk.
         </p>
       </Section>
 
@@ -173,13 +181,111 @@ export function Terms() {
           these terms, as described above.
         </p>
         <p>
-          If these terms change in a way that matters, we’ll email you before the change takes effect. The date at the
-          top shows when they last changed.
+          If these terms change in a way that matters, we’ll email you at least 30 days before the change takes effect.
+          Small fixes, like typos or clearer wording, apply straight away. A change the law requires, or one that’s
+          urgent for security, can apply sooner, and we’ll say why. The date at the top shows when they last changed.
         </p>
         <p>
           English law applies to these terms, and the courts of England and Wales can hear any dispute. If you live in
           Scotland or Northern Ireland, you can use your own courts too.
         </p>
+      </Section>
+    </Page>
+  )
+}
+
+export function DeveloperTerms() {
+  return (
+    <Page
+      title="Developer terms"
+      updated={termsChanged}
+      lead="The deal for building an app on Tethr. It’s free for any app, paid or not, as long as you treat people’s data, and Tethr’s, fairly."
+      drawing={<SmallPrint />}
+      other={
+        <Link to="/developers" className={home.inline}>
+          Developers
+        </Link>
+      }
+    >
+      <Section title="About these terms">
+        <p>
+          These terms are an agreement between Ellisn Ltd and you, the person or company behind an app that uses Tethr’s
+          API. They apply when you register an app or use the API. The people using your app agree to our{' '}
+          <Link to="/terms">terms of use</Link> too. If you run your own copy of Tethr’s open-source code, these terms
+          don’t apply to it. You can reach us at {contact}.
+        </p>
+      </Section>
+
+      <Section title="Using the API">
+        <p>
+          The API is free for any app, whether you charge for it or not. Register each app on the{' '}
+          <Link to="/developers">Developers page</Link>.
+        </p>
+        <p>
+          We set the rate limits and can change them. We can start a new app on lower limits until we’ve had a look at
+          it. If you need more, ask us, and tell us what the app does and who’s behind it.
+        </p>
+      </Section>
+
+      <Section title="People’s data">
+        <p>
+          Someone connecting your app lets it read and add to their watch data. Use it only to run your app for that
+          person, and keep it only as long as your app needs it to show them their own things. Delete it when they ask,
+          or when you no longer need it. Don’t sell it, share it, or use it to build a picture of anyone.
+        </p>
+      </Section>
+
+      <Section title="Tethr’s own figures">
+        <p>
+          Tethr may offer figures worked out across everyone, without names, such as what’s popular. When you show them,
+          say they come from Tethr, and keep them separate: don’t blend them into a score of your own or anyone else’s.
+          Fetch them fresh, and don’t keep a copy for more than 24 hours.
+        </p>
+      </Section>
+
+      <Section title="What you can’t do">
+        <ul className={styles.list}>
+          <li>sell, license or pass on data from Tethr</li>
+          <li>build or add to another database of films, shows or viewing from it</li>
+          <li>scrape the site, or get round rate limits</li>
+          <li>
+            train AI models on data from Tethr, or send it to an AI service, except to show a person their own things in
+            your app
+          </li>
+          <li>suggest Tethr made, endorses or checked your app</li>
+        </ul>
+      </Section>
+
+      <Section title="Credit">
+        <p>
+          Say your app uses Tethr somewhere people can find it, such as its settings or about screen, with a link to
+          tethr.tv. Wherever you show Tethr’s own figures, say they’re from Tethr.
+        </p>
+      </Section>
+
+      <Section title="If something goes wrong">
+        <p>
+          For most problems, we’ll email you and give you 14 days to put it right. If it isn’t fixed by then, we can
+          suspend your app’s access.
+        </p>
+        <p>
+          For anything serious, such as scraping, selling data from Tethr, building another database from it, putting
+          people’s privacy at risk or straining the service, we can suspend access straight away. Either way, we can ask
+          you to delete data from Tethr that you hold, and you must.
+        </p>
+        <p>
+          The API comes as it is, with no promise that it will always be there or never make a mistake. As far as the
+          law allows, we aren’t liable for losses that come from using it.
+        </p>
+      </Section>
+
+      <Section title="Changes">
+        <p>
+          If these terms change in a way that affects you, we’ll email the address on your account at least 30 days
+          before. Small fixes, like typos or clearer wording, apply straight away. A change the law requires, or one
+          that’s urgent for security, can apply sooner, and we’ll say why.
+        </p>
+        <p>English law applies to these terms, and the courts of England and Wales can hear any dispute.</p>
       </Section>
     </Page>
   )
@@ -248,6 +354,7 @@ export function Privacy() {
   return (
     <Page
       title="Privacy"
+      updated={privacyChanged}
       lead={
         <>
           What Tethr keeps about you, why, and for how long. The short version: your history is{' '}

@@ -132,6 +132,10 @@ function Register({ onRegistered }: { onRegistered: (name: string, secret: strin
   return (
     <section>
       <h2 className={home.sectionTitle}>Register an app</h2>
+      <p className={home.note}>
+        Apps on Tethr follow the <Link to="/developer-terms">developer terms</Link>: free for any app, paid or not, with
+        a few rules about people’s data and Tethr’s.
+      </p>
       <form className={styles.form} onSubmit={submit}>
         <Field label="Name people will see" value={name} onChange={setName} placeholder="My Player" />
         <label className={styles.check}>
