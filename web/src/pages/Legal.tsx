@@ -8,6 +8,7 @@ import styles from './Legal.module.css'
 
 const termsChanged = '9 November 2026'
 const privacyChanged = '7 November 2026'
+const developerChanged = '9 November 2026'
 const contact = (
   <a href="mailto:legal@tethr.tv" className={home.inline}>
     legal@tethr.tv
@@ -110,7 +111,8 @@ export function Terms() {
         <p>
           A player or media server you connect can read and add to the watch data of the profile you picked. You can
           disconnect any of them from your account page, which stops them logging and never touches your history. Apps
-          are made by other people, and once an app has your data, what it does with it is up to that app’s own terms.
+          are made by other people. Our developer terms set rules for what they can do with your data, and each app has
+          its own terms as well.
         </p>
         <p>
           Building an app of your own? It needs registering, and our <Link to="/developer-terms">developer terms</Link>{' '}
@@ -198,7 +200,7 @@ export function DeveloperTerms() {
   return (
     <Page
       title="Developer terms"
-      updated={termsChanged}
+      updated={developerChanged}
       lead="The deal for building an app on Tethr. It’s free for any app, paid or not, as long as you treat people’s data, and Tethr’s, fairly."
       drawing={<SmallPrint />}
       other={
@@ -210,9 +212,9 @@ export function DeveloperTerms() {
       <Section title="About these terms">
         <p>
           These terms are an agreement between Ellisn Ltd and you, the person or company behind an app that uses Tethr’s
-          API. They apply when you register an app or use the API. The people using your app agree to our{' '}
-          <Link to="/terms">terms of use</Link> too. If you run your own copy of Tethr’s open-source code, these terms
-          don’t apply to it. You can reach us at {contact}.
+          API. They apply when you register an app or use the API. People who connect your app to Tethr have agreed to
+          our <Link to="/terms">terms of use</Link> too. If you run your own copy of Tethr’s open-source code, these
+          terms don’t apply to it. You can reach us at {contact}.
         </p>
       </Section>
 
@@ -231,27 +233,18 @@ export function DeveloperTerms() {
         <p>
           Someone connecting your app lets it read and add to their watch data. Use it only to run your app for that
           person, and keep it only as long as your app needs it to show them their own things. Delete it when they ask,
-          or when you no longer need it. Don’t sell it, share it, or use it to build a picture of anyone.
-        </p>
-      </Section>
-
-      <Section title="Tethr’s own figures">
-        <p>
-          Tethr may offer figures worked out across everyone, without names, such as what’s popular. When you show them,
-          say they come from Tethr, and keep them separate: don’t blend them into a score of your own or anyone else’s.
-          Fetch them fresh, and don’t keep a copy for more than 24 hours.
+          or when you no longer need it. Don’t sell it, share it with anyone they haven’t asked you to, or use it to
+          build a picture of anyone.
         </p>
       </Section>
 
       <Section title="What you can’t do">
         <ul className={styles.list}>
-          <li>sell, license or pass on data from Tethr</li>
+          <li>sell or license data from Tethr</li>
           <li>build or add to another database of films, shows or viewing from it</li>
           <li>scrape the site, or get round rate limits</li>
-          <li>
-            train AI models on data from Tethr, or send it to an AI service, except to show a person their own things in
-            your app
-          </li>
+          <li>train AI models on data from Tethr</li>
+          <li>send data from Tethr to an AI service, except to show a person their own things in your app</li>
           <li>suggest Tethr made, endorses or checked your app</li>
         </ul>
       </Section>
@@ -259,7 +252,7 @@ export function DeveloperTerms() {
       <Section title="Credit">
         <p>
           Say your app uses Tethr somewhere people can find it, such as its settings or about screen, with a link to
-          tethr.tv. Wherever you show Tethr’s own figures, say they’re from Tethr.
+          tethr.tv.
         </p>
       </Section>
 
@@ -275,7 +268,8 @@ export function DeveloperTerms() {
         </p>
         <p>
           The API comes as it is, with no promise that it will always be there or never make a mistake. As far as the
-          law allows, we aren’t liable for losses that come from using it.
+          law allows, we aren’t liable for losses that come from using it. Nothing here limits liability the law doesn’t
+          let us limit, such as for fraud.
         </p>
       </Section>
 
@@ -283,7 +277,8 @@ export function DeveloperTerms() {
         <p>
           If these terms change in a way that affects you, we’ll email the address on your account at least 30 days
           before. Small fixes, like typos or clearer wording, apply straight away. A change the law requires, or one
-          that’s urgent for security, can apply sooner, and we’ll say why.
+          that’s urgent for security, can apply sooner, and we’ll say why. The date at the top shows when they last
+          changed.
         </p>
         <p>English law applies to these terms, and the courts of England and Wales can hear any dispute.</p>
       </Section>
