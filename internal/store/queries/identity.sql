@@ -30,6 +30,7 @@ UPDATE profiles
 SET name = coalesce(sqlc.narg(name), name),
     username = coalesce(sqlc.narg(username), username),
     private = coalesce(sqlc.narg(private), private),
+    in_popular = coalesce(sqlc.narg(in_popular), in_popular),
     updated_at = now()
 WHERE id = sqlc.arg(id)
 RETURNING *;

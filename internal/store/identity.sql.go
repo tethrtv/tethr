@@ -51,7 +51,7 @@ func (q *Queries) CreateHousehold(ctx context.Context, ownerAccountID int64) (Ho
 const createProfile = `-- name: CreateProfile :one
 INSERT INTO profiles (household_id, account_id, username, name, kind, position)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at
+RETURNING id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at, in_popular
 `
 
 type CreateProfileParams struct {
@@ -87,6 +87,7 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InPopular,
 	)
 	return i, err
 }
@@ -121,7 +122,7 @@ func (q *Queries) HouseholdOfAccount(ctx context.Context, ownerAccountID int64) 
 }
 
 const householdProfile = `-- name: HouseholdProfile :one
-SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at
+SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at, p.in_popular
 FROM profiles p
 JOIN households h ON h.id = p.household_id
 WHERE p.id = $1 AND h.owner_account_id = $2
@@ -149,6 +150,7 @@ func (q *Queries) HouseholdProfile(ctx context.Context, arg HouseholdProfilePara
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InPopular,
 	)
 	return i, err
 }
@@ -165,7 +167,7 @@ func (q *Queries) NextProfilePosition(ctx context.Context, householdID int64) (i
 }
 
 const ownerProfile = `-- name: OwnerProfile :one
-SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at
+SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at, p.in_popular
 FROM profiles p
 JOIN households h ON h.id = p.household_id
 WHERE h.owner_account_id = $1 AND p.kind = 'owner'
@@ -188,6 +190,7 @@ func (q *Queries) OwnerProfile(ctx context.Context, ownerAccountID int64) (Profi
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InPopular,
 	)
 	return i, err
 }
@@ -197,16 +200,18 @@ UPDATE profiles
 SET name = coalesce($1, name),
     username = coalesce($2, username),
     private = coalesce($3, private),
+    in_popular = coalesce($4, in_popular),
     updated_at = now()
-WHERE id = $4
-RETURNING id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at
+WHERE id = $5
+RETURNING id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at, in_popular
 `
 
 type UpdateProfileParams struct {
-	Name     *string
-	Username *string
-	Private  *bool
-	ID       int64
+	Name      *string
+	Username  *string
+	Private   *bool
+	InPopular *bool
+	ID        int64
 }
 
 func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (Profile, error) {
@@ -214,6 +219,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (P
 		arg.Name,
 		arg.Username,
 		arg.Private,
+		arg.InPopular,
 		arg.ID,
 	)
 	var i Profile
@@ -231,6 +237,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (P
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InPopular,
 	)
 	return i, err
 }
