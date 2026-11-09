@@ -316,6 +316,7 @@ type Profile struct {
 	Position    int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	InPopular   bool
 }
 
 type ProfileShowSetting struct {

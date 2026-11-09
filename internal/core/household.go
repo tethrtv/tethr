@@ -25,9 +25,10 @@ type NewProfile struct {
 }
 
 type ProfileChanges struct {
-	Name     *string
-	Username *string
-	Private  *bool
+	Name      *string
+	Username  *string
+	Private   *bool
+	InPopular *bool
 }
 
 func AddProfile(ctx context.Context, db *pgxpool.Pool, accountID int64, in NewProfile) (store.Profile, error) {
@@ -113,7 +114,7 @@ func UpdateProfile(ctx context.Context, db *pgxpool.Pool, accountID, profileID i
 		if err != nil {
 			return notFound(err)
 		}
-		profile, err = q.UpdateProfile(ctx, store.UpdateProfileParams{ID: profileID, Name: c.Name, Username: c.Username, Private: c.Private})
+		profile, err = q.UpdateProfile(ctx, store.UpdateProfileParams{ID: profileID, Name: c.Name, Username: c.Username, Private: c.Private, InPopular: c.InPopular})
 		if err != nil || profile.Username == was.Username {
 			return err
 		}
