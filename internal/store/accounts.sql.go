@@ -255,7 +255,7 @@ func (q *Queries) EmailLinkByToken(ctx context.Context, tokenHash []byte) (Email
 }
 
 const householdProfiles = `-- name: HouseholdProfiles :many
-SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at
+SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at, p.in_popular
 FROM profiles p
 JOIN households h ON h.id = p.household_id
 WHERE h.owner_account_id = $1
@@ -285,6 +285,7 @@ func (q *Queries) HouseholdProfiles(ctx context.Context, ownerAccountID int64) (
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.InPopular,
 		); err != nil {
 			return nil, err
 		}

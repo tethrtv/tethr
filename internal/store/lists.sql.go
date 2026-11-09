@@ -288,7 +288,7 @@ func (q *Queries) OwnedList(ctx context.Context, arg OwnedListParams) (List, err
 }
 
 const profileByUsername = `-- name: ProfileByUsername :one
-SELECT id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at FROM profiles WHERE username = lower($1)
+SELECT id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at, in_popular FROM profiles WHERE username = lower($1)
 `
 
 func (q *Queries) ProfileByUsername(ctx context.Context, lower string) (Profile, error) {
@@ -308,6 +308,7 @@ func (q *Queries) ProfileByUsername(ctx context.Context, lower string) (Profile,
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InPopular,
 	)
 	return i, err
 }

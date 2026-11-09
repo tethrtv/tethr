@@ -1719,6 +1719,29 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/popular:
+    get:
+      operationId: getPopular
+      summary: What people on Tethr are watching this week
+      description: Films and shows played by the most households in the last 7 days, up to 10. A title is only listed once at least 10 households have played it, so nobody's viewing can be picked out. Only person profiles that haven't opted out are counted, and each household counts once.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Most households first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PopularTitle'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/years/{year}:
     get:
       operationId: getYear
@@ -2549,7 +2572,7 @@ components:
           format: date-time
     Profile:
       type: object
-      required: [id, username, name, kind, private]
+      required: [id, username, name, kind, private, in_popular]
       properties:
         id:
           type: integer
@@ -2563,6 +2586,9 @@ components:
           enum: [owner, person, kids, guest]
         private:
           type: boolean
+        in_popular:
+          type: boolean
+          description: This profile's plays count towards Popular on Tethr. Kids' and guest profiles are never counted.
     Problem:
       type: object
       required: [code, message]
@@ -2592,6 +2618,8 @@ components:
         username:
           type: string
         private:
+          type: boolean
+        in_popular:
           type: boolean
     Invites:
       type: object
@@ -3508,6 +3536,14 @@ components:
         watchlist:
           type: boolean
           description: The show is on your watchlist and you haven't started it.
+    PopularTitle:
+      type: object
+      required: [item, households]
+      properties:
+        item:
+          $ref: '#/components/schemas/Item'
+        households:
+          type: integer
     Year:
       type: object
       required: [year, through, plays, episodes, films, minutes, plays_without_length, new_shows, rewatched, days, hours, shows, film_plays, run, years]

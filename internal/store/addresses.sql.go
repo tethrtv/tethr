@@ -65,7 +65,7 @@ func (q *Queries) ListIDBySlug(ctx context.Context, arg ListIDBySlugParams) (int
 }
 
 const profileByOldUsername = `-- name: ProfileByOldUsername :one
-SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at FROM profiles p
+SELECT p.id, p.household_id, p.account_id, p.uuid, p.username, p.name, p.kind, p.hue, p.private, p.paused, p.position, p.created_at, p.updated_at, p.in_popular FROM profiles p
 JOIN old_usernames o ON o.profile_id = p.id
 WHERE o.username = lower($1)
 `
@@ -87,6 +87,7 @@ func (q *Queries) ProfileByOldUsername(ctx context.Context, lower string) (Profi
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InPopular,
 	)
 	return i, err
 }

@@ -558,6 +558,10 @@ func TestUpNextEndpoints(t *testing.T) {
 		t.Errorf("a year to come = %d", rec.Code)
 	}
 
+	if rec := do(t, h, "GET", "/v1/popular", "", cookie); rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Errorf("popular with one household = %d %s", rec.Code, rec.Body)
+	}
+
 	var next []UpNextEntry
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/up-next", "", cookie).Body.Bytes(), &next)
 	if len(next) != 1 || next[0].Next.Number != 2 || next[0].Next.FirstAired == nil || next[0].Aired != 2 || next[0].Watched != 1 || *next[0].Show.Ids.Tmdb != 1396 {

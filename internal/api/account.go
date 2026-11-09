@@ -45,7 +45,7 @@ func (s *Server) UpdateProfile(ctx context.Context, req UpdateProfileRequestObje
 	if !ok {
 		return UpdateProfile401JSONResponse(notSignedIn), err
 	}
-	changes := core.ProfileChanges{Name: req.Body.Name, Username: req.Body.Username, Private: req.Body.Private}
+	changes := core.ProfileChanges{Name: req.Body.Name, Username: req.Body.Username, Private: req.Body.Private, InPopular: req.Body.InPopular}
 	profile, err := core.UpdateProfile(ctx, s.DB, accountID, req.Id, changes)
 	switch {
 	case errors.Is(err, core.ErrNotFound):

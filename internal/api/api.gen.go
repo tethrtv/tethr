@@ -1452,6 +1452,12 @@ type PlayAction string
 // PlayPrecision How much of `watched_at` is known. With `day` only the date is, and its time is noon UTC. With `none` it was seen at some point nobody recorded, and `watched_at` is 1970-01-01.
 type PlayPrecision string
 
+// PopularTitle defines model for PopularTitle.
+type PopularTitle struct {
+	Households int  `json:"households"`
+	Item       Item `json:"item"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Example: username_taken
@@ -1461,11 +1467,14 @@ type Problem struct {
 
 // Profile defines model for Profile.
 type Profile struct {
-	Id       int64       `json:"id"`
-	Kind     ProfileKind `json:"kind"`
-	Name     string      `json:"name"`
-	Private  bool        `json:"private"`
-	Username string      `json:"username"`
+	Id int64 `json:"id"`
+
+	// InPopular This profile's plays count towards Popular on Tethr. Kids' and guest profiles are never counted.
+	InPopular bool        `json:"in_popular"`
+	Kind      ProfileKind `json:"kind"`
+	Name      string      `json:"name"`
+	Private   bool        `json:"private"`
+	Username  string      `json:"username"`
 }
 
 // ProfileKind defines model for Profile.Kind.
@@ -1473,9 +1482,10 @@ type ProfileKind string
 
 // ProfileChanges defines model for ProfileChanges.
 type ProfileChanges struct {
-	Name     *string `json:"name,omitempty"`
-	Private  *bool   `json:"private,omitempty"`
-	Username *string `json:"username,omitempty"`
+	InPopular *bool   `json:"in_popular,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Private   *bool   `json:"private,omitempty"`
+	Username  *string `json:"username,omitempty"`
 }
 
 // ProfileChoice defines model for ProfileChoice.
@@ -2107,6 +2117,12 @@ type RemovePlaybackParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// GetPopularParams defines parameters for GetPopular.
+type GetPopularParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // BrowseListsParams defines parameters for BrowseLists.
 type BrowseListsParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -2550,6 +2566,9 @@ type ServerInterface interface {
 	// RemovePlayback Forget a resume point
 	// (DELETE /v1/playback/{id})
 	RemovePlayback(w http.ResponseWriter, r *http.Request, id Id, params RemovePlaybackParams)
+	// GetPopular What people on Tethr are watching this week
+	// (GET /v1/popular)
+	GetPopular(w http.ResponseWriter, r *http.Request, params GetPopularParams)
 	// GetProfile The profile you're logging to
 	// (GET /v1/profile)
 	GetProfile(w http.ResponseWriter, r *http.Request)
@@ -4791,6 +4810,39 @@ func (siw *ServerInterfaceWrapper) RemovePlayback(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetPopular operation middleware
+func (siw *ServerInterfaceWrapper) GetPopular(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPopularParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPopular(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProfile operation middleware
 func (siw *ServerInterfaceWrapper) GetProfile(w http.ResponseWriter, r *http.Request) {
 
@@ -6149,6 +6201,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.RemoveListFromUpNext)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/up-next/lists/{id}", wrapper.AddListToUpNext)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/upcoming", wrapper.GetUpcoming)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/popular", wrapper.GetPopular)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/years/{year}", wrapper.GetYear)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/titles/{id}", wrapper.GetTitle)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.UseAiredOrder)
@@ -9615,6 +9668,56 @@ func (response RemovePlayback404JSONResponse) VisitRemovePlaybackResponse(w http
 	return err
 }
 
+type GetPopularRequestObject struct {
+	Params GetPopularParams
+}
+
+type GetPopularResponseObject interface {
+	VisitGetPopularResponse(w http.ResponseWriter) error
+}
+
+type GetPopular200JSONResponse []PopularTitle
+
+func (response GetPopular200JSONResponse) VisitGetPopularResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPopular401JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetPopular401JSONResponse) VisitGetPopularResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPopular404JSONResponse Problem
+
+func (response GetPopular404JSONResponse) VisitGetPopularResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetProfileRequestObject struct {
 }
 
@@ -11463,6 +11566,9 @@ type StrictServerInterface interface {
 	// RemovePlayback Forget a resume point
 	// (DELETE /v1/playback/{id})
 	RemovePlayback(ctx context.Context, request RemovePlaybackRequestObject) (RemovePlaybackResponseObject, error)
+	// GetPopular What people on Tethr are watching this week
+	// (GET /v1/popular)
+	GetPopular(ctx context.Context, request GetPopularRequestObject) (GetPopularResponseObject, error)
 	// GetProfile The profile you're logging to
 	// (GET /v1/profile)
 	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
@@ -13397,6 +13503,32 @@ func (sh *strictHandler) RemovePlayback(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RemovePlaybackResponseObject); ok {
 		if err := validResponse.VisitRemovePlaybackResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPopular operation middleware
+func (sh *strictHandler) GetPopular(w http.ResponseWriter, r *http.Request, params GetPopularParams) {
+	var request GetPopularRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPopular(ctx, request.(GetPopularRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPopular")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPopularResponseObject); ok {
+		if err := validResponse.VisitGetPopularResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

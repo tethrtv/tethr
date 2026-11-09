@@ -622,7 +622,7 @@ func (q *Queries) MarkActivity(ctx context.Context, arg MarkActivityParams) erro
 }
 
 const profileByID = `-- name: ProfileByID :one
-SELECT id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at FROM profiles WHERE id = $1
+SELECT id, household_id, account_id, uuid, username, name, kind, hue, private, paused, position, created_at, updated_at, in_popular FROM profiles WHERE id = $1
 `
 
 func (q *Queries) ProfileByID(ctx context.Context, id int64) (Profile, error) {
@@ -642,6 +642,7 @@ func (q *Queries) ProfileByID(ctx context.Context, id int64) (Profile, error) {
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InPopular,
 	)
 	return i, err
 }
