@@ -1,3 +1,5 @@
+import styles from './Mark.module.css'
+
 export function Mark() {
   return (
     <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
@@ -6,5 +8,14 @@ export function Mark() {
       <circle cx="9" cy="21" r="3.2" fill="#d4fa3c" />
       <circle cx="23" cy="11" r="3.2" fill="#d4fa3c" />
     </svg>
+  )
+}
+
+export function Made() {
+  return (
+    <span className={styles.made}>
+      <Mark />
+      Made by Tethr
+    </span>
   )
 }
