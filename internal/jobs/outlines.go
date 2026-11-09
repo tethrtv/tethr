@@ -44,8 +44,8 @@ func (o Outlines) Refresh(ctx context.Context) error {
 		} else if err == nil {
 			err = core.SaveOutline(ctx, o.DB, show.ID, outline(episodes))
 		}
-		if err != nil {
-			return err
+		if err != nil && ctx.Err() == nil {
+			o.Log.Error("refreshing an episode outline", "show", show.ID, "err", err)
 		}
 	}
 
