@@ -1058,6 +1058,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/popular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What people on Tethr are watching this week
+         * @description Films and shows played by the most households in the last 7 days, up to 10. A title is only listed once at least 10 households have played it, so nobody's viewing can be picked out. Only person profiles that haven't opted out are counted, and each household counts once.
+         */
+        get: operations["getPopular"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/years/{year}": {
         parameters: {
             query?: never;
@@ -1540,6 +1560,8 @@ export interface components {
             /** @enum {string} */
             kind: "owner" | "person" | "kids" | "guest";
             private: boolean;
+            /** @description This profile's plays count towards Popular on Tethr. Kids' and guest profiles are never counted. */
+            in_popular: boolean;
         };
         Problem: {
             /** @example username_taken */
@@ -1557,6 +1579,7 @@ export interface components {
             name?: string;
             username?: string;
             private?: boolean;
+            in_popular?: boolean;
         };
         Invites: {
             /** @description Anyone can sign up, so invites aren't needed. */
@@ -2116,6 +2139,10 @@ export interface components {
             episode: components["schemas"]["Episode"];
             /** @description The show is on your watchlist and you haven't started it. */
             watchlist: boolean;
+        };
+        PopularTitle: {
+            item: components["schemas"]["Item"];
+            households: number;
         };
         Year: {
             year: number;
@@ -4319,6 +4346,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpcomingEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getPopular: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Most households first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PopularTitle"][];
                 };
             };
             401: components["responses"]["Problem"];
