@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type CSSProperties, type ReactNode, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
@@ -9,10 +9,10 @@ import { useWatching } from '../components/Shell'
 import { Television } from '../components/Television'
 import { TitleLink } from '../components/TitleLink'
 import { ago, ep, playedAgo, plural } from '../format'
-import { image, useDetails } from '../tmdb'
+import { image, useDetails, useTrending } from '../tmdb'
 import { listParams, ownerName } from './MyLists'
 import styles from './Today.module.css'
-import { useYear } from './Year'
+import { useSeen, useYear } from './Year'
 
 type Title = components['schemas']['Title']
 type Profile = components['schemas']['Me']['profiles'][number]
@@ -179,7 +179,8 @@ export function Today() {
 
       {year.data && year.data.plays > 0 && recent.data && <Month y={year.data} recent={recent.data} />}
 
-      <PopularOnTethr profileID={profile.id} />
+      <TopTen profileID={profile.id} />
+      <Trending />
       <ListsPeopleFollow profileID={profile.id} />
     </div>
   )
@@ -280,7 +281,7 @@ function Row({ kind, title, detail }: { kind: 'movie' | 'show'; title: Title; de
   const name = meta?.name ?? title.name ?? 'Untitled'
   return (
     <li className={styles.row}>
-      <Cover id={title.ids.tethr ?? 0} name={name} poster={meta?.poster} size="xs" />
+      <Cover id={title.ids.tethr ?? 0} name={name} poster={meta?.poster} size="s" />
       <TitleLink type={kind} slug={title.slug} className={styles.name}>
         {name}
       </TitleLink>
@@ -415,6 +416,48 @@ const daySeed = () => {
 
 const shuffleKey = (id: number, seed: number) => ((id ^ seed) * 2654435761) % 4294967296
 
+function Shelf({
+  title,
+  note,
+  to,
+  more,
+  children,
+}: {
+  title: string
+  note?: ReactNode
+  to?: string
+  more?: string
+  children: ReactNode
+}) {
+  const [ref, seen] = useSeen<HTMLElement>()
+  return (
+    <section ref={ref} className={styles.section} data-seen={seen || undefined}>
+      <h2 className={styles.sectionTitle}>{title}</h2>
+      {note && <p className={styles.note}>{note}</p>}
+      {children}
+      {to && more && (
+        <Link to={to} className={styles.more}>
+          {more}
+        </Link>
+      )}
+    </section>
+  )
+}
+
+function Poster({ kind, title, note, index }: { kind: 'movie' | 'show'; title: Title; note: string; index: number }) {
+  const meta = useDetails(kind, title.ids.tmdb)
+  const name = meta?.name ?? title.name ?? 'Untitled'
+  return (
+    <li className={styles.poster} style={{ '--i': index } as CSSProperties}>
+      <TitleLink type={kind} slug={title.slug} className={styles.posterLink}>
+        <Cover id={title.ids.tethr ?? index} name={name} poster={meta?.poster} size="l" />
+        <span className={styles.posterName}>{name}</span>
+        <span className={styles.posterNote}>{note}</span>
+      </TitleLink>
+    </li>
+  )
+}
+
 function OnYourWatchlist({ profileID, skip }: { profileID: number; skip: Set<number> }) {
   const listed = useQuery({
     queryKey: ['watchlist', profileID],
@@ -430,34 +473,101 @@ function OnYourWatchlist({ profileID, skip }: { profileID: number; skip: Set<num
       titles.add(id)
       return true
     })
-    .slice(0, 3)
+    .slice(0, 4)
   if (!picks.length) return null
   return (
-    <Block title="From your watchlist" to="/watchlist" more="Your watchlist">
-      {picks.map((l) => (
-        <Row key={l.id} kind={kindOf(l.item)} title={l.item.title} detail={`Added ${ago(l.listed_at)}`} />
-      ))}
-    </Block>
+    <Shelf title="From your watchlist" note="A few picks, different each day." to="/watchlist" more="Your watchlist">
+      <ul className={styles.posters}>
+        {picks.map((l, i) => (
+          <Poster key={l.id} kind={kindOf(l.item)} title={l.item.title} note={`Added ${ago(l.listed_at)}`} index={i} />
+        ))}
+      </ul>
+    </Shelf>
   )
 }
 
-function PopularOnTethr({ profileID }: { profileID: number }) {
+function TopTen({ profileID }: { profileID: number }) {
   const popular = useQuery({
     queryKey: ['popular', profileID],
     queryFn: () => load(api.GET('/v1/popular', { params: { query: { profile_id: profileID } } })),
   })
   if (!popular.data?.length) return null
   return (
-    <Block title="Popular on Tethr this week">
-      {popular.data.slice(0, 5).map((p) => (
-        <Row
-          key={p.item.title.ids.tethr}
-          kind={kindOf(p.item)}
-          title={p.item.title}
-          detail={`${p.households}+ households watched`}
-        />
-      ))}
-    </Block>
+    <Shelf title="Top 10 on Tethr this week" note="What the most households played in the last seven days.">
+      <ol className={styles.chart}>
+        {popular.data.map((p, i) => (
+          <Ranked
+            key={p.item.title.ids.tethr}
+            rank={i + 1}
+            kind={kindOf(p.item)}
+            title={p.item.title}
+            households={p.households}
+          />
+        ))}
+      </ol>
+    </Shelf>
+  )
+}
+
+function Ranked({
+  rank,
+  kind,
+  title,
+  households,
+}: {
+  rank: number
+  kind: 'movie' | 'show'
+  title: Title
+  households: number
+}) {
+  const meta = useDetails(kind, title.ids.tmdb)
+  const name = meta?.name ?? title.name ?? 'Untitled'
+  return (
+    <li
+      className={rank === 1 ? `${styles.ranked} ${styles.first}` : styles.ranked}
+      style={{ '--i': rank } as CSSProperties}
+    >
+      <span className={styles.rank} aria-hidden="true">
+        {rank}
+      </span>
+      <TitleLink type={kind} slug={title.slug} className={styles.posterLink}>
+        <Cover id={title.ids.tethr ?? rank} name={name} poster={meta?.poster} size="l" />
+        <span className={styles.posterName}>
+          <span className={styles.hidden}>{rank}. </span>
+          {name}
+        </span>
+        <span className={styles.posterNote}>{households}+ households</span>
+      </TitleLink>
+    </li>
+  )
+}
+
+function Trending() {
+  const trending = useTrending()
+  if (!trending.data?.length) return null
+  return (
+    <Shelf title="Trending this week" note="What’s getting watched everywhere, from TMDB.">
+      <ul className={styles.stills}>
+        {trending.data.map((t, i) => (
+          <li key={`${t.type}-${t.tmdb}`} className={styles.still} style={{ '--i': i } as CSSProperties}>
+            <TitleLink type={t.type} slug={`tmdb-${t.tmdb}`} className={styles.posterLink}>
+              <span className={styles.frame}>
+                {t.backdrop || t.poster ? (
+                  <img src={image(t.backdrop ?? t.poster ?? undefined, 'w500')} alt="" loading="lazy" />
+                ) : (
+                  <span className={styles.blank}>{t.name}</span>
+                )}
+              </span>
+              <span className={styles.posterName}>{t.name}</span>
+              <span className={styles.posterNote}>
+                {t.type === 'movie' ? 'Film' : 'Show'}
+                {t.year ? `, ${t.year}` : ''}
+              </span>
+            </TitleLink>
+          </li>
+        ))}
+      </ul>
+    </Shelf>
   )
 }
 
@@ -472,18 +582,20 @@ function ListsPeopleFollow({ profileID }: { profileID: number }) {
   const followed = (lists.data?.lists ?? []).filter((l) => l.follower_count > 1 && l.access !== 'mine')
   if (followed.length < listFloor) return null
   return (
-    <Block title="Lists people follow" to="/lists/browse" more="Browse lists">
-      {followed.slice(0, 3).map((l) => (
-        <li key={l.id} className={`${styles.row} ${styles.listRow}`}>
-          <ListCover items={l.cover ?? []} />
-          <Link to="/@{$username}/lists/$slug" params={listParams(l)} className={styles.name}>
-            {l.name}
-          </Link>
-          <span className={styles.detail}>
-            From {ownerName(l)}, {plural(l.follower_count, 'follower')}
-          </span>
-        </li>
-      ))}
-    </Block>
+    <Shelf title="Lists people follow" to="/lists/browse" more="Browse lists">
+      <ul className={styles.lists}>
+        {followed.slice(0, 4).map((l, i) => (
+          <li key={l.id} className={styles.poster} style={{ '--i': i } as CSSProperties}>
+            <Link to="/@{$username}/lists/$slug" params={listParams(l)} className={styles.posterLink}>
+              <ListCover items={l.cover ?? []} size="l" />
+              <span className={styles.posterName}>{l.name}</span>
+              <span className={styles.posterNote}>
+                From {ownerName(l)}, {plural(l.follower_count, 'follower')}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Shelf>
   )
 }

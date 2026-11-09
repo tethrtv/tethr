@@ -28,7 +28,7 @@ const hourName = (h: number) => (h === 0 ? 'midnight' : h === 12 ? 'noon' : h < 
 const spin = (id: number, by: number) => (((id * 2654435761) % 1000) / 1000 - 0.5) * by
 const kindOf = (t: { type?: string }) => (t.type === 'movie' ? 'movie' : 'show')
 
-function useSeen<T extends Element>() {
+export function useSeen<T extends Element>() {
   const ref = useRef<T>(null)
   const [seen, setSeen] = useState(false)
   useEffect(() => {

@@ -87,6 +87,16 @@ export function useFind(q: string) {
   })
 }
 
+export type Trend = Found & { backdrop?: string }
+
+export function useTrending() {
+  return useQuery({
+    queryKey: ['meta', 'trending'],
+    staleTime: 60 * 60 * 1000,
+    queryFn: async () => (await meta<{ results: Trend[] }>('/trending'))?.results ?? [],
+  })
+}
+
 export function useSeason(show?: number, season?: number) {
   return useQuery({
     queryKey: ['meta', 'season', show, season],
