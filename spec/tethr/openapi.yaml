@@ -3499,7 +3499,7 @@ components:
           description: The show is on your watchlist and you haven't started it.
     Year:
       type: object
-      required: [year, through, plays, episodes, films, minutes, new_shows, rewatched, days, hours, shows, film_plays, run, years]
+      required: [year, through, plays, episodes, films, minutes, plays_without_length, new_shows, rewatched, days, hours, shows, film_plays, run, years]
       properties:
         year:
           type: integer
@@ -3515,13 +3515,16 @@ components:
           type: integer
         minutes:
           type: integer
-          description: Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise. Plays of titles with no known runtime add nothing.
+          description: Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise.
+        plays_without_length:
+          type: integer
+          description: Plays with no known length, which add nothing to `minutes`.
         new_shows:
           type: integer
           description: Shows you played for the first time this year.
         rewatched:
           type: integer
-          description: Plays of an episode or film you'd already seen.
+          description: Shows and films you went back to, with a play of an episode or film you'd already seen.
         days:
           type: array
           description: One entry per day from 1 January to `through`.
@@ -3606,7 +3609,7 @@ components:
           format: date
     BusiestDay:
       type: object
-      description: The day with the most time spent, and what you played most that day.
+      description: The day with the most plays, and what you played most that day.
       required: [date, plays, minutes, item, item_plays]
       properties:
         date:

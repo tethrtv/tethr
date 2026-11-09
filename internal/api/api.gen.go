@@ -843,7 +843,7 @@ type AutoListItemsPage struct {
 // AutoListKind `stopped` is shows you started and haven't watched for 90 days, or took out of Up next. `favourites` is films and shows you rated 9 or 10. `rewatch` is ones you rated 8 or more and last watched over a year ago. `household` is anything someone in the household rated 9 or 10, never counting guests, and counting only kids profiles when a kids profile asks.
 type AutoListKind string
 
-// BusiestDay The day with the most time spent, and what you played most that day.
+// BusiestDay The day with the most plays, and what you played most that day.
 type BusiestDay struct {
 	Date      openapi_types.Date `json:"date"`
 	Item      Item               `json:"item"`
@@ -1749,7 +1749,7 @@ type WatchPrecision string
 
 // Year defines model for Year.
 type Year struct {
-	// Busiest The day with the most time spent, and what you played most that day.
+	// Busiest The day with the most plays, and what you played most that day.
 	Busiest *BusiestDay `json:"busiest,omitempty"`
 
 	// Days One entry per day from 1 January to `through`.
@@ -1765,14 +1765,17 @@ type Year struct {
 	Hours  []int  `json:"hours"`
 	Latest *Watch `json:"latest,omitempty"`
 
-	// Minutes Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise. Plays of titles with no known runtime add nothing.
+	// Minutes Roughly how long it all took, from each play's length where the app sent one and the title's usual runtime otherwise.
 	Minutes int `json:"minutes"`
 
 	// NewShows Shows you played for the first time this year.
 	NewShows int `json:"new_shows"`
 	Plays    int `json:"plays"`
 
-	// Rewatched Plays of an episode or film you'd already seen.
+	// PlaysWithoutLength Plays with no known length, which add nothing to `minutes`.
+	PlaysWithoutLength int `json:"plays_without_length"`
+
+	// Rewatched Shows and films you went back to, with a play of an episode or film you'd already seen.
 	Rewatched int `json:"rewatched"`
 
 	// Run The longest stretch of days in a row with at least one play.
