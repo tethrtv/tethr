@@ -275,6 +275,12 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, accountID int64)
 
 func (s *Server) trending(w http.ResponseWriter, r *http.Request) {
 	found, err := s.TMDB.Trending(r.Context())
+	if errors.Is(err, tmdb.ErrNotFound) {
+		s.Log.Error("tmdb trending list is missing", "err", err)
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "tmdb didn't answer", http.StatusBadGateway)
+		return
+	}
 	if !s.found(w, r, err) {
 		return
 	}
