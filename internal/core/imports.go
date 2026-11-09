@@ -398,7 +398,7 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 	}
 
 	err = im.each(f.Hidden, &summary.Hidden, []string{"movie", "show", "season"}, hiddenField, func(item ImportItem, r resolved) (int64, error) {
-		if !slices.Contains(HiddenSections, item.Section) {
+		if !slices.Contains(HiddenSections, item.Section) || item.Section == "progress_watched_reset" && item.At == nil {
 			return 0, nil
 		}
 		at := time.Now()

@@ -90,6 +90,32 @@ func TestRewatch(t *testing.T) {
 		t.Errorf("still rewatching after stopping: %v", state.RewatchFrom)
 	}
 
+	imported, err := CreateImport(ctx, db, profile, "trakt", "trakt.zip", ImportFile{Hidden: []ImportItem{
+		{Ref: Ref{Kind: "show", IDs: IDs{TMDB: 1396}}, Label: "Breaking Bad (2008)", Section: "progress_watched_reset", At: at("2026-01-01T00:00:00Z")},
+		{Ref: Ref{Kind: "show", IDs: IDs{TMDB: 125988}}, Label: "Silo (2023)", Section: "progress_watched_reset"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := QueueImport(ctx, db, profile, imported.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyNextImport(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := ImportByID(ctx, db, profile, imported.ID); err != nil || applied.Summary.Hidden.Added != 1 || applied.Summary.Hidden.Skipped != 1 {
+		t.Errorf("imported resets = %+v, %v", applied.Summary.Hidden, err)
+	}
+	if err := StartRewatch(ctx, db, profile, show); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UndoImport(ctx, db, profile, imported.ID); err != nil {
+		t.Fatal(err)
+	}
+	if state, _ := Title(ctx, db, profile, strconv.FormatInt(show, 10), "show"); state.RewatchFrom == nil {
+		t.Error("undoing an import ended a rewatch started afterwards")
+	}
+
 	film, err := ScrobbleStop(ctx, db, caller, Scrobble{Ref: inception(), Progress: 100})
 	if err != nil {
 		t.Fatal(err)
