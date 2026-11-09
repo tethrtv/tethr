@@ -96,12 +96,13 @@ export function YearPage({ year }: { year: number }) {
   const summary = useQuery({
     queryKey: ['year', profile.id, year, zone],
     queryFn: async () => {
-      const { data, error, response } = await api.GET('/v1/years/{year}', {
-        params: { path: { year }, query: { profile_id: profile.id, tz: zone } },
-      })
-      if (response.status === 404) return null
-      if (error) throw error
-      return data
+      const ask = (tz?: string) =>
+        api.GET('/v1/years/{year}', { params: { path: { year }, query: { profile_id: profile.id, tz } } })
+      let answer = await ask(zone)
+      if (answer.error?.code === 'invalid_time_zone') answer = await ask()
+      if (answer.error?.code === 'not_started') return null
+      if (answer.error) throw answer.error
+      return answer.data
     },
   })
   const current = year === new Date().getFullYear()
@@ -190,7 +191,7 @@ export function YearPage({ year }: { year: number }) {
           <div className={styles.columns}>
             {y.busiest && (
               <Section title="Biggest day">
-                <Busiest day={y.busiest} />
+                <Busiest day={y.busiest} timed={timed(y)} />
               </Section>
             )}
             {y.run.days > 1 && y.run.from && (
@@ -222,6 +223,8 @@ function both(a: string | false, b: string | false) {
   return <strong>{a || b}</strong>
 }
 
+const timed = (y: Summary) => y.minutes > 0 && y.plays_without_length * 2 <= y.plays
+
 function Lead({ y, current }: { y: Summary; current: boolean }) {
   if (y.plays === 0) {
     return (
@@ -233,15 +236,20 @@ function Lead({ y, current }: { y: Summary; current: boolean }) {
   }
   const hours = Math.round(y.minutes / 60)
   const active = y.days.filter((d) => d.plays > 0).length
-  const time = hours >= 2 ? `${hours.toLocaleString('en-GB')} hours` : duration(y.minutes)
   return (
     <p className={styles.lead}>
-      {current ? 'Since 1 January you’ve watched' : `In ${y.year} you watched`} about{' '}
-      <strong>
-        <Marked>{hours >= 2 ? <CountUp to={hours} /> : time}</Marked>
-        {hours >= 2 && ' hours'}
-      </strong>
-      : {both(y.episodes > 0 && plural(y.episodes, 'episode'), y.films > 0 && plural(y.films, 'film'))}, on {active} of{' '}
+      {current ? 'Since 1 January you’ve watched' : `In ${y.year} you watched`}{' '}
+      {timed(y) && (
+        <>
+          about{' '}
+          <strong>
+            <Marked>{hours >= 2 ? <CountUp to={hours} /> : duration(y.minutes)}</Marked>
+            {hours >= 2 && ' hours'}
+          </strong>
+          :{' '}
+        </>
+      )}
+      {both(y.episodes > 0 && plural(y.episodes, 'episode'), y.films > 0 && plural(y.films, 'film'))}, on {active} of{' '}
       {y.days.length} days.{' '}
       {y.new_shows > 0 && (
         <>
@@ -527,7 +535,7 @@ function Hours({ hours }: { hours: number[] }) {
   )
 }
 
-function Busiest({ day }: { day: NonNullable<Summary['busiest']> }) {
+function Busiest({ day, timed }: { day: NonNullable<Summary['busiest']>; timed: boolean }) {
   const item = day.item
   const kind = kindOf(item)
   const meta = useDetails(kind, item.title.ids.tmdb)
@@ -548,7 +556,7 @@ function Busiest({ day }: { day: NonNullable<Summary['busiest']> }) {
           {name}
         </TitleLink>
         {others > 0 ? ` and ${plural(others, 'other thing')}` : ''}
-        {day.minutes ? `, ${duration(day.minutes)} in all.` : '.'}
+        {timed && day.minutes ? `, ${duration(day.minutes)} in all.` : '.'}
       </p>
     </div>
   )
