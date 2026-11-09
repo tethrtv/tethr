@@ -83,10 +83,15 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 		if req.JSONBody.Source != NewImportSourceLetterboxd {
 			return CreateImport400JSONResponse{problem("unknown_source", "Only Letterboxd exports are sent as JSON.")}, nil
 		}
+		for _, r := range value(req.JSONBody.Ratings) {
+			if n := value(r.Rating); n < 1 || n > 10 {
+				return CreateImport400JSONResponse{problem("invalid_rating", "Ratings go from 1 to 10.")}, nil
+			}
+		}
 		return s.createImport(ctx, c.ProfileID, string(req.JSONBody.Source), value(req.Params.Filename), matchedImport(*req.JSONBody))
 	}
 	if req.Body == nil {
-		return CreateImport400JSONResponse{problem("not_an_export", "Send the export as a zip, or as JSON once it’s matched.")}, nil
+		return CreateImport400JSONResponse{problem("not_an_export", "Send the export as a zip with Content-Type application/zip, or as JSON once it’s matched.")}, nil
 	}
 	body, err := io.ReadAll(io.LimitReader(req.Body, maxUpload+1))
 	if err != nil {
