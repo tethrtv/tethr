@@ -4,11 +4,13 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
+import { ListCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { Television } from '../components/Television'
 import { TitleLink } from '../components/TitleLink'
-import { ep, playedAgo, plural } from '../format'
+import { ago, ep, playedAgo, plural } from '../format'
 import { image, useDetails } from '../tmdb'
+import { listParams, ownerName } from './MyLists'
 import styles from './Today.module.css'
 import { useYear } from './Year'
 
@@ -165,6 +167,8 @@ export function Today() {
         </Block>
       )}
 
+      <OnYourWatchlist profileID={profile.id} skip={new Set([...seen, ...week.map((u) => u.show.ids.tethr ?? 0)])} />
+
       {others.length > 0 && (
         <Block title="Household">
           {others.map((p) => (
@@ -174,6 +178,9 @@ export function Today() {
       )}
 
       {year.data && year.data.plays > 0 && recent.data && <Month y={year.data} recent={recent.data} />}
+
+      <PopularOnTethr profileID={profile.id} />
+      <ListsPeopleFollow profileID={profile.id} />
     </div>
   )
 }
@@ -398,5 +405,85 @@ function GetStarted() {
         </li>
       </ol>
     </section>
+  )
+}
+
+const daySeed = () => {
+  const d = new Date()
+  return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate()
+}
+
+const shuffleKey = (id: number, seed: number) => ((id ^ seed) * 2654435761) % 4294967296
+
+function OnYourWatchlist({ profileID, skip }: { profileID: number; skip: Set<number> }) {
+  const listed = useQuery({
+    queryKey: ['watchlist', profileID],
+    queryFn: () => load(api.GET('/v1/watchlist', { params: { query: { profile_id: profileID } } })),
+  })
+  const seed = daySeed()
+  const titles = new Set<number>(skip)
+  const picks = [...(listed.data ?? [])]
+    .sort((a, b) => shuffleKey(a.id, seed) - shuffleKey(b.id, seed))
+    .filter((l) => {
+      const id = l.item.title.ids.tethr ?? 0
+      if (titles.has(id)) return false
+      titles.add(id)
+      return true
+    })
+    .slice(0, 3)
+  if (!picks.length) return null
+  return (
+    <Block title="From your watchlist" to="/watchlist" more="Your watchlist">
+      {picks.map((l) => (
+        <Row key={l.id} kind={kindOf(l.item)} title={l.item.title} detail={`Added ${ago(l.listed_at)}`} />
+      ))}
+    </Block>
+  )
+}
+
+function PopularOnTethr({ profileID }: { profileID: number }) {
+  const popular = useQuery({
+    queryKey: ['popular', profileID],
+    queryFn: () => load(api.GET('/v1/popular', { params: { query: { profile_id: profileID } } })),
+  })
+  if (!popular.data?.length) return null
+  return (
+    <Block title="Popular on Tethr this week">
+      {popular.data.slice(0, 5).map((p) => (
+        <Row
+          key={p.item.title.ids.tethr}
+          kind={kindOf(p.item)}
+          title={p.item.title}
+          detail={`${plural(p.households, 'household')} watched`}
+        />
+      ))}
+    </Block>
+  )
+}
+
+const listFloor = 3
+
+function ListsPeopleFollow({ profileID }: { profileID: number }) {
+  const lists = useQuery({
+    queryKey: ['public-lists', profileID, 'popular'],
+    queryFn: () =>
+      load(api.GET('/v1/public-lists', { params: { query: { profile_id: profileID, order: 'popular', limit: 6 } } })),
+  })
+  const followed = (lists.data?.lists ?? []).filter((l) => l.follower_count > 1 && l.access !== 'mine')
+  if (followed.length < listFloor) return null
+  return (
+    <Block title="Lists people follow" to="/lists/browse" more="Browse lists">
+      {followed.slice(0, 3).map((l) => (
+        <li key={l.id} className={`${styles.row} ${styles.listRow}`}>
+          <ListCover items={l.cover ?? []} />
+          <Link to="/@{$username}/lists/$slug" params={listParams(l)} className={styles.name}>
+            {l.name}
+          </Link>
+          <span className={styles.detail}>
+            From {ownerName(l)}, {plural(l.follower_count, 'follower')}
+          </span>
+        </li>
+      ))}
+    </Block>
   )
 }
