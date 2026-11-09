@@ -1778,7 +1778,7 @@ type Year struct {
 	// Run The longest stretch of days in a row with at least one play.
 	Run YearRun `json:"run"`
 
-	// Shows Every show you played, most time spent first.
+	// Shows Every show you played, most episodes first.
 	Shows []YearShow `json:"shows"`
 
 	// Through The last day counted. Today for the current year, otherwise 31 December.
