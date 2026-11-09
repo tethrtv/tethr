@@ -138,15 +138,16 @@ function ListPage({ id, opened, profileID, profileKind }: { id: number; opened: 
   const navigate = useNavigate()
   const here = useRouterState({ select: (s) => s.location.pathname })
   const shown = page.data?.list
+  const start = opened.toLowerCase()
   useEffect(() => {
     if (!shown) return
     const params = listParams(shown)
     const at = decodeURIComponent(here).toLowerCase()
     // Only correct the address while it's still the one this page was opened at, or leaving the page bounces back.
-    if (at !== opened.toLowerCase() || at === `/@${params.username}/lists/${params.slug}`.toLowerCase()) return
+    if (at !== start || at === `/@${params.username}/lists/${params.slug}`.toLowerCase()) return
     queries.setQueryData(addressKey(params.username, params.slug, profileID), shown.id)
     navigate({ to: '/@{$username}/lists/$slug', params, replace: true })
-  }, [shown, here, profileID, queries, navigate])
+  }, [shown, here, start, profileID, queries, navigate])
 
   if (page.data === null) return <MissingList signedIn={!!profileID} />
   if (!page.data) return null
