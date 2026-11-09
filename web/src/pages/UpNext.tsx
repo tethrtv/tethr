@@ -107,9 +107,9 @@ function airsIn(day: string) {
 }
 
 function dayName(days: number, day: string) {
-  if (days <= 0) return 'Today'
+  if (days === 0) return 'Today'
   if (days === 1) return 'Tomorrow'
-  if (days <= 7) return new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long' })
+  if (days < 7) return new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long' })
   return 'Later'
 }
 
@@ -121,6 +121,7 @@ function ComingUp({ profileID }: { profileID: number }) {
   const groups: { label: string; items: Upcoming[] }[] = []
   for (const u of upcoming.data ?? []) {
     const day = u.episode.first_aired ?? ''
+    if (airsIn(day) < 0) continue
     const label = dayName(airsIn(day), day)
     const last = groups[groups.length - 1]
     if (last?.label === label) last.items.push(u)

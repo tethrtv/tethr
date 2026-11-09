@@ -24,7 +24,7 @@ func Upcoming(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]Upcomin
 	if err != nil {
 		return nil, err
 	}
-	hidden, _, err := hiddenFromUpNext(ctx, q, profileID)
+	hidden, hiddenSeasons, err := hiddenFromUpNext(ctx, q, profileID)
 	if err != nil {
 		return nil, err
 	}
@@ -51,18 +51,35 @@ func Upcoming(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]Upcomin
 	if err != nil {
 		return nil, err
 	}
+	outline, err := q.OutlineEpisodes(ctx, showIDs)
+	if err != nil {
+		return nil, err
+	}
+	known := map[int64]bool{}
+	for _, list := range episodes {
+		for _, e := range list {
+			known[e.ID] = true
+		}
+	}
+	// Episode groups lag behind new episodes, so ones missing from a chosen order keep their TMDB numbers.
+	for _, e := range outline {
+		if !known[e.ID] {
+			episodes[e.ShowID] = append(episodes[e.ShowID], OrderedEpisode{Episode: e, Season: e.SeasonNumber, Number: e.EpisodeNumber})
+		}
+	}
 
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	week := today.AddDate(0, 0, upcomingDays)
+	since := today.AddDate(0, 0, -1)
 	var entries []UpcomingEntry
 	for _, id := range showIDs {
 		var soon []OrderedEpisode
 		var later *OrderedEpisode
 		for _, e := range episodes[id] {
 			switch {
-			case e.SeasonNumber == 0, e.FirstAired == nil, e.FirstAired.Before(today), watched[e.ID]:
+			case e.Season == 0, e.FirstAired == nil, e.FirstAired.Before(since), watched[e.ID], slices.Contains(hiddenSeasons[id], e.Season):
 				continue
-			case !started[id] && e.EpisodeNumber != 1:
+			case !started[id] && e.Number != 1:
 				continue
 			case !e.FirstAired.After(week):
 				soon = append(soon, e)
