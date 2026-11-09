@@ -1428,10 +1428,15 @@ paths:
         - $ref: '#/components/parameters/ProfileId'
         - name: order
           in: query
-          description: Most followed first, or newest first. Newest by default. Lists made by Tethr come first either way.
+          description: Most followed first, most new followers in the last 7 days first (only lists with some), or newest first. Newest by default. Lists made by Tethr come first.
           schema:
             type: string
-            enum: [popular, newest]
+            enum: [popular, rising, newest]
+        - name: official
+          in: query
+          description: True for only lists made by Tethr, false to leave them out. Left out, both are listed.
+          schema:
+            type: boolean
         - name: q
           in: query
           description: Only lists whose name contains this, ignoring case.

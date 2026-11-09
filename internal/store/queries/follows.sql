@@ -20,11 +20,17 @@ SELECT l.id, count(*) OVER ()::bigint AS total
 FROM lists l
 JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN (SELECT list_id, count(*) AS n FROM list_follows GROUP BY list_id) f ON f.list_id = l.id
+LEFT JOIN (SELECT lf.list_id, count(*) AS n FROM list_follows lf WHERE lf.followed_at > sqlc.arg(since) GROUP BY lf.list_id) recent ON recent.list_id = l.id
 WHERE l.kind = 'custom' AND l.privacy = 'public'
   AND EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id)
   AND NOT EXISTS (SELECT 1 FROM list_reports r WHERE r.list_id = l.id AND r.resolved_at IS NULL)
   AND (sqlc.narg(search)::text IS NULL OR l.name ILIKE '%' || sqlc.narg(search)::text || '%')
-ORDER BY o.username = sqlc.arg(official)::text DESC, CASE WHEN sqlc.arg(popular)::boolean THEN coalesce(f.n, 0) END DESC, l.created_at DESC, l.id DESC
+  AND (sqlc.narg(only_official)::boolean IS NULL OR (o.username = sqlc.arg(official)::text) = sqlc.narg(only_official)::boolean)
+  AND (NOT sqlc.arg(rising)::boolean OR recent.n > 0)
+ORDER BY o.username = sqlc.arg(official)::text DESC,
+  CASE WHEN sqlc.arg(rising)::boolean THEN coalesce(recent.n, 0) END DESC,
+  CASE WHEN sqlc.arg(popular)::boolean THEN coalesce(f.n, 0) END DESC,
+  l.created_at DESC, l.id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: AddListReport :one
