@@ -27,26 +27,27 @@ func (s *Server) GetYear(ctx context.Context, req GetYearRequestObject) (GetYear
 	}
 	y, err := core.Year(ctx, s.DB, c.ProfileID, req.Year, loc, time.Now())
 	if errors.Is(err, core.ErrNotFound) {
-		return GetYear404JSONResponse(problem("not_found", "That year hasn’t started yet.")), nil
+		return GetYear404JSONResponse(problem("not_started", "That year hasn’t started yet.")), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	out := GetYear200JSONResponse{
-		Year:      y.Year,
-		Through:   openapi_types.Date{Time: y.Through},
-		Plays:     y.Plays,
-		Episodes:  y.Episodes,
-		Films:     y.Films,
-		Minutes:   y.Minutes,
-		NewShows:  y.NewShows,
-		Rewatched: y.Rewatched,
-		Days:      make([]YearDay, 0, len(y.Days)),
-		Hours:     y.Hours[:],
-		Shows:     make([]YearShow, 0, len(y.Shows)),
-		FilmPlays: make([]YearFilm, 0, len(y.FilmsSeen)),
-		Run:       YearRun{Days: y.Run.Days},
-		Years:     y.Years,
+		Year:               y.Year,
+		Through:            openapi_types.Date{Time: y.Through},
+		Plays:              y.Plays,
+		Episodes:           y.Episodes,
+		Films:              y.Films,
+		Minutes:            y.Minutes,
+		PlaysWithoutLength: y.Unknown,
+		NewShows:           y.NewShows,
+		Rewatched:          y.Rewatched,
+		Days:               make([]YearDay, 0, len(y.Days)),
+		Hours:              y.Hours[:],
+		Shows:              make([]YearShow, 0, len(y.Shows)),
+		FilmPlays:          make([]YearFilm, 0, len(y.FilmsSeen)),
+		Run:                YearRun{Days: y.Run.Days},
+		Years:              y.Years,
 	}
 	if out.Years == nil {
 		out.Years = []int{}
