@@ -330,14 +330,12 @@ function Head({
         {list.description && <p className={styles.lead}>{list.description}</p>}
         <p className={styles.small}>
           {by}
-          {privacyWords[list.privacy]} can see it.{' '}
           {!mine && list.can_edit_items && profileID && 'You can add to it, take things off and change the order. '}
           {list.item_count === 0
             ? 'Nothing on it yet.'
             : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
           {list.in_up_next && ' Up next shows what to watch from it next.'}
           {list.privacy === 'public' && list.follower_count > 0 && ` ${plural(list.follower_count, 'follower')}.`}
-          {canFollow && !list.following && ' If you follow it, its owner sees your username.'}
         </p>
         {(upNext.isError || follow.isError) && (
           <p className={styles.error}>{problemMessage(upNext.error ?? follow.error)}</p>
