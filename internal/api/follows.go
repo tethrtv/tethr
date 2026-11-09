@@ -105,9 +105,11 @@ func (s *Server) BrowseLists(ctx context.Context, req BrowseListsRequestObject) 
 	}
 	p := req.Params
 	query := core.BrowseQuery{
-		Popular: p.Order != nil && *p.Order == Popular,
-		Search:  value(p.Q),
-		Page:    core.Page{Page: max(value(p.Page), 1), Limit: min(max(value(p.Limit), 0), 100)},
+		Popular:  p.Order != nil && *p.Order == Popular,
+		Rising:   p.Order != nil && *p.Order == Rising,
+		Official: p.Official,
+		Search:   value(p.Q),
+		Page:     core.Page{Page: max(value(p.Page), 1), Limit: min(max(value(p.Limit), 0), 100)},
 	}
 	if query.Page.Limit == 0 {
 		query.Page.Limit = 20
@@ -166,6 +168,8 @@ func (s *Server) ReportList(ctx context.Context, req ReportListRequestObject) (R
 		return ReportList400JSONResponse{problem("invalid_reason", "Pick a reason for the report.")}, nil
 	case errors.Is(err, core.ErrReportNote):
 		return ReportList400JSONResponse{problem("invalid_note", "Notes are up to 500 characters.")}, nil
+	case errors.Is(err, core.ErrReportOfficial):
+		return ReportList403JSONResponse(problem("official_list", "Lists made by Tethr can’t be reported. If something on one is wrong, email reports@tethr.tv.")), nil
 	case errors.Is(err, core.ErrTooManyReports):
 		return ReportList429JSONResponse(problem("too_many_reports", "That’s a lot of reports for one day. If something urgent needs a look, email reports@tethr.tv.")), nil
 	case err != nil:

@@ -46,6 +46,8 @@ func main() {
 			run = app
 		case "report":
 			run = report
+		case "official":
+			run = official
 		}
 	}
 	if err := run(log); err != nil {
@@ -116,6 +118,23 @@ func app(*slog.Logger) error {
 		return err
 	}
 	fmt.Printf("client id:     %s\nclient secret: %s\n", a.ClientID, a.ClientSecret)
+	return nil
+}
+
+func official(*slog.Logger) error {
+	if len(os.Args) != 3 {
+		return errors.New("usage: tethr official <email>")
+	}
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if _, err := core.CreateOfficialAccount(ctx, db, os.Args[2]); err != nil {
+		return err
+	}
+	fmt.Printf("Made @%s for %s. Sign in with that email to make Tethr's lists.\n", core.OfficialUsername, os.Args[2])
 	return nil
 }
 

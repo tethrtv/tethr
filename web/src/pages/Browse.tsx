@@ -1,7 +1,8 @@
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import { Button } from '../components/Button'
+import { ListTiles } from '../components/ListTiles'
 import { useWatching } from '../components/Shell'
 import { Option } from './List'
 import own from './List.module.css'
@@ -18,14 +19,37 @@ export function Browse() {
   const [order, setOrder] = useState<(typeof orders)[number]['value']>('newest')
   const [search, setSearch] = useState('')
   const q = search.trim()
+  const shelf = (key: string, query: { official?: boolean; order?: 'rising' }) =>
+    ({
+      queryKey: ['public-lists', profile.id, key],
+      enabled: goesOutside(profile.kind),
+      queryFn: async () => {
+        const { data, error } = await api.GET('/v1/public-lists', {
+          params: { query: { profile_id: profile.id, limit: 20, ...query } },
+        })
+        if (error) throw error
+        return data.lists
+      },
+    }) as const
+  const official = useQuery(shelf('official', { official: true }))
+  const rising = useQuery(shelf('rising', { official: false, order: 'rising' }))
+  const shelves = !q && official.isSuccess
   const lists = useInfiniteQuery({
-    queryKey: ['public-lists', profile.id, order, q],
-    enabled: goesOutside(profile.kind),
+    queryKey: ['public-lists', profile.id, order, q, shelves],
+    enabled: goesOutside(profile.kind) && !official.isPending,
     placeholderData: keepPreviousData,
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const { data, error } = await api.GET('/v1/public-lists', {
-        params: { query: { profile_id: profile.id, order, q: q || undefined, page: pageParam } },
+        params: {
+          query: {
+            profile_id: profile.id,
+            order,
+            official: shelves ? false : undefined,
+            q: q || undefined,
+            page: pageParam,
+          },
+        },
       })
       if (error) throw error
       return data
@@ -55,6 +79,22 @@ export function Browse() {
         </p>
       </header>
 
+      {shelves && !!official.data?.length && (
+        <section>
+          <h2 className={styles.sectionTitle}>Made by Tethr</h2>
+          <p className={styles.quiet}>Lists Tethr makes and keeps up to date.</p>
+          <ListTiles lists={official.data} />
+        </section>
+      )}
+
+      {!q && !!rising.data?.length && (
+        <section>
+          <h2 className={styles.sectionTitle}>Rising this week</h2>
+          <p className={styles.quiet}>Lists picking up the most new followers in the last seven days.</p>
+          <ListTiles lists={rising.data.slice(0, 4)} />
+        </section>
+      )}
+
       <div className={`${styles.filters} ${own.filters}`}>
         <fieldset className={styles.options}>
           <legend className={styles.hidden}>Order</legend>
@@ -76,7 +116,7 @@ export function Browse() {
 
       <section>
         <h2 className={styles.sectionTitle}>
-          {orders.find((o) => o.value === order)?.label}
+          Everyone’s lists
           {total !== undefined && <span className={styles.faint}> {total}</span>}
         </h2>
         {lists.isError && <p className={styles.error}>{problemMessage(lists.error)}</p>}

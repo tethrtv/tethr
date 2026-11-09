@@ -69,7 +69,7 @@ func (s *Server) toList(l core.List) List {
 		Privacy:       ListPrivacy(l.Privacy),
 		SortBy:        ListSortBy(l.SortBy),
 		SortHow:       ListSortHow(l.SortHow),
-		Owner:         ListOwner{Username: l.Owner.Username, Name: optionalString(l.Owner.Name)},
+		Owner:         ListOwner{Username: l.Owner.Username, Name: optionalString(l.Owner.Name), Official: l.Owner.Username == core.OfficialUsername},
 		Access:        ListAccess(l.Access),
 		CanEditItems:  l.CanEdit,
 		InUpNext:      l.InUpNext,
