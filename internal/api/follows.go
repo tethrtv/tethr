@@ -105,9 +105,11 @@ func (s *Server) BrowseLists(ctx context.Context, req BrowseListsRequestObject) 
 	}
 	p := req.Params
 	query := core.BrowseQuery{
-		Popular: p.Order != nil && *p.Order == Popular,
-		Search:  value(p.Q),
-		Page:    core.Page{Page: max(value(p.Page), 1), Limit: min(max(value(p.Limit), 0), 100)},
+		Popular:  p.Order != nil && *p.Order == Popular,
+		Rising:   p.Order != nil && *p.Order == Rising,
+		Official: p.Official,
+		Search:   value(p.Q),
+		Page:     core.Page{Page: max(value(p.Page), 1), Limit: min(max(value(p.Limit), 0), 100)},
 	}
 	if query.Page.Limit == 0 {
 		query.Page.Limit = 20

@@ -32,10 +32,14 @@ type PublicProfile struct {
 }
 
 type BrowseQuery struct {
-	Popular bool
-	Search  string
-	Page    Page
+	Popular  bool
+	Rising   bool
+	Official *bool
+	Search   string
+	Page     Page
 }
+
+const risingDays = 7
 
 func goesOutside(kind string) bool {
 	return kind != "kids" && kind != "guest"
@@ -141,11 +145,14 @@ func BrowseLists(ctx context.Context, db *pgxpool.Pool, viewer int64, query Brow
 		search = &s
 	}
 	rows, err := q.BrowseLists(ctx, store.BrowseListsParams{
-		Search:   search,
-		Official: OfficialUsername,
-		Popular:  query.Popular,
-		Lim:      int32(query.Page.Limit),
-		Off:      query.Page.offset(),
+		Search:       search,
+		Official:     OfficialUsername,
+		OnlyOfficial: query.Official,
+		Rising:       query.Rising,
+		Since:        time.Now().AddDate(0, 0, -risingDays),
+		Popular:      query.Popular,
+		Lim:          int32(query.Page.Limit),
+		Off:          query.Page.offset(),
 	})
 	if err != nil {
 		return nil, 0, err

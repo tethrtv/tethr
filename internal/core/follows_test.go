@@ -217,3 +217,73 @@ func TestBrowsingLists(t *testing.T) {
 		t.Errorf("no such username = %v", err)
 	}
 }
+
+func TestOfficialLists(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	if _, err := CreateOfficialAccount(ctx, db, "not an email"); !errors.Is(err, ErrInvalidEmail) {
+		t.Errorf("bad email = %v", err)
+	}
+	account, err := CreateOfficialAccount(ctx, db, "lists@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateOfficialAccount(ctx, db, "again@example.com"); !errors.Is(err, ErrOfficialExists) {
+		t.Errorf("second official account = %v", err)
+	}
+	_, profiles, err := Me(ctx, db, account.ID)
+	if err != nil || len(profiles) != 1 || profiles[0].Username != OfficialUsername || profiles[0].Private {
+		t.Fatalf("official profile = %+v, %v", profiles, err)
+	}
+	official := profiles[0].ID
+
+	viewerAccount, _ := signedUpAccount(t, db)
+	_, mine, _ := Me(ctx, db, viewerAccount)
+	viewer := mine[0].ID
+	publish := func(profileID int64, name string) List {
+		t.Helper()
+		l, err := CreateList(ctx, db, profileID, ListChanges{Name: ptr(name), Privacy: ptr("public")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := AddToList(ctx, db, profileID, l.ID, []Listing{{Ref: inception()}}); err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	publish(official, "Christmas films")
+	favourites := publish(viewer, "My favourites")
+	publish(viewer, "Old news")
+	if _, err := FollowList(ctx, db, official, favourites.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	names := func(q BrowseQuery) string {
+		t.Helper()
+		q.Page = Page{Page: 1, Limit: 20}
+		lists, _, err := BrowseLists(ctx, db, viewer, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, l := range lists {
+			out = append(out, l.Name)
+		}
+		return strings.Join(out, ", ")
+	}
+	if got := names(BrowseQuery{}); got != "Christmas films, Old news, My favourites" {
+		t.Errorf("newest = %q", got)
+	}
+	if got := names(BrowseQuery{Popular: true}); got != "Christmas films, My favourites, Old news" {
+		t.Errorf("most followed = %q", got)
+	}
+	if got := names(BrowseQuery{Official: ptr(true)}); got != "Christmas films" {
+		t.Errorf("only official = %q", got)
+	}
+	if got := names(BrowseQuery{Official: ptr(false), Popular: true}); got != "My favourites, Old news" {
+		t.Errorf("without official = %q", got)
+	}
+	if got := names(BrowseQuery{Rising: true}); got != "My favourites" {
+		t.Errorf("rising = %q", got)
+	}
+}

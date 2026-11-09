@@ -627,6 +627,7 @@ func (e ListPlaybackParamsType) Valid() bool {
 const (
 	Newest  BrowseListsParamsOrder = "newest"
 	Popular BrowseListsParamsOrder = "popular"
+	Rising  BrowseListsParamsOrder = "rising"
 )
 
 // Valid indicates whether the value is a known member of the BrowseListsParamsOrder enum.
@@ -635,6 +636,8 @@ func (e BrowseListsParamsOrder) Valid() bool {
 	case Newest:
 		return true
 	case Popular:
+		return true
+	case Rising:
 		return true
 	default:
 		return false
@@ -1998,8 +2001,11 @@ type BrowseListsParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 
-	// Order Most followed first, or newest first. Newest by default. Lists made by Tethr come first either way.
+	// Order Most followed first, most new followers in the last 7 days first (only lists with some), or newest first. Newest by default. Lists made by Tethr come first.
 	Order *BrowseListsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
+
+	// Official True for only lists made by Tethr, false to leave them out. Left out, both are listed.
+	Official *bool `form:"official,omitempty" json:"official,omitempty"`
 
 	// Q Only lists whose name contains this, ignoring case.
 	Q    *string `form:"q,omitempty" json:"q,omitempty"`
@@ -4773,6 +4779,19 @@ func (siw *ServerInterfaceWrapper) BrowseLists(w http.ResponseWriter, r *http.Re
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "order"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "official" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "official", r.URL.Query(), &params.Official, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "official"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "official", Err: err})
 		}
 		return
 	}
