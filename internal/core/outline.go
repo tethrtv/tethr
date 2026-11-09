@@ -92,6 +92,9 @@ func mergeEpisode(ctx context.Context, q *store.Queries, from, into int64) error
 	if err := q.MergeEpisodePlayback(ctx, store.MergeEpisodePlaybackParams{FromID: &from, IntoID: &into}); err != nil {
 		return err
 	}
+	if err := q.TouchListsWithEpisodes(ctx, []int64{from, into}); err != nil {
+		return err
+	}
 	if err := q.DropClashingListItems(ctx, store.DropClashingListItemsParams{FromID: &from, IntoID: &into}); err != nil {
 		return err
 	}
