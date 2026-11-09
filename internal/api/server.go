@@ -57,6 +57,10 @@ const (
 func (s *Server) Handler() http.Handler {
 	strict := NewStrictHandlerWithOptions(s, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+				writeProblem(w, http.StatusRequestEntityTooLarge, "too_big", "Requests up to 100 MB can be sent.")
+				return
+			}
 			writeProblem(w, http.StatusBadRequest, "invalid_request", "That request couldn't be read.")
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
