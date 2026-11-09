@@ -251,11 +251,14 @@ func TestOfficialLists(t *testing.T) {
 		}
 		return l
 	}
-	publish(official, "Christmas films")
+	christmas := publish(official, "Christmas films")
 	favourites := publish(viewer, "My favourites")
 	publish(viewer, "Old news")
 	if _, err := FollowList(ctx, db, official, favourites.ID); err != nil {
 		t.Fatal(err)
+	}
+	if _, _, err := ReportList(ctx, db, viewer, christmas.ID, "spam", ""); !errors.Is(err, ErrReportOfficial) {
+		t.Errorf("reporting a list made by Tethr = %v", err)
 	}
 
 	names := func(q BrowseQuery) string {

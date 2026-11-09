@@ -805,7 +805,7 @@ export interface paths {
         put?: never;
         /**
          * Report a list that breaks the rules
-         * @description For public lists from outside your household. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
+         * @description For public lists from outside your household, except lists made by Tethr. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
          */
         post: operations["reportList"];
         delete?: never;
@@ -3815,6 +3815,7 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
         };

@@ -17,6 +17,7 @@ var (
 	ErrReportReason   = errors.New("a report's reason is illegal, harassment, personal, spam or other")
 	ErrReportNote     = errors.New("a report's note is up to 500 characters")
 	ErrTooManyReports = errors.New("a profile can send up to 20 reports a day")
+	ErrReportOfficial = errors.New("lists made by tethr can't be reported")
 )
 
 const reportsPerDay = 20
@@ -41,6 +42,9 @@ func ReportList(ctx context.Context, db *pgxpool.Pool, reporter, listID int64, r
 	}
 	if l.Access != "public" {
 		return Report{}, false, ErrNotFound
+	}
+	if l.Owner.Username == OfficialUsername {
+		return Report{}, false, ErrReportOfficial
 	}
 	if !slices.Contains([]string{"illegal", "harassment", "personal", "spam", "other"}, reason) {
 		return Report{}, false, ErrReportReason

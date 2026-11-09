@@ -390,7 +390,7 @@ function Head({
               See who follows it
             </button>
           )}
-          {outsider && (
+          {outsider && !list.owner.official && (
             <button
               type="button"
               className={`${styles.textButton} ${own.quietAction}`}
@@ -424,7 +424,9 @@ function Head({
           </SlipBody>
         </Slip>
       )}
-      {outsider && <ReportSlip list={list} profileID={profileID} open={slip === 'report'} onClose={close} />}
+      {outsider && !list.owner.official && (
+        <ReportSlip list={list} profileID={profileID} open={slip === 'report'} onClose={close} />
+      )}
     </header>
   )
 }
