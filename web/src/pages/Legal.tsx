@@ -143,8 +143,11 @@ export function Terms() {
       <Section title="Reporting something">
         <p>
           If you see a list that breaks these rules, use Report on the list. For anything else, email {reports} with a
-          link to it and what’s wrong. We read every report, usually within a few days, and a reported list stops
-          showing up when people browse until we have.
+          link to it and what’s wrong. We read every report, usually within a few days. Until we’ve looked at it, a list
+          reported for something illegal or for sharing someone’s private details stops showing up when people browse,
+          and so does one reported by three households. A list we’ve looked at and kept carries on showing up until it
+          changes, and once three of a household’s reports in the last year have turned out to be unfounded, its reports
+          stop taking lists out of browsing.
         </p>
         <p>
           We can hide or remove anything that breaks these rules, and suspend or close accounts that do it again or do
@@ -344,7 +347,8 @@ const kept = [
   },
   {
     what: 'Reports',
-    detail: 'Reports you send about a list: the reason, your note, and which profile sent it.',
+    detail:
+      'Reports you send about a list: the reason, your note, which profile and household sent it, and what we decided. Once three of your household’s reports in the last year have turned out to be unfounded, its reports stop taking lists out of browsing.',
     until: 'A year after we’ve dealt with it',
   },
   {

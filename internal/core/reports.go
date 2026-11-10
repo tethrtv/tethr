@@ -16,17 +16,18 @@ import (
 var (
 	ErrReportReason   = errors.New("a report's reason is illegal, harassment, personal, spam or other")
 	ErrReportNote     = errors.New("a report's note is up to 500 characters")
-	ErrTooManyReports = errors.New("a profile can send up to 20 reports a day")
+	ErrTooManyReports = errors.New("a household can send up to 5 reports a day")
 	ErrReportOfficial = errors.New("lists made by tethr can't be reported")
 )
 
-const reportsPerDay = 20
+const reportsPerDay = 5
 
 type Report struct {
 	List     List
 	Reason   string
 	Note     *string
 	Reporter string
+	Hid      bool
 }
 
 type RemovedList struct {
@@ -53,23 +54,44 @@ func ReportList(ctx context.Context, db *pgxpool.Pool, reporter, listID int64, r
 	if n != nil && utf8.RuneCountInString(*n) > 500 {
 		return Report{}, false, ErrReportNote
 	}
-	sent, err := q.CountReportsSince(ctx, store.CountReportsSinceParams{ReporterID: &reporter, CreatedAt: time.Now().Add(-24 * time.Hour)})
+	p, err := q.ProfileByID(ctx, reporter)
+	if err != nil {
+		return Report{}, false, err
+	}
+	sent, err := q.CountReportsSince(ctx, store.CountReportsSinceParams{HouseholdID: &p.HouseholdID, CreatedAt: time.Now().Add(-24 * time.Hour)})
 	if err != nil {
 		return Report{}, false, err
 	}
 	if sent >= reportsPerDay {
 		return Report{}, false, ErrTooManyReports
 	}
-	p, err := q.ProfileByID(ctx, reporter)
+	r := Report{List: l, Reason: reason, Note: n, Reporter: p.Username}
+	isNew := false
+	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		if _, err := q.LockList(ctx, listID); err != nil {
+			return notFound(err)
+		}
+		before, err := q.ListHidden(ctx, listID)
+		if err != nil {
+			return err
+		}
+		_, err = q.AddListReport(ctx, store.AddListReportParams{ListID: listID, ReporterID: &reporter, HouseholdID: &p.HouseholdID, Reason: reason, Note: n})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		isNew = true
+		after, err := q.ListHidden(ctx, listID)
+		r.Hid = !before && after
+		return err
+	})
 	if err != nil {
 		return Report{}, false, err
 	}
-	r := Report{List: l, Reason: reason, Note: n, Reporter: p.Username}
-	_, err = q.AddListReport(ctx, store.AddListReportParams{ListID: listID, ReporterID: &reporter, Reason: reason, Note: n})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return r, false, nil
-	}
-	return r, err == nil, err
+	return r, isNew, nil
 }
 
 func OpenReports(ctx context.Context, db *pgxpool.Pool) ([]store.OpenReportsRow, error) {
@@ -77,11 +99,17 @@ func OpenReports(ctx context.Context, db *pgxpool.Pool) ([]store.OpenReportsRow,
 }
 
 func KeepList(ctx context.Context, db *pgxpool.Pool, listID int64) error {
-	n, err := store.New(db).ResolveReports(ctx, store.ResolveReportsParams{ListID: listID, Outcome: optional("kept")})
-	if err == nil && n == 0 {
-		return ErrNotFound
-	}
-	return err
+	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		n, err := q.ResolveReports(ctx, store.ResolveReportsParams{ListID: listID, Outcome: optional("kept")})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		return q.MarkListKept(ctx, listID)
+	})
 }
 
 func RemoveList(ctx context.Context, db *pgxpool.Pool, listID int64) (RemovedList, error) {
