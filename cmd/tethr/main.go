@@ -224,6 +224,10 @@ func serve(log *slog.Logger) error {
 	defer db.Close()
 
 	appURL := envOr("APP_URL", "http://localhost:5173")
+	london, err := time.LoadLocation("Europe/London")
+	if err != nil {
+		return err
+	}
 	origins := strings.Split(envOr("ALLOWED_ORIGINS", appURL), ",")
 	wa, err := webauthn.New(&webauthn.Config{
 		RPID:          envOr("WEBAUTHN_RP_ID", "localhost"),
@@ -254,6 +258,7 @@ func serve(log *slog.Logger) error {
 
 	go jobs.Imports{DB: db, Log: log}.Run(ctx)
 	go jobs.Cleanup{DB: db, Log: log}.Run(ctx)
+	go jobs.Reports{DB: db, Mail: v1.Mail, To: v1.ReportsTo, AppURL: appURL, Zone: london, Log: log}.Run(ctx)
 	go jobs.Titles{DB: db, Wikidata: &wikidata.Client{UserAgent: "Tethr/" + version + " (https://github.com/tethrtv/tethr)"}, Log: log}.Run(ctx)
 	media := &hooks.Server{DB: db, Log: log}
 	var details *meta.Server
