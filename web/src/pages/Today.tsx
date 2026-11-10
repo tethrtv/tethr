@@ -476,7 +476,7 @@ function OnYourWatchlist({ profileID, skip }: { profileID: number; skip: Set<num
     .slice(0, 4)
   if (!picks.length) return null
   return (
-    <Shelf title="From your watchlist" note="A few picks, different each day." to="/watchlist" more="Your watchlist">
+    <Shelf title="From your watchlist" note="A few picks, shuffled each day." to="/watchlist" more="Your watchlist">
       <ul className={styles.posters}>
         {picks.map((l, i) => (
           <Poster key={l.id} kind={kindOf(l.item)} title={l.item.title} note={`Added ${ago(l.listed_at)}`} index={i} />
@@ -493,10 +493,7 @@ function TopTen({ profileID }: { profileID: number }) {
   })
   if (!popular.data?.length) return null
   return (
-    <Shelf
-      title={`Top ${popular.data.length} on Tethr this week`}
-      note="What the most households played in the last seven days."
-    >
+    <Shelf title="Popular on Tethr this week" note="What the most households played in the last seven days.">
       <ol className={styles.chart}>
         {popular.data.map((p, i) => (
           <Ranked
@@ -549,7 +546,7 @@ function Trending() {
   const trending = useTrending()
   if (!trending.data?.length) return null
   return (
-    <Shelf title="Trending this week" note="What’s getting watched everywhere, from TMDB.">
+    <Shelf title="Trending this week" note="What’s trending on TMDB.">
       <ul className={styles.stills}>
         {trending.data.map((t, i) => (
           <li key={`${t.type}-${t.tmdb}`} className={styles.still} style={{ '--i': i } as CSSProperties}>

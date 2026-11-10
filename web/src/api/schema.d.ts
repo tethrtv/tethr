@@ -192,7 +192,7 @@ export interface paths {
         delete: operations["removeProfile"];
         options?: never;
         head?: never;
-        /** Rename a profile, change its username or privacy */
+        /** Rename a profile, change its username or privacy, or choose whether it counts in Popular on Tethr */
         patch: operations["updateProfile"];
         trace?: never;
     };
@@ -1067,7 +1067,7 @@ export interface paths {
         };
         /**
          * What people on Tethr are watching this week
-         * @description Films and shows played by the most households in the last 7 days, up to 10. A title is only listed once at least 10 households have played it, and counts are rounded down to a multiple of 5. Each household counts once, and only once it's been on Tethr for two weeks. Kids' and guest profiles and profiles that have opted out aren't counted, and kids' and guest profiles can't see the list.
+         * @description Films and shows played by the most households in the last 7 days, up to 10. A title is only listed once at least 10 households have played it, and counts are rounded down to a multiple of 5. Each household counts once, and only after two weeks on Tethr. Kids' and guest profiles and profiles that have opted out aren't counted, and kids' and guest profiles can't see the list.
          */
         get: operations["getPopular"];
         put?: never;
