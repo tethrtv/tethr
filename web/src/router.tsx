@@ -126,17 +126,6 @@ function OneYear() {
   )
 }
 
-function OneYear() {
-  const { year = '' } = useParams({ strict: false })
-  const n = Number(year)
-  if (!Number.isInteger(n) || n <= 1900) return <NotFound />
-  return (
-    <Shell>
-      <YearPage key={n} year={n} />
-    </Shell>
-  )
-}
-
 const routes = [
   createRoute({
     getParentRoute: () => root,
