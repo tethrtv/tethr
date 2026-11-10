@@ -57,7 +57,14 @@ export function Search({ profileID }: { profileID: number }) {
   const list = (hits: Hit[]) =>
     hits.map((r) => (
       <li key={r.key}>
-        <TitleLink type={r.type} slug={r.slug} className={styles.result} onClick={close}>
+        <TitleLink
+          type={r.type}
+          slug={r.slug}
+          className={styles.result}
+          onClick={close}
+          // Safari doesn't focus a link on click, so the search box would blur and close the list first.
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <span className={styles.name}>{r.name}</span>
           <span className={styles.faint}>{kind(r.type, r.year)}</span>
         </TitleLink>
