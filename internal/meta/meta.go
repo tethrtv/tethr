@@ -45,6 +45,7 @@ type title struct {
 	Name        string       `json:"name"`
 	Year        *int         `json:"year"`
 	Poster      *string      `json:"poster"`
+	Backdrop    string       `json:"backdrop,omitempty"`
 	Overview    string       `json:"overview,omitempty"`
 	Tagline     string       `json:"tagline,omitempty"`
 	Genres      []string     `json:"genres,omitempty"`
@@ -149,7 +150,7 @@ func (s *Server) title(fetch func(context.Context, int32) (tmdb.Title, error), c
 		if !s.found(w, r, err) {
 			return
 		}
-		out := title{Name: t.Name, Overview: t.Overview, Tagline: t.Tagline, Genres: t.Genres, Runtime: t.Runtime, Creators: t.Creators, Cast: t.Cast, Networks: t.Networks, Status: t.Status}
+		out := title{Name: t.Name, Backdrop: t.Backdrop, Overview: t.Overview, Tagline: t.Tagline, Genres: t.Genres, Runtime: t.Runtime, Creators: t.Creators, Cast: t.Cast, Networks: t.Networks, Status: t.Status}
 		if t.Year > 0 {
 			out.Year = &t.Year
 		}

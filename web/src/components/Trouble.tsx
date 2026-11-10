@@ -33,7 +33,7 @@ export function NotFound() {
       <p className={styles.lead}>There’s no page at this address. The link might be old, or have a typo in it.</p>
       <Listing note="Not found. No repeats scheduled." />
       <p className={styles.actions}>
-        <Link to="/" className={`${buttons.primary} ${styles.button}`}>
+        <Link to="/up-next" className={`${buttons.primary} ${styles.button}`}>
           Go to Up next
         </Link>
         <Link to="/lists" className={styles.textLink}>

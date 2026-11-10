@@ -31,7 +31,7 @@ func server(t *testing.T) (http.Handler, *[]string) {
 			if r.URL.Query().Get("language") != "en-GB" {
 				t.Errorf("language = %q", r.URL.Query().Get("language"))
 			}
-			_, _ = w.Write([]byte(`{"name":"Breaking Bad","first_air_date":"2008-01-20","poster_path":"/bb.jpg","overview":"A teacher","vote_average":8.94,"vote_count":16000,
+			_, _ = w.Write([]byte(`{"name":"Breaking Bad","first_air_date":"2008-01-20","poster_path":"/bb.jpg","backdrop_path":"/bb-wide.jpg","overview":"A teacher","vote_average":8.94,"vote_count":16000,
 				"genres":[{"id":18,"name":"Drama"}],"episode_run_time":[],"last_episode_to_air":{"runtime":47},"networks":[{"name":"AMC"}],"created_by":[{"name":"Vince Gilligan"}],
 				"status":"Returning Series","seasons":[{"season_number":0,"episode_count":2},{"season_number":1,"episode_count":7}],"next_episode_to_air":{"season_number":6,"episode_number":1,"name":"Next","air_date":"2026-12-01"},
 				"aggregate_credits":{"cast":[{"name":"A"},{"name":"B"},{"name":"C"},{"name":"D"},{"name":"E"},{"name":"F"}]},
@@ -108,7 +108,7 @@ func TestDetails(t *testing.T) {
 	h, _ := server(t)
 
 	rec := get(h, "/meta/tv/1396", "same-site")
-	want := `{"name":"Breaking Bad","year":2008,"poster":"/bb.jpg","overview":"A teacher","genres":["Drama"],"runtime":47,"certificate":{"country":"GB","rating":"18"},"score":8.9,` +
+	want := `{"name":"Breaking Bad","year":2008,"poster":"/bb.jpg","backdrop":"/bb-wide.jpg","overview":"A teacher","genres":["Drama"],"runtime":47,"certificate":{"country":"GB","rating":"18"},"score":8.9,` +
 		`"creators":["Vince Gilligan"],"cast":["A","B","C","D","E"],"networks":["AMC"],"status":"Returning Series","next_episode":{"season":6,"number":1,"name":"Next","air_date":"2026-12-01"},` +
 		`"seasons":[{"number":0,"episodes":2},{"number":1,"episodes":7}]}` + "\n"
 	if rec.Code != http.StatusOK || rec.Body.String() != want {

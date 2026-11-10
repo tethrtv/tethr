@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type CSSProperties, createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
+import { Television } from '../components/Television'
 import { TitleLink } from '../components/TitleLink'
 import { duration, ep, plural } from '../format'
 import { image, useDetails } from '../tmdb'
@@ -52,12 +53,14 @@ function useSeen<T extends Element>() {
   return [ref, seen] as const
 }
 
+const Seen = createContext(false)
+
 function Section({ title, className, children }: { title: string; className?: string; children: ReactNode }) {
   const [ref, seen] = useSeen<HTMLElement>()
   return (
     <section ref={ref} className={`${styles.section} ${className ?? ''}`} data-seen={seen || undefined}>
       <h2 className={styles.sectionTitle}>{title}</h2>
-      {children}
+      <Seen.Provider value={seen}>{children}</Seen.Provider>
     </section>
   )
 }
@@ -91,13 +94,12 @@ function Marked({ children }: { children: ReactNode }) {
   )
 }
 
-export function YearPage({ year }: { year: number }) {
-  const { profile } = useWatching()
-  const summary = useQuery({
-    queryKey: ['year', profile.id, year, zone],
+export function useYear(profileID: number, year: number) {
+  return useQuery({
+    queryKey: ['year', profileID, year, zone],
     queryFn: async () => {
       const ask = (tz?: string) =>
-        api.GET('/v1/years/{year}', { params: { path: { year }, query: { profile_id: profile.id, tz } } })
+        api.GET('/v1/years/{year}', { params: { path: { year }, query: { profile_id: profileID, tz } } })
       let answer = await ask(zone)
       if (answer.error?.code === 'invalid_time_zone') answer = await ask()
       if (answer.error?.code === 'not_started') return null
@@ -105,6 +107,11 @@ export function YearPage({ year }: { year: number }) {
       return answer.data
     },
   })
+}
+
+export function YearPage({ year }: { year: number }) {
+  const { profile } = useWatching()
+  const summary = useYear(profile.id, year)
   const current = year === new Date().getFullYear()
   const heading = current ? `${year} so far` : String(year)
 
@@ -410,43 +417,11 @@ function Telly({ watch, label }: { watch: Watch; label: string }) {
           hour: '2-digit',
           minute: '2-digit',
         })
-  const clip = `screen-${watch.id}`
+  const seen = useContext(Seen)
   return (
     <figure className={styles.telly}>
       <svg viewBox="0 0 240 230" className={styles.tellySet} role="img" aria-label={`${name} on an old television`}>
-        <defs>
-          <clipPath id={clip}>
-            <rect x="34" y="62" width="128" height="104" rx="14" />
-          </clipPath>
-        </defs>
-        <g className={styles.aerials}>
-          <path d="M120 44L92 8" />
-          <path d="M120 44L156 14" />
-          <circle cx="92" cy="8" r="3" />
-          <circle cx="156" cy="14" r="3" />
-        </g>
-        <rect x="18" y="44" width="204" height="140" rx="12" className={styles.cabinet} />
-        <rect x="34" y="62" width="128" height="104" rx="14" className={styles.glass} />
-        <g clipPath={`url(#${clip})`} className={styles.picture}>
-          {poster ? (
-            <image href={poster} x="34" y="40" width="128" height="192" preserveAspectRatio="xMidYMid slice" />
-          ) : (
-            <>
-              <rect x="34" y="62" width="128" height="104" className={styles.blank} />
-              <rect x="34" y="100" width="128" height="28" className={styles.band} />
-              <text x="98" y="119" textAnchor="middle" className={styles.bandText}>
-                {name.length > 16 ? `${name.slice(0, 15)}…` : name}
-              </text>
-            </>
-          )}
-        </g>
-        <rect x="34" y="62" width="128" height="104" rx="14" className={styles.bezel} />
-        <circle cx="194" cy="84" r="11" className={styles.knob} />
-        <path d="M194 76v8" className={styles.knobMark} />
-        <circle cx="194" cy="118" r="11" className={styles.knob} />
-        <path d="M188 114l6 4" className={styles.knobMark} />
-        <path d="M182 148h24M182 156h24M182 164h24" className={styles.grille} />
-        <path d="M46 184l-10 28M194 184l10 28" className={styles.legs} />
+        <Television still={image(meta?.backdrop, 'w300')} poster={poster} name={name} on={seen} />
       </svg>
       <figcaption>
         <span className={styles.faint}>{label}</span>
