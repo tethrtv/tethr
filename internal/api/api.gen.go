@@ -2578,7 +2578,7 @@ type ServerInterface interface {
 	// RemoveProfile Remove someone from the household, and their history
 	// (DELETE /v1/profiles/{id})
 	RemoveProfile(w http.ResponseWriter, r *http.Request, id Id)
-	// UpdateProfile Rename a profile, change its username or privacy
+	// UpdateProfile Rename a profile, change its username or privacy, or choose whether it counts in Popular on Tethr
 	// (PATCH /v1/profiles/{id})
 	UpdateProfile(w http.ResponseWriter, r *http.Request, id Id)
 	// BrowseLists Browse public lists
@@ -11592,7 +11592,7 @@ type StrictServerInterface interface {
 	// RemoveProfile Remove someone from the household, and their history
 	// (DELETE /v1/profiles/{id})
 	RemoveProfile(ctx context.Context, request RemoveProfileRequestObject) (RemoveProfileResponseObject, error)
-	// UpdateProfile Rename a profile, change its username or privacy
+	// UpdateProfile Rename a profile, change its username or privacy, or choose whether it counts in Popular on Tethr
 	// (PATCH /v1/profiles/{id})
 	UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error)
 	// BrowseLists Browse public lists
