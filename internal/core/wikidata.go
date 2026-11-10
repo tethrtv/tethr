@@ -109,6 +109,9 @@ func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into i
 	if err := q.MergeTitleWatching(ctx, store.MergeTitleWatchingParams{FromID: from, IntoID: into}); err != nil {
 		return err
 	}
+	if err := q.TouchListsWithTitles(ctx, []int64{from, into}); err != nil {
+		return err
+	}
 	if err := q.DropClashingTitleListItems(ctx, store.DropClashingTitleListItemsParams{FromID: from, IntoID: into}); err != nil {
 		return err
 	}

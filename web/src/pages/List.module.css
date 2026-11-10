@@ -309,3 +309,14 @@
     transition: opacity 160ms ease;
   }
 }
+
+.made {
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.made:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}

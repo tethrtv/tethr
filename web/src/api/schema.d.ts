@@ -805,7 +805,7 @@ export interface paths {
         put?: never;
         /**
          * Report a list that breaks the rules
-         * @description For public lists from outside your household. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
+         * @description For public lists from outside your household, except lists made by Tethr. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
          */
         post: operations["reportList"];
         delete?: never;
@@ -864,7 +864,7 @@ export interface paths {
         };
         /**
          * Browse public lists
-         * @description Public lists with at least one item, from anyone. Lists with a report waiting to be looked at are left out. Kids and guest profiles can't browse.
+         * @description Public lists with at least one item, from anyone. Lists with a report waiting to be looked at are left out. Kids and guest profiles can't browse. Fetch a list's items a page at a time from `/v1/lists/{id}/items`, and compare `updated_at` to skip lists that haven't changed.
          */
         get: operations["browseLists"];
         put?: never;
@@ -1877,11 +1877,16 @@ export interface components {
             url: string;
             /** Format: date-time */
             created_at: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Changes when the list's details change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on. Your watched progress, a title's name or year, and an episode's number can change without it.
+             */
             updated_at: string;
         };
         ListOwner: {
             username: string;
+            /** @description The list is made by Tethr itself. */
+            official: boolean;
             /** @description Left out when the owner's profile is private and you're outside their household. */
             name?: string;
         };
@@ -3900,6 +3905,7 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
         };
@@ -3988,8 +3994,10 @@ export interface operations {
             query?: {
                 /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
                 profile_id?: components["parameters"]["ProfileId"];
-                /** @description Most followed first, or newest first. Newest by default. */
-                order?: "popular" | "newest";
+                /** @description Most followed first, most new followers in the last 7 days first (only lists with some), or newest first. Newest by default. Lists made by Tethr come first. */
+                order?: "popular" | "rising" | "newest";
+                /** @description True for only lists made by Tethr, false to leave them out. Left out, both are listed. */
+                official?: boolean;
                 /** @description Only lists whose name contains this, ignoring case. */
                 q?: string;
                 page?: number;

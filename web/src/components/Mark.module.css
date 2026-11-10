@@ -1,0 +1,11 @@
+.made {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.made svg {
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+}
