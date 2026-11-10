@@ -36,6 +36,18 @@ func TestMergeSharedWikidata(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	shelf, err := CreateList(ctx, db, caller.ProfileID, ListChanges{Name: ptr("Fantasy")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddToList(ctx, db, caller.ProfileID, shelf.ID, []Listing{{Ref: Ref{Kind: "show", IDs: byTVDB}}}); err != nil {
+		t.Fatal(err)
+	}
+	shelf, err = GetList(ctx, db, caller.ProfileID, shelf.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	lookUp := func(ids IDs) int64 {
 		t.Helper()
 		items, err := LookUp(ctx, db, "show", ids, false)
@@ -89,6 +101,9 @@ func TestMergeSharedWikidata(t *testing.T) {
 	}
 	if items, _ := LookUp(ctx, db, "show", byTMDB, false); items[0].Title.Tvdb != "121361" || *items[0].Title.Name != "Game of Thrones" {
 		t.Errorf("the merged row's TVDB ID should move across: %+v", items[0].Title)
+	}
+	if merged, err := GetList(ctx, db, caller.ProfileID, shelf.ID); err != nil || !merged.UpdatedAt.After(shelf.UpdatedAt) {
+		t.Errorf("a list holding the merged row should count as changed: %v", err)
 	}
 	after, err := LastActivities(ctx, db, caller.ProfileID)
 	if err != nil {

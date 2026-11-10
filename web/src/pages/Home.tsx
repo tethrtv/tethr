@@ -5,6 +5,7 @@ import { api, type Me, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
+import { Made } from '../components/Mark'
 import { Plain } from '../components/Plain'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { describeDevice } from '../device'
@@ -332,7 +333,12 @@ function ConnectionRow({ connection: c }: { connection: Connection }) {
     <li className={styles.row}>
       <span className={styles.name}>
         {c.app_name}
-        {c.official && <span className={styles.handle}> Official</span>}
+        {c.official && (
+          <span className={styles.handle}>
+            {' '}
+            <Made />
+          </span>
+        )}
         {c.label && <span className={styles.handle}> {c.label}</span>}
       </span>
       <span className={styles.kind}>Logs as {c.profile_name}</span>

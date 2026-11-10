@@ -1088,6 +1088,26 @@ func (q *Queries) TitleSharingWikidata(ctx context.Context, arg TitleSharingWiki
 	return i, err
 }
 
+const touchListsWithEpisodes = `-- name: TouchListsWithEpisodes :exec
+UPDATE lists SET updated_at = greatest(updated_at, clock_timestamp())
+WHERE id IN (SELECT list_id FROM list_items WHERE episode_id = ANY($1::bigint[]))
+`
+
+func (q *Queries) TouchListsWithEpisodes(ctx context.Context, ids []int64) error {
+	_, err := q.db.Exec(ctx, touchListsWithEpisodes, ids)
+	return err
+}
+
+const touchListsWithTitles = `-- name: TouchListsWithTitles :exec
+UPDATE lists SET updated_at = greatest(updated_at, clock_timestamp())
+WHERE id IN (SELECT list_id FROM list_items WHERE title_id = ANY($1::bigint[]))
+`
+
+func (q *Queries) TouchListsWithTitles(ctx context.Context, ids []int64) error {
+	_, err := q.db.Exec(ctx, touchListsWithTitles, ids)
+	return err
+}
+
 const updateEpisode = `-- name: UpdateEpisode :exec
 UPDATE episodes
 SET season_number = $2, episode_number = $3, tmdb_episode_id = $4, first_aired = $5, removed_at = NULL

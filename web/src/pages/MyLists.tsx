@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
+import buttons from '../components/Button.module.css'
 import { Field } from '../components/Field'
 import { ListCover, TethrCover } from '../components/ListCover'
+import { ListTiles } from '../components/ListTiles'
+import { Made } from '../components/Mark'
 import { useWatching } from '../components/Shell'
 import { ago, plural } from '../format'
 import own from './List.module.css'
@@ -71,17 +74,10 @@ export function MyLists() {
           Your watchlist, and lists you make yourself. Keep a list to yourself, share it with the household, or let{' '}
           <strong>anyone</strong> find it.
         </p>
-        {outside && (
-          <p>
-            <Link to="/lists/browse" className={styles.titleLink}>
-              Browse lists other people have shared
-            </Link>
-          </p>
-        )}
       </header>
 
       <section>
-        <h2 className={styles.sectionTitle}>Yours</h2>
+        <h2 className={styles.sectionTitle}>Your lists</h2>
         <ol className={styles.rows}>
           <li className={own.list}>
             <ListCover items={watchlist.data?.slice(0, 4).map((l) => l.item) ?? []} />
@@ -123,7 +119,8 @@ export function MyLists() {
 
       {!!auto.data?.length && (
         <section>
-          <h2 className={styles.sectionTitle}>From what you watch</h2>
+          <h2 className={styles.sectionTitle}>Smart lists</h2>
+          <p className={styles.quiet}>Tethr makes these from what you watch and keeps them up to date.</p>
           <ol className={styles.rows}>
             {auto.data.map((l) => (
               <li key={l.kind} className={own.list}>
@@ -139,7 +136,7 @@ export function MyLists() {
                   <span className={styles.quiet}>{l.description}</span>
                 </div>
                 <span className={`${styles.code} ${own.count}`}>{plural(l.item_count, 'thing')}</span>
-                <span className={styles.faint}>Made by Tethr</span>
+                <span className={styles.faint} />
               </li>
             ))}
           </ol>
@@ -167,7 +164,44 @@ export function MyLists() {
           </ol>
         </section>
       )}
+
+      {outside && <FindLists profileID={profile.id} />}
     </div>
+  )
+}
+
+function FindLists({ profileID }: { profileID: number }) {
+  const lists = useQuery({
+    queryKey: ['public-lists', profileID, 'preview'],
+    queryFn: async () => {
+      const { data, error } = await api.GET('/v1/public-lists', {
+        params: { query: { profile_id: profileID, order: 'popular', limit: 4 } },
+      })
+      if (error) throw error
+      return data.lists
+    },
+  })
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>Lists people share</h2>
+      <p className={styles.quiet}>
+        Follow one to keep it here, or watch it in order in Up next. Tethr makes some of its own too.
+      </p>
+      {!!lists.data?.length && <ListTiles lists={lists.data} />}
+      <p>
+        <Link to="/lists/browse" className={buttons.primary}>
+          Browse lists
+        </Link>
+      </p>
+    </section>
+  )
+}
+
+export function MadeByTethr() {
+  return (
+    <Link to="/@{$username}" params={{ username: 'tethr' }} className={own.made}>
+      <Made />
+    </Link>
   )
 }
 
@@ -190,10 +224,16 @@ export function ListRow({ list: l }: { list: List }) {
             `From ${ownerName(l)}`
           ) : (
             <>
-              From{' '}
-              <Link to="/@{$username}" params={{ username: l.owner.username }} className={styles.titleLink}>
-                {ownerName(l)}
-              </Link>
+              {l.owner.official ? (
+                <MadeByTethr />
+              ) : (
+                <>
+                  From{' '}
+                  <Link to="/@{$username}" params={{ username: l.owner.username }} className={styles.titleLink}>
+                    {ownerName(l)}
+                  </Link>
+                </>
+              )}
               {l.follower_count > 0 && `, ${plural(l.follower_count, 'follower')}`}
             </>
           )}

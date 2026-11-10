@@ -133,6 +133,16 @@ func TestOutlineRenumbering(t *testing.T) {
 	if lazy.Item.Episode.TmdbEpisodeID != nil {
 		t.Fatalf("S1E3 shouldn't have a TMDB ID yet: %+v", lazy.Item.Episode)
 	}
+	shelf, err := CreateList(ctx, db, caller.ProfileID, ListChanges{Name: ptr("Episodes")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddToList(ctx, db, caller.ProfileID, shelf.ID, []Listing{{Ref: episode(1, 3)}}); err != nil {
+		t.Fatal(err)
+	}
+	if shelf, err = GetList(ctx, db, caller.ProfileID, shelf.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := SaveOutline(ctx, db, show, []OutlineEpisode{
 		{TMDBID: 101, Season: 1, Number: 1, FirstAired: aired(30)},
@@ -149,6 +159,9 @@ func TestOutlineRenumbering(t *testing.T) {
 	moved := history[0].Item.Episode
 	if moved.ID == lazy.Item.Episode.ID || moved.TmdbEpisodeID == nil || *moved.TmdbEpisodeID != 102 || moved.EpisodeNumber != 3 {
 		t.Errorf("the S1E3 watch should now point at TMDB episode 102: %+v", moved)
+	}
+	if merged, err := GetList(ctx, db, caller.ProfileID, shelf.ID); err != nil || !merged.UpdatedAt.After(shelf.UpdatedAt) {
+		t.Errorf("a list holding the merged episode should count as changed: %v", err)
 	}
 	got, err := UpNext(ctx, db, caller.ProfileID)
 	if err != nil || len(got) != 1 || got[0].Next.EpisodeNumber != 4 {

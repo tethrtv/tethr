@@ -107,6 +107,7 @@ function Register({ onRegistered }: { onRegistered: (name: string, secret: strin
   const [name, setName] = useState('')
   const [tvOnly, setTVOnly] = useState(false)
   const [redirects, setRedirects] = useState('')
+  const [agreed, setAgreed] = useState(false)
 
   const register = useMutation({
     mutationFn: async () => {
@@ -132,6 +133,7 @@ function Register({ onRegistered }: { onRegistered: (name: string, secret: strin
   return (
     <section>
       <h2 className={home.sectionTitle}>Register an app</h2>
+      <p className={home.note}>The API is free for any app, paid or not, with a few rules about how it’s used.</p>
       <form className={styles.form} onSubmit={submit}>
         <Field label="Name people will see" value={name} onChange={setName} placeholder="My Player" />
         <label className={styles.check}>
@@ -152,11 +154,17 @@ function Register({ onRegistered }: { onRegistered: (name: string, secret: strin
             hint="Separate several with spaces. Custom schemes and localhost are fine."
           />
         )}
+        <label className={styles.check}>
+          <input type="checkbox" checked={agreed} onChange={() => setAgreed(!agreed)} />
+          <span>
+            I agree to the <Link to="/developer-terms">developer terms</Link>
+          </span>
+        </label>
         <div className={home.rowActions}>
           <Button
             variant="primary"
             aria-busy={register.isPending}
-            disabled={!name.trim() || (!tvOnly && !redirects.trim())}
+            disabled={!agreed || !name.trim() || (!tvOnly && !redirects.trim())}
           >
             Register
           </Button>

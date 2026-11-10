@@ -15,7 +15,7 @@ import { ep, plural } from '../format'
 import { useDetails } from '../tmdb'
 import own from './List.module.css'
 import styles from './Lists.module.css'
-import { goesOutside, listParams, ownerName, privacyWords } from './MyLists'
+import { goesOutside, listParams, MadeByTethr, ownerName, privacyWords } from './MyLists'
 
 type List = components['schemas']['List']
 type Item = components['schemas']['ListItem']
@@ -77,10 +77,18 @@ export function ListAt({ username, slug, profileID, profileKind }: { username: s
   if (found.isError) return <p className={styles.error}>{problemMessage(found.error)}</p>
   if (found.data === null) return <MissingList signedIn={!!profileID} />
   if (!found.data) return null
-  return <ListPage key={found.data} id={found.data} profileID={profileID} profileKind={profileKind} />
+  return (
+    <ListPage
+      key={found.data}
+      id={found.data}
+      opened={`/@${username}/lists/${slug}`}
+      profileID={profileID}
+      profileKind={profileKind}
+    />
+  )
 }
 
-function ListPage({ id, profileID, profileKind }: { id: number } & Where) {
+function ListPage({ id, opened, profileID, profileKind }: { id: number; opened: string } & Where) {
   const queries = useQueryClient()
   const [kind, setKind] = useState<(typeof kinds)[number]['value']>('all')
   const [hideWatched, setHideWatched] = useState(false)
@@ -130,13 +138,16 @@ function ListPage({ id, profileID, profileKind }: { id: number } & Where) {
   const navigate = useNavigate()
   const here = useRouterState({ select: (s) => s.location.pathname })
   const shown = page.data?.list
+  const start = opened.toLowerCase()
   useEffect(() => {
     if (!shown) return
     const params = listParams(shown)
-    if (decodeURIComponent(here) === `/@${params.username}/lists/${params.slug}`) return
+    const at = decodeURIComponent(here).toLowerCase()
+    // Only correct the address while it's still the one this page was opened at, or leaving the page bounces back.
+    if (at !== start || at === `/@${params.username}/lists/${params.slug}`.toLowerCase()) return
     queries.setQueryData(addressKey(params.username, params.slug, profileID), shown.id)
     navigate({ to: '/@{$username}/lists/$slug', params, replace: true })
-  }, [shown, here, profileID, queries, navigate])
+  }, [shown, here, start, profileID, queries, navigate])
 
   if (page.data === null) return <MissingList signedIn={!!profileID} />
   if (!page.data) return null
@@ -308,6 +319,10 @@ function Head({
   const by =
     list.access === 'mine' ? null : list.access === 'household' ? (
       `${ownerName(list)}’s list. `
+    ) : list.owner.official ? (
+      <>
+        <MadeByTethr />.{' '}
+      </>
     ) : (
       <>
         A list by{' '}
@@ -326,14 +341,12 @@ function Head({
         {list.description && <p className={styles.lead}>{list.description}</p>}
         <p className={styles.small}>
           {by}
-          {privacyWords[list.privacy]} can see it.{' '}
           {!mine && list.can_edit_items && profileID && 'You can add to it, take things off and change the order. '}
           {list.item_count === 0
             ? 'Nothing on it yet.'
             : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
           {list.in_up_next && ' Up next shows what to watch from it next.'}
           {list.privacy === 'public' && list.follower_count > 0 && ` ${plural(list.follower_count, 'follower')}.`}
-          {canFollow && !list.following && ' If you follow it, its owner sees your username.'}
         </p>
         {(upNext.isError || follow.isError) && (
           <p className={styles.error}>{problemMessage(upNext.error ?? follow.error)}</p>
@@ -388,7 +401,7 @@ function Head({
               See who follows it
             </button>
           )}
-          {outsider && (
+          {outsider && !list.owner.official && (
             <button
               type="button"
               className={`${styles.textButton} ${own.quietAction}`}
@@ -422,7 +435,9 @@ function Head({
           </SlipBody>
         </Slip>
       )}
-      {outsider && <ReportSlip list={list} profileID={profileID} open={slip === 'report'} onClose={close} />}
+      {outsider && !list.owner.official && (
+        <ReportSlip list={list} profileID={profileID} open={slip === 'report'} onClose={close} />
+      )}
     </header>
   )
 }

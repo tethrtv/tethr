@@ -1327,7 +1327,7 @@ paths:
     post:
       operationId: reportList
       summary: Report a list that breaks the rules
-      description: For public lists from outside your household. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
+      description: For public lists from outside your household, except lists made by Tethr. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
       security:
         - session: []
         - bearer: []
@@ -1346,6 +1346,8 @@ paths:
         '400':
           $ref: '#/components/responses/Problem'
         '401':
+          $ref: '#/components/responses/Problem'
+        '403':
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
@@ -1420,7 +1422,7 @@ paths:
     get:
       operationId: browseLists
       summary: Browse public lists
-      description: Public lists with at least one item, from anyone. Lists with a report waiting to be looked at are left out. Kids and guest profiles can't browse.
+      description: Public lists with at least one item, from anyone. Lists with a report waiting to be looked at are left out. Kids and guest profiles can't browse. Fetch a list's items a page at a time from `/v1/lists/{id}/items`, and compare `updated_at` to skip lists that haven't changed.
       security:
         - session: []
         - bearer: []
@@ -1428,10 +1430,15 @@ paths:
         - $ref: '#/components/parameters/ProfileId'
         - name: order
           in: query
-          description: Most followed first, or newest first. Newest by default.
+          description: Most followed first, most new followers in the last 7 days first (only lists with some), or newest first. Newest by default. Lists made by Tethr come first.
           schema:
             type: string
-            enum: [popular, newest]
+            enum: [popular, rising, newest]
+        - name: official
+          in: query
+          description: True for only lists made by Tethr, false to leave them out. Left out, both are listed.
+          schema:
+            type: boolean
         - name: q
           in: query
           description: Only lists whose name contains this, ignoring case.
@@ -3108,12 +3115,16 @@ components:
         updated_at:
           type: string
           format: date-time
+          description: Changes when the list's details change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on. Your watched progress, a title's name or year, and an episode's number can change without it.
     ListOwner:
       type: object
-      required: [username]
+      required: [username, official]
       properties:
         username:
           type: string
+        official:
+          type: boolean
+          description: The list is made by Tethr itself.
         name:
           type: string
           description: Left out when the owner's profile is private and you're outside their household.
