@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import { Button } from '../components/Button'
 import { CodeInput } from '../components/CodeInput'
+import { Made } from '../components/Mark'
 import { Plain } from '../components/Plain'
 import auth from './Auth.module.css'
 import styles from './Connect.module.css'
@@ -174,7 +175,11 @@ function Approve({
         Code {code.slice(0, 4)}-{code.slice(4)}
       </p>
       <h1 className={auth.title}>{app} wants to connect</h1>
-      {official && <p className={styles.official}>Made by Tethr</p>}
+      {official && (
+        <p className={styles.official}>
+          <Made />
+        </p>
+      )}
       <Permissions />
       <ProfilePicker legend="Log plays from it to" profiles={me.profiles} value={profile} onChange={setProfile} />
       <div className={auth.actions}>

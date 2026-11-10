@@ -248,3 +248,11 @@ WHERE t.merged_into_id IS NULL
   )
 ORDER BY t.name ILIKE sqlc.arg(words) || '%' DESC, t.name
 LIMIT 20;
+
+-- name: TouchListsWithTitles :exec
+UPDATE lists SET updated_at = greatest(updated_at, clock_timestamp())
+WHERE id IN (SELECT list_id FROM list_items WHERE title_id = ANY(sqlc.arg(ids)::bigint[]));
+
+-- name: TouchListsWithEpisodes :exec
+UPDATE lists SET updated_at = greatest(updated_at, clock_timestamp())
+WHERE id IN (SELECT list_id FROM list_items WHERE episode_id = ANY(sqlc.arg(ids)::bigint[]));
