@@ -99,15 +99,34 @@ func TestFollowAndReportEndpoints(t *testing.T) {
 	if rec := do(t, h, "POST", "/v1/lists/"+id+"/reports", `{"reason":"rude"}`, sam); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad reason = %d %s", rec.Code, rec.Body)
 	}
+	emails := func() int {
+		mail.mu.Lock()
+		defer mail.mu.Unlock()
+		return len(mail.sent)
+	}
+	before := emails()
 	if rec := do(t, h, "POST", "/v1/lists/"+id+"/reports", `{"reason":"spam","note":"A scam link"}`, sam); rec.Code != http.StatusNoContent {
 		t.Fatalf("report = %d %s", rec.Code, rec.Body)
 	}
+	if emails() != before {
+		t.Error("a report that doesn't hide the list sent an email")
+	}
+	rec = do(t, h, "POST", "/v1/lists", `{"name":"Leaked","privacy":"public"}`, nathan)
+	var leaked List
+	_ = json.Unmarshal(rec.Body.Bytes(), &leaked)
+	leakedID := strconv.FormatInt(leaked.Id, 10)
+	if rec := do(t, h, "POST", "/v1/lists/"+leakedID+"/items", `{"items":[{"item":{"type":"movie","ids":{"tmdb":27205}}}]}`, nathan); rec.Code != http.StatusOK {
+		t.Fatalf("add = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/v1/lists/"+leakedID+"/reports", `{"reason":"personal","note":"Someone's address"}`, sam); rec.Code != http.StatusNoContent {
+		t.Fatalf("report = %d %s", rec.Code, rec.Body)
+	}
 	sent := mail.last(t)
-	if sent.to != "reports@example.com" || !strings.Contains(sent.body, `sam reported "Slow films" by nathan for spam`) || !strings.Contains(sent.body, "tethr report keep "+id) {
+	if sent.to != "reports@example.com" || !strings.Contains(sent.body, `sam reported "Leaked" by nathan for personal`) || !strings.Contains(sent.body, "tethr report keep "+leakedID) {
 		t.Errorf("report email = %+v", sent)
 	}
-	if rec := do(t, h, "GET", "/v1/public-lists", "", sam); !strings.Contains(rec.Body.String(), `"total":0`) {
-		t.Errorf("browse after a report = %s", rec.Body)
+	if rec := do(t, h, "GET", "/v1/public-lists", "", sam); !strings.Contains(rec.Body.String(), `"total":1`) || strings.Contains(rec.Body.String(), "Leaked") {
+		t.Errorf("browse after the reports = %s", rec.Body)
 	}
 	if rec := do(t, h, "POST", "/v1/lists/"+id+"/reports", `{"reason":"spam"}`, nathan); rec.Code != http.StatusNotFound {
 		t.Errorf("reporting your own list = %d", rec.Code)

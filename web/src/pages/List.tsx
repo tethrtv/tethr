@@ -983,7 +983,7 @@ function ReportSlip({
       {sent ? (
         <>
           <SlipBody>
-            <p>We’ll take a look, usually within a few days. Until then it won’t show up when people browse lists.</p>
+            <p>We’ll take a look, usually within a few days.</p>
           </SlipBody>
           <SlipFoot>
             <Button variant="primary" onClick={onClose}>

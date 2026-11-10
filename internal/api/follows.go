@@ -175,7 +175,7 @@ func (s *Server) ReportList(ctx context.Context, req ReportListRequestObject) (R
 	case err != nil:
 		return nil, err
 	}
-	if isNew {
+	if isNew && r.Hid {
 		if err := s.Mail.Send(ctx, s.reportEmail(r)); err != nil {
 			s.log().Error("emailing a report", "list", r.List.ID, "err", err)
 		}

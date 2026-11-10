@@ -149,8 +149,8 @@ func TestBrowsingLists(t *testing.T) {
 		t.Errorf("search ignoring case = %q", got)
 	}
 
-	r, isNew, err := ReportList(ctx, db, other, loud.ID, "spam", "  Links to a scam  ")
-	if err != nil || !isNew || r.Reporter != "other" || *r.Note != "Links to a scam" {
+	r, isNew, err := ReportList(ctx, db, other, loud.ID, "personal", "  Shows someone's address  ")
+	if err != nil || !isNew || !r.Hid || r.Reporter != "other" || *r.Note != "Shows someone's address" {
 		t.Fatalf("report = %+v, %v, %v", r, isNew, err)
 	}
 	if _, isNew, err := ReportList(ctx, db, other, loud.ID, "spam", ""); err != nil || isNew {

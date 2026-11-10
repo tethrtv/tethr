@@ -805,7 +805,7 @@ export interface paths {
         put?: never;
         /**
          * Report a list that breaks the rules
-         * @description For public lists from outside your household, except lists made by Tethr. The list leaves browsing until it's been looked at, but still opens for its owner, its followers and anyone with the link. Reporting the same list again before then does nothing. A profile can send up to 20 reports a day.
+         * @description For public lists from outside your household, except lists made by Tethr. A report of something illegal or of someone's private details takes the list out of browsing until it's been looked at, and reports from three households do the same for any reason. A list that's been looked at and kept stays in browsing until it changes, and once three of a household's reports in the last year have turned out to be unfounded, its reports stop taking lists out of browsing. Hidden or not, the list still opens for its owner, its followers and anyone with the link. A household can have one report waiting on each list, and reporting the same list again does nothing. Each household can send up to 5 reports a day.
          */
         post: operations["reportList"];
         delete?: never;

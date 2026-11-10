@@ -161,7 +161,11 @@ func report(*slog.Logger) error {
 			if r.ReporterUsername != nil {
 				from = *r.ReporterUsername
 			}
-			fmt.Printf("%d  %q by %s: %s, from %s on %s\n", r.ListID, r.ListName, r.OwnerUsername, r.Reason, from, r.CreatedAt.Format("2 Jan 15:04"))
+			where := ""
+			if r.Hidden {
+				where = ", out of browsing"
+			}
+			fmt.Printf("%d  %q by %s%s: %s, from %s on %s\n", r.ListID, r.ListName, r.OwnerUsername, where, r.Reason, from, r.CreatedAt.Format("2 Jan 15:04"))
 			if r.Note != nil {
 				fmt.Printf("    %s\n", *r.Note)
 			}

@@ -136,6 +136,10 @@ type HiddenItem struct {
 	ImportID     *int64
 }
 
+type HiddenList struct {
+	ListID int64
+}
+
 type Household struct {
 	ID             int64
 	OwnerAccountID int64
@@ -178,6 +182,7 @@ type List struct {
 	SortBy      string
 	SortHow     string
 	CoverItemID *int64
+	KeptAt      *time.Time
 }
 
 type ListFollow struct {
@@ -199,14 +204,15 @@ type ListItem struct {
 }
 
 type ListReport struct {
-	ID         int64
-	ListID     int64
-	ReporterID *int64
-	Reason     string
-	Note       *string
-	CreatedAt  time.Time
-	ResolvedAt *time.Time
-	Outcome    *string
+	ID          int64
+	ListID      int64
+	ReporterID  *int64
+	Reason      string
+	Note        *string
+	CreatedAt   time.Time
+	ResolvedAt  *time.Time
+	Outcome     *string
+	HouseholdID *int64
 }
 
 type MediaServer struct {
