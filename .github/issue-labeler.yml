@@ -1,0 +1,22 @@
+needs triage:
+  - '/.*/'
+web:
+  - '### Which part of Tethr\?\s+The website'
+lists:
+  - '### Which part of Tethr\?\s+Lists'
+imports:
+  - '### Which part of Tethr\?\s+Imports from other trackers'
+integrations:
+  - '### Which part of Tethr\?\s+Media servers or other apps'
+api:
+  - '### Which part of Tethr\?\s+The API'
+trakt-compat:
+  - '### Which part of Tethr\?\s+The Trakt-compatible API'
+email:
+  - '### Which part of Tethr\?\s+Emails'
+markers:
+  - '### Which part of Tethr\?\s+Skip markers'
+catalogue:
+  - '### Which part of Tethr\?\s+Titles, IDs or search'
+self-hosting:
+  - '### Which part of Tethr\?\s+Running my own Tethr'
