@@ -36,7 +36,7 @@ type Ref struct {
 
 type Item struct {
 	Title   store.CatalogueTitlesRow
-	Season  *int32
+	Season  *store.Season
 	Episode *OrderedEpisode
 }
 
@@ -52,8 +52,22 @@ func (i Item) Kind() string {
 
 type resolved struct {
 	title   store.Title
-	season  *int32
+	season  *store.Season
 	episode *store.Episode
+}
+
+func (r resolved) seasonID() *int64 {
+	if r.season == nil {
+		return nil
+	}
+	return &r.season.ID
+}
+
+func (r resolved) seasonNumber() *int32 {
+	if r.season == nil {
+		return nil
+	}
+	return &r.season.SeasonNumber
 }
 
 func (r resolved) episodeID() *int64 {
@@ -69,11 +83,7 @@ func resolve(ctx context.Context, q *store.Queries, ref Ref, create bool) (resol
 		t, err := resolveTitle(ctx, q, ref.Kind, ref.IDs, create)
 		return resolved{title: t}, err
 	case "season":
-		if ref.Season == nil {
-			return resolved{}, ErrNotFound
-		}
-		t, err := resolveTitle(ctx, q, "show", ref.Show, create)
-		return resolved{title: t, season: ref.Season}, err
+		return resolveSeason(ctx, q, ref, create)
 	case "episode":
 		return resolveEpisode(ctx, q, ref, create)
 	}
@@ -160,6 +170,36 @@ func learnIDs(ctx context.Context, q *store.Queries, t store.Title, ids IDs) err
 	return nil
 }
 
+func resolveSeason(ctx context.Context, q *store.Queries, ref Ref, create bool) (resolved, error) {
+	if ref.IDs.Tethr > 0 {
+		s, err := q.SeasonByID(ctx, ref.IDs.Tethr)
+		switch {
+		case err == nil:
+			ref.Show, ref.Season = IDs{Tethr: s.ShowID}, &s.SeasonNumber
+		case !errors.Is(err, pgx.ErrNoRows):
+			return resolved{}, err
+		}
+	}
+	if ref.Season == nil || *ref.Season < 0 {
+		return resolved{}, ErrNotFound
+	}
+	show, err := resolveTitle(ctx, q, "show", ref.Show, create)
+	if err != nil {
+		return resolved{}, err
+	}
+	s, err := q.SeasonByNumber(ctx, store.SeasonByNumberParams{ShowID: show.ID, SeasonNumber: *ref.Season})
+	if errors.Is(err, pgx.ErrNoRows) && create {
+		s, err = q.CreateSeason(ctx, store.CreateSeasonParams{ShowID: show.ID, SeasonNumber: *ref.Season})
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return resolved{}, ErrNotFound
+	}
+	if err != nil {
+		return resolved{}, err
+	}
+	return resolved{title: show, season: &s}, nil
+}
+
 func resolveEpisode(ctx context.Context, q *store.Queries, ref Ref, create bool) (resolved, error) {
 	e, err := findEpisode(ctx, q, ref, create)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -206,15 +246,19 @@ func findEpisode(ctx context.Context, q *store.Queries, ref Ref, create bool) (s
 		}
 	}
 	e, err := q.EpisodeByNumber(ctx, store.EpisodeByNumberParams{ShowID: show.ID, SeasonNumber: *ref.Season, EpisodeNumber: *ref.Number})
-	if errors.Is(err, pgx.ErrNoRows) && create {
-		return q.CreateEpisode(ctx, store.CreateEpisodeParams{
-			ShowID:        show.ID,
-			SeasonNumber:  *ref.Season,
-			EpisodeNumber: *ref.Number,
-			TmdbEpisodeID: int32ID(ref.IDs.TMDB),
-		})
+	if !errors.Is(err, pgx.ErrNoRows) || !create {
+		return e, err
 	}
-	return e, err
+	e, err = q.CreateEpisode(ctx, store.CreateEpisodeParams{
+		ShowID:        show.ID,
+		SeasonNumber:  *ref.Season,
+		EpisodeNumber: *ref.Number,
+		TmdbEpisodeID: int32ID(ref.IDs.TMDB),
+	})
+	if err != nil {
+		return e, err
+	}
+	return e, q.AddShowSeasons(ctx, show.ID)
 }
 
 func int32ID(id int64) *int32 {
@@ -261,7 +305,14 @@ func loadCatalogue(ctx context.Context, q *store.Queries, profileID int64, title
 	return c, nil
 }
 
-func (c catalogue) item(titleID int64, season *int32, episodeID *int64) Item {
+func seasonOf(showID int64, id *int64, number *int32) *store.Season {
+	if id == nil || number == nil {
+		return nil
+	}
+	return &store.Season{ID: *id, ShowID: showID, SeasonNumber: *number}
+}
+
+func (c catalogue) item(titleID int64, season *store.Season, episodeID *int64) Item {
 	item := Item{Title: c.titles[titleID], Season: season}
 	if episodeID != nil {
 		e := c.episodes[*episodeID]

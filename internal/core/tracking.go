@@ -456,7 +456,7 @@ func RemoveHistory(ctx context.Context, db *pgxpool.Pool, profileID int64, ids [
 				ProfileID: profileID,
 				TitleID:   r.title.ID,
 				EpisodeID: r.episodeID(),
-				Season:    r.season,
+				Season:    r.seasonNumber(),
 			})
 			if err != nil {
 				return err
@@ -546,7 +546,7 @@ func Watchlist(ctx context.Context, db *pgxpool.Pool, profileID int64, kind stri
 	}
 	entries := make([]Entry, 0, len(rows))
 	for _, row := range rows {
-		entries = append(entries, Entry{ID: row.ID, At: row.ListedAt, Rank: row.Rank, Notes: row.Notes, Item: c.item(row.TitleID, row.SeasonNumber, row.EpisodeID)})
+		entries = append(entries, Entry{ID: row.ID, At: row.ListedAt, Rank: row.Rank, Notes: row.Notes, Item: c.item(row.TitleID, seasonOf(row.TitleID, row.SeasonID, row.SeasonNumber), row.EpisodeID)})
 	}
 	return entries, nil
 }
@@ -569,12 +569,12 @@ func AddToWatchlist(ctx context.Context, db *pgxpool.Pool, profileID int64, item
 				return err
 			}
 			_, err = q.AddListItem(ctx, store.AddListItemParams{
-				ListID:       list.ID,
-				TitleID:      r.title.ID,
-				SeasonNumber: r.season,
-				EpisodeID:    r.episodeID(),
-				Notes:        optional(l.Notes),
-				ListedAt:     l.At,
+				ListID:    list.ID,
+				TitleID:   r.title.ID,
+				SeasonID:  r.seasonID(),
+				EpisodeID: r.episodeID(),
+				Notes:     optional(l.Notes),
+				ListedAt:  l.At,
 			})
 			if errors.Is(err, pgx.ErrNoRows) {
 				result.Existing.add(l.Ref.Kind)
@@ -603,7 +603,7 @@ func RemoveFromWatchlist(ctx context.Context, db *pgxpool.Pool, profileID int64,
 			if err != nil {
 				return err
 			}
-			n, err := q.RemoveListItem(ctx, store.RemoveListItemParams{ListID: list.ID, TitleID: r.title.ID, SeasonNumber: r.season, EpisodeID: r.episodeID()})
+			n, err := q.RemoveListItem(ctx, store.RemoveListItemParams{ListID: list.ID, TitleID: r.title.ID, SeasonID: r.seasonID(), EpisodeID: r.episodeID()})
 			if err != nil {
 				return err
 			}
@@ -682,7 +682,10 @@ func RemoveListing(ctx context.Context, db *pgxpool.Pool, profileID, id int64) e
 		if _, err := q.TouchList(ctx, row.ListID); err != nil {
 			return err
 		}
-		r := resolved{title: store.Title{Kind: row.Kind}, season: row.SeasonNumber}
+		r := resolved{title: store.Title{Kind: row.Kind}}
+		if row.SeasonID != nil {
+			r.season = &store.Season{ID: *row.SeasonID}
+		}
 		if row.EpisodeID != nil {
 			r.episode = &store.Episode{ID: *row.EpisodeID}
 		}

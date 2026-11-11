@@ -173,9 +173,10 @@ func (q *Queries) ListItemsAddedSince(ctx context.Context, arg ListItemsAddedSin
 }
 
 const listItemsIn = `-- name: ListItemsIn :many
-SELECT li.id, li.list_id, li.title_id, li.season_number, li.episode_id, li.rank, li.notes, li.listed_at, li.import_id, t.kind AS title_kind
+SELECT li.id, li.list_id, li.title_id, li.episode_id, li.rank, li.notes, li.listed_at, li.import_id, li.season_id, t.kind AS title_kind, s.season_number
 FROM list_items li
 JOIN titles t ON t.id = li.title_id
+LEFT JOIN seasons s ON s.id = li.season_id
 WHERE li.list_id = ANY($1::bigint[])
 ORDER BY li.list_id, li.rank, li.id
 `
@@ -184,13 +185,14 @@ type ListItemsInRow struct {
 	ID           int64
 	ListID       int64
 	TitleID      int64
-	SeasonNumber *int32
 	EpisodeID    *int64
 	Rank         int32
 	Notes        *string
 	ListedAt     time.Time
 	ImportID     *int64
+	SeasonID     *int64
 	TitleKind    string
+	SeasonNumber *int32
 }
 
 func (q *Queries) ListItemsIn(ctx context.Context, listIds []int64) ([]ListItemsInRow, error) {
@@ -206,13 +208,14 @@ func (q *Queries) ListItemsIn(ctx context.Context, listIds []int64) ([]ListItems
 			&i.ID,
 			&i.ListID,
 			&i.TitleID,
-			&i.SeasonNumber,
 			&i.EpisodeID,
 			&i.Rank,
 			&i.Notes,
 			&i.ListedAt,
 			&i.ImportID,
+			&i.SeasonID,
 			&i.TitleKind,
+			&i.SeasonNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -427,7 +430,7 @@ JOIN lists l ON l.id = i.list_id
 JOIN profiles o ON o.id = l.profile_id
 JOIN profiles v ON v.id = $1
 WHERE l.kind = 'custom' AND o.household_id = v.household_id AND (l.profile_id = v.id OR l.privacy <> 'private')
-  AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
+  AND i.title_id = $2 AND i.season_id IS NULL AND i.episode_id IS NULL
 ORDER BY i.list_id
 `
 

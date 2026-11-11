@@ -68,6 +68,19 @@ func (q *Queries) AddOutlineEpisode(ctx context.Context, arg AddOutlineEpisodePa
 	return err
 }
 
+const addShowSeasons = `-- name: AddShowSeasons :exec
+INSERT INTO seasons (show_id, season_number)
+SELECT DISTINCT e.show_id, e.season_number FROM episodes e
+WHERE e.show_id = $1
+  AND NOT EXISTS (SELECT 1 FROM seasons s WHERE s.show_id = e.show_id AND s.season_number = e.season_number)
+ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) AddShowSeasons(ctx context.Context, showID int64) error {
+	_, err := q.db.Exec(ctx, addShowSeasons, showID)
+	return err
+}
+
 const catalogueEpisodes = `-- name: CatalogueEpisodes :many
 SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes WHERE id = ANY($1::bigint[])
 `
@@ -91,6 +104,30 @@ func (q *Queries) CatalogueEpisodes(ctx context.Context, ids []int64) ([]Episode
 			&i.FirstAired,
 			&i.RemovedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const catalogueSeasons = `-- name: CatalogueSeasons :many
+SELECT id, show_id, season_number FROM seasons WHERE id = ANY($1::bigint[])
+`
+
+func (q *Queries) CatalogueSeasons(ctx context.Context, ids []int64) ([]Season, error) {
+	rows, err := q.db.Query(ctx, catalogueSeasons, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Season
+	for rows.Next() {
+		var i Season
+		if err := rows.Scan(&i.ID, &i.ShowID, &i.SeasonNumber); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -155,6 +192,24 @@ func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]Catalogue
 	return items, nil
 }
 
+const copyTitleSeasons = `-- name: CopyTitleSeasons :exec
+INSERT INTO seasons (show_id, season_number)
+SELECT $1, o.season_number FROM seasons o
+WHERE o.show_id = $2
+  AND NOT EXISTS (SELECT 1 FROM seasons n WHERE n.show_id = $1 AND n.season_number = o.season_number)
+ON CONFLICT DO NOTHING
+`
+
+type CopyTitleSeasonsParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) CopyTitleSeasons(ctx context.Context, arg CopyTitleSeasonsParams) error {
+	_, err := q.db.Exec(ctx, copyTitleSeasons, arg.IntoID, arg.FromID)
+	return err
+}
+
 const createEpisode = `-- name: CreateEpisode :one
 INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id)
 VALUES ($1, $2, $3, $4)
@@ -188,6 +243,25 @@ func (q *Queries) CreateEpisode(ctx context.Context, arg CreateEpisodeParams) (E
 		&i.FirstAired,
 		&i.RemovedAt,
 	)
+	return i, err
+}
+
+const createSeason = `-- name: CreateSeason :one
+INSERT INTO seasons (show_id, season_number)
+VALUES ($1, $2)
+ON CONFLICT (show_id, season_number) DO UPDATE SET season_number = excluded.season_number
+RETURNING id, show_id, season_number
+`
+
+type CreateSeasonParams struct {
+	ShowID       int64
+	SeasonNumber int32
+}
+
+func (q *Queries) CreateSeason(ctx context.Context, arg CreateSeasonParams) (Season, error) {
+	row := q.db.QueryRow(ctx, createSeason, arg.ShowID, arg.SeasonNumber)
+	var i Season
+	err := row.Scan(&i.ID, &i.ShowID, &i.SeasonNumber)
 	return i, err
 }
 
@@ -289,7 +363,7 @@ WHERE h.title_id = $1
   AND EXISTS (
     SELECT 1 FROM hidden_items g
     WHERE g.profile_id = h.profile_id AND g.section = h.section AND g.title_id = $2
-      AND g.season_number IS NOT DISTINCT FROM h.season_number)
+      AND g.season_id IS NOT DISTINCT FROM h.season_id)
 `
 
 type DropClashingTitleHiddenParams struct {
@@ -308,7 +382,7 @@ WHERE l.title_id = $1
   AND EXISTS (
     SELECT 1 FROM list_items m
     WHERE m.list_id = l.list_id AND m.title_id = $2
-      AND m.season_number IS NOT DISTINCT FROM l.season_number AND m.episode_id IS NOT DISTINCT FROM l.episode_id)
+      AND m.season_id IS NOT DISTINCT FROM l.season_id AND m.episode_id IS NOT DISTINCT FROM l.episode_id)
 `
 
 type DropClashingTitleListItemsParams struct {
@@ -345,7 +419,7 @@ WHERE r.title_id = $1
   AND EXISTS (
     SELECT 1 FROM ratings s
     WHERE s.profile_id = r.profile_id AND s.title_id = $2
-      AND s.season_number IS NOT DISTINCT FROM r.season_number AND s.episode_id IS NOT DISTINCT FROM r.episode_id)
+      AND s.season_id IS NOT DISTINCT FROM r.season_id AND s.episode_id IS NOT DISTINCT FROM r.episode_id)
 `
 
 type DropClashingTitleRatingsParams struct {
@@ -735,6 +809,30 @@ func (q *Queries) MergeTitleRatings(ctx context.Context, arg MergeTitleRatingsPa
 	return err
 }
 
+const mergeTitleSeasons = `-- name: MergeTitleSeasons :exec
+WITH m AS (
+    SELECT o.id AS from_id, n.id AS into_id
+    FROM seasons o
+    JOIN seasons n ON n.show_id = $1 AND n.season_number = o.season_number
+    WHERE o.show_id = $2
+), l AS (
+    UPDATE list_items i SET season_id = m.into_id FROM m WHERE i.season_id = m.from_id
+), r AS (
+    UPDATE ratings r SET season_id = m.into_id FROM m WHERE r.season_id = m.from_id
+)
+UPDATE hidden_items h SET season_id = m.into_id FROM m WHERE h.season_id = m.from_id
+`
+
+type MergeTitleSeasonsParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MergeTitleSeasons(ctx context.Context, arg MergeTitleSeasonsParams) error {
+	_, err := q.db.Exec(ctx, mergeTitleSeasons, arg.IntoID, arg.FromID)
+	return err
+}
+
 const mergeTitleWatching = `-- name: MergeTitleWatching :exec
 UPDATE watching SET title_id = $1 WHERE title_id = $2
 `
@@ -873,6 +971,33 @@ func (q *Queries) SearchLibrary(ctx context.Context, arg SearchLibraryParams) ([
 	return items, nil
 }
 
+const seasonByID = `-- name: SeasonByID :one
+SELECT id, show_id, season_number FROM seasons WHERE id = $1
+`
+
+func (q *Queries) SeasonByID(ctx context.Context, id int64) (Season, error) {
+	row := q.db.QueryRow(ctx, seasonByID, id)
+	var i Season
+	err := row.Scan(&i.ID, &i.ShowID, &i.SeasonNumber)
+	return i, err
+}
+
+const seasonByNumber = `-- name: SeasonByNumber :one
+SELECT id, show_id, season_number FROM seasons WHERE show_id = $1 AND season_number = $2
+`
+
+type SeasonByNumberParams struct {
+	ShowID       int64
+	SeasonNumber int32
+}
+
+func (q *Queries) SeasonByNumber(ctx context.Context, arg SeasonByNumberParams) (Season, error) {
+	row := q.db.QueryRow(ctx, seasonByNumber, arg.ShowID, arg.SeasonNumber)
+	var i Season
+	err := row.Scan(&i.ID, &i.ShowID, &i.SeasonNumber)
+	return i, err
+}
+
 const setTitleTMDB = `-- name: SetTitleTMDB :exec
 UPDATE titles SET tmdb_id = $2, updated_at = now() WHERE id = $1 AND tmdb_id IS NULL
 `
@@ -910,6 +1035,30 @@ func (q *Queries) ShowEpisodes(ctx context.Context, showID int64) ([]Episode, er
 			&i.FirstAired,
 			&i.RemovedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const showSeasons = `-- name: ShowSeasons :many
+SELECT id, show_id, season_number FROM seasons WHERE show_id = $1 ORDER BY season_number
+`
+
+func (q *Queries) ShowSeasons(ctx context.Context, showID int64) ([]Season, error) {
+	rows, err := q.db.Query(ctx, showSeasons, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Season
+	for rows.Next() {
+		var i Season
+		if err := rows.Scan(&i.ID, &i.ShowID, &i.SeasonNumber); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

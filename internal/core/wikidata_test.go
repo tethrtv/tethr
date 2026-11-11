@@ -96,8 +96,13 @@ func TestMergeSharedWikidata(t *testing.T) {
 	if rated, err := Ratings(ctx, db, caller.ProfileID, "", nil); err != nil || len(rated) != 1 || rated[0].Rating != 9 {
 		t.Errorf("the surviving row's rating should win: %+v, %v", rated, err)
 	}
-	if listed, err := Watchlist(ctx, db, caller.ProfileID, ""); err != nil || len(listed) != 1 || listed[0].Item.Title.ID != winner {
-		t.Errorf("watchlist = %+v, %v", listed, err)
+	listed, err := Watchlist(ctx, db, caller.ProfileID, "")
+	if err != nil || len(listed) != 1 || listed[0].Item.Title.ID != winner {
+		t.Fatalf("watchlist = %+v, %v", listed, err)
+	}
+	var season int64
+	if err := db.QueryRow(ctx, "SELECT id FROM seasons WHERE show_id = $1 AND season_number = 2", winner).Scan(&season); err != nil || listed[0].Item.Season.ID != season {
+		t.Errorf("the listed season should move to the surviving row's season 2 (%d): %+v, %v", season, listed[0].Item.Season, err)
 	}
 	if items, _ := LookUp(ctx, db, "show", byTMDB, false); items[0].Title.Tvdb != "121361" || *items[0].Title.Name != "Game of Thrones" {
 		t.Errorf("the merged row's TVDB ID should move across: %+v", items[0].Title)

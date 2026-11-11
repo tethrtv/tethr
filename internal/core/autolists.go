@@ -102,7 +102,7 @@ func AutoListEntries(ctx context.Context, db *pgxpool.Pool, profileID int64, kin
 	}
 	rated := map[int64]int16{}
 	for _, r := range ratings {
-		if r.SeasonNumber == nil && r.EpisodeID == nil {
+		if r.SeasonID == nil && r.EpisodeID == nil {
 			rated[r.TitleID] = r.Rating
 		}
 	}
@@ -181,10 +181,10 @@ func autoItems(ctx context.Context, q *store.Queries, profileID int64, kind stri
 		if err != nil {
 			return nil, false, err
 		}
-		slices.SortStableFunc(ratings, func(a, b store.Rating) int { return cmp.Compare(b.Rating, a.Rating) })
+		slices.SortStableFunc(ratings, func(a, b store.RatingsRow) int { return cmp.Compare(b.Rating, a.Rating) })
 		var items []autoItem
 		for _, r := range ratings {
-			if r.SeasonNumber == nil && r.EpisodeID == nil {
+			if r.SeasonID == nil && r.EpisodeID == nil {
 				items = append(items, autoItem{titleID: r.TitleID, at: r.RatedAt})
 			}
 		}
@@ -276,7 +276,7 @@ func dueRewatch(ctx context.Context, q *store.Queries, profileID int64, now time
 	var items []autoItem
 	for _, r := range ratings {
 		at, ok := last[r.TitleID]
-		if r.SeasonNumber == nil && r.EpisodeID == nil && ok && now.Sub(at) >= rewatchAfter {
+		if r.SeasonID == nil && r.EpisodeID == nil && ok && now.Sub(at) >= rewatchAfter {
 			items = append(items, autoItem{titleID: r.TitleID, at: at})
 		}
 	}

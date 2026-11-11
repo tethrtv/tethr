@@ -6,7 +6,7 @@ import styles from './ListCover.module.css'
 type Item = components['schemas']['Item']
 
 const key = (i: Item) =>
-  [i.type, i.title.ids.tethr ?? i.title.ids.tmdb, i.season, i.episode?.season, i.episode?.number].join('-')
+  [i.type, i.title.ids.tethr ?? i.title.ids.tmdb, i.season?.number, i.episode?.season, i.episode?.number].join('-')
 
 export function ListCover({ items, size = 's' }: { items: Item[]; size?: 's' | 'l' }) {
   return (

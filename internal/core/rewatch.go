@@ -44,7 +44,7 @@ func rewatches(ctx context.Context, q *store.Queries, profileID int64) (map[int6
 	}
 	out := map[int64]time.Time{}
 	for _, h := range items {
-		if h.SeasonNumber == nil {
+		if h.SeasonID == nil {
 			out[h.TitleID] = h.HiddenAt
 		}
 	}

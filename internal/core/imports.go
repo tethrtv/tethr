@@ -345,13 +345,13 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 			at = *item.At
 		}
 		return q.ImportListItem(ctx, store.ImportListItemParams{
-			ListID:       list.ID,
-			TitleID:      r.title.ID,
-			SeasonNumber: r.season,
-			EpisodeID:    r.episodeID(),
-			Notes:        optional(item.Notes),
-			ListedAt:     at,
-			ImportID:     importID,
+			ListID:    list.ID,
+			TitleID:   r.title.ID,
+			SeasonID:  r.seasonID(),
+			EpisodeID: r.episodeID(),
+			Notes:     optional(item.Notes),
+			ListedAt:  at,
+			ImportID:  importID,
 		})
 	})
 	if err != nil {
@@ -384,13 +384,13 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 			at = *item.At
 		}
 		return q.ImportRating(ctx, store.ImportRatingParams{
-			ProfileID:    profileID,
-			TitleID:      r.title.ID,
-			SeasonNumber: r.season,
-			EpisodeID:    r.episodeID(),
-			Rating:       item.Rating,
-			RatedAt:      at,
-			ImportID:     importID,
+			ProfileID: profileID,
+			TitleID:   r.title.ID,
+			SeasonID:  r.seasonID(),
+			EpisodeID: r.episodeID(),
+			Rating:    item.Rating,
+			RatedAt:   at,
+			ImportID:  importID,
 		})
 	})
 	if err != nil {
@@ -406,12 +406,12 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 			at = *item.At
 		}
 		return q.ImportHiddenItem(ctx, store.ImportHiddenItemParams{
-			ProfileID:    profileID,
-			Section:      item.Section,
-			TitleID:      r.title.ID,
-			SeasonNumber: r.season,
-			HiddenAt:     at,
-			ImportID:     importID,
+			ProfileID: profileID,
+			Section:   item.Section,
+			TitleID:   r.title.ID,
+			SeasonID:  r.seasonID(),
+			HiddenAt:  at,
+			ImportID:  importID,
 		})
 	})
 	if err != nil {

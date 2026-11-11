@@ -167,3 +167,30 @@ func TestListIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestSeasonIDs(t *testing.T) {
+	db := dbtest.New(t)
+	c, _ := signIn(t, db)
+
+	c.valid("POST", "/sync/watchlist", map[string]any{"shows": []any{map[string]any{"ids": map[string]any{"tmdb": 1396}, "seasons": []any{map[string]any{"number": 2}}}}}, http.StatusCreated)
+	listed := c.list("GET", "/sync/watchlist/seasons", nil)
+	if len(listed) != 1 {
+		t.Fatalf("watchlisted seasons = %v", listed)
+	}
+	season := traktOf(listed[0], "season")
+	if season <= catalogueOffset {
+		t.Errorf("season ID should go out above the offset: %d", season)
+	}
+
+	rated := c.valid("POST", "/sync/ratings", map[string]any{"seasons": []any{
+		map[string]any{"rating": 8, "ids": map[string]any{"trakt": season}},
+		map[string]any{"rating": 8, "ids": map[string]any{"trakt": season + 1000}},
+	}}, http.StatusCreated)
+	if rated["added"].(map[string]any)["seasons"] != 1.0 || len(rated["not_found"].(map[string]any)["seasons"].([]any)) != 1 {
+		t.Errorf("rate seasons by ID = %v", rated)
+	}
+	ratings := c.list("GET", "/sync/ratings/seasons", nil)
+	if len(ratings) != 1 || traktOf(ratings[0], "season") != season || ratings[0]["season"].(map[string]any)["number"] != 2.0 {
+		t.Errorf("rated seasons = %v", ratings)
+	}
+}

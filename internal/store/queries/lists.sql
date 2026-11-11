@@ -55,9 +55,10 @@ JOIN profiles o ON o.household_id = p.household_id
 WHERE o.id = $1;
 
 -- name: ListItemsIn :many
-SELECT li.*, t.kind AS title_kind
+SELECT li.*, t.kind AS title_kind, s.season_number
 FROM list_items li
 JOIN titles t ON t.id = li.title_id
+LEFT JOIN seasons s ON s.id = li.season_id
 WHERE li.list_id = ANY(sqlc.arg(list_ids)::bigint[])
 ORDER BY li.list_id, li.rank, li.id;
 
@@ -97,7 +98,7 @@ JOIN lists l ON l.id = i.list_id
 JOIN profiles o ON o.id = l.profile_id
 JOIN profiles v ON v.id = sqlc.arg(profile_id)
 WHERE l.kind = 'custom' AND o.household_id = v.household_id AND (l.profile_id = v.id OR l.privacy <> 'private')
-  AND i.title_id = sqlc.arg(title_id) AND i.season_number IS NULL AND i.episode_id IS NULL
+  AND i.title_id = sqlc.arg(title_id) AND i.season_id IS NULL AND i.episode_id IS NULL
 ORDER BY i.list_id;
 
 -- name: ListItemsAddedSince :many

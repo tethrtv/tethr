@@ -740,7 +740,7 @@ export function what(i: Pick<Item, 'item'>) {
     case 'movie':
       return 'Film'
     case 'season':
-      return `Season ${i.item.season}`
+      return `Season ${i.item.season?.number}`
     case 'episode':
       return i.item.episode ? ep(i.item.episode.season, i.item.episode.number) : 'Episode'
   }

@@ -50,7 +50,11 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 			for _, e := range season.Episodes {
 				episodes = append(episodes, EpisodeDetail{Episode: toEpisode(e.Episode), Watches: toPlays(e.Watches), Resume: toResume(e.Resume)})
 			}
-			seasons = append(seasons, SeasonDetail{Number: int(season.Number), Episodes: episodes})
+			detail := SeasonDetail{Number: int(season.Number), Episodes: episodes}
+			if season.ID != 0 {
+				detail.Ids = &Ids{Tethr: &season.ID}
+			}
+			seasons = append(seasons, detail)
 		}
 		out.Seasons = &seasons
 		out.RewatchFrom = t.RewatchFrom

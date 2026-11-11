@@ -112,28 +112,29 @@ ON CONFLICT (profile_id) WHERE kind = 'watchlist' DO UPDATE SET kind = lists.kin
 RETURNING *;
 
 -- name: ListItems :many
-SELECT li.*, t.kind AS title_kind
+SELECT li.*, t.kind AS title_kind, s.season_number
 FROM list_items li
 JOIN titles t ON t.id = li.title_id
+LEFT JOIN seasons s ON s.id = li.season_id
 WHERE li.list_id = $1
   AND (sqlc.narg(kind)::text IS NULL
     OR (sqlc.narg(kind) = 'movie' AND t.kind = 'movie' AND li.episode_id IS NULL)
-    OR (sqlc.narg(kind) = 'show' AND t.kind = 'show' AND li.season_number IS NULL AND li.episode_id IS NULL)
-    OR (sqlc.narg(kind) = 'season' AND li.season_number IS NOT NULL AND li.episode_id IS NULL)
+    OR (sqlc.narg(kind) = 'show' AND t.kind = 'show' AND li.season_id IS NULL AND li.episode_id IS NULL)
+    OR (sqlc.narg(kind) = 'season' AND li.season_id IS NOT NULL AND li.episode_id IS NULL)
     OR (sqlc.narg(kind) = 'episode' AND li.episode_id IS NOT NULL))
 ORDER BY li.rank, li.id;
 
 -- name: AddListItem :one
-INSERT INTO list_items (list_id, title_id, season_number, episode_id, rank, notes, listed_at)
+INSERT INTO list_items (list_id, title_id, season_id, episode_id, rank, notes, listed_at)
 SELECT $1, $2, $3, $4, coalesce(max(rank), 0) + 1, $5, coalesce(sqlc.narg(listed_at)::timestamptz, now())
 FROM list_items WHERE list_id = $1
-ON CONFLICT (list_id, title_id, season_number, episode_id) DO NOTHING
+ON CONFLICT (list_id, title_id, season_id, episode_id) DO NOTHING
 RETURNING *;
 
 -- name: RemoveListItem :execrows
 DELETE FROM list_items
 WHERE list_id = $1 AND title_id = $2
-  AND season_number IS NOT DISTINCT FROM sqlc.narg(season_number)
+  AND season_id IS NOT DISTINCT FROM sqlc.narg(season_id)
   AND episode_id IS NOT DISTINCT FROM sqlc.narg(episode_id);
 
 -- name: CountListItems :one
@@ -146,23 +147,27 @@ UPDATE lists SET updated_at = now() WHERE id = $1 RETURNING updated_at;
 DELETE FROM list_items li
 USING lists l
 WHERE li.id = $1 AND l.id = li.list_id AND l.profile_id = $2 AND l.kind = 'watchlist'
-RETURNING li.list_id, li.season_number, li.episode_id, (SELECT kind FROM titles WHERE id = li.title_id)::text AS kind;
+RETURNING li.list_id, li.season_id, li.episode_id, (SELECT kind FROM titles WHERE id = li.title_id)::text AS kind;
 
 -- name: EpisodePlayback :many
 SELECT id, episode_id, progress FROM playback
 WHERE profile_id = $1 AND episode_id = ANY(sqlc.arg(episode_ids)::bigint[]);
 
 -- name: HideItem :exec
-INSERT INTO hidden_items (profile_id, section, title_id, season_number)
+INSERT INTO hidden_items (profile_id, section, title_id, season_id)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT DO NOTHING;
 
 -- name: UnhideItem :execrows
 DELETE FROM hidden_items
-WHERE profile_id = $1 AND section = $2 AND title_id = $3 AND season_number IS NOT DISTINCT FROM sqlc.narg(season_number);
+WHERE profile_id = $1 AND section = $2 AND title_id = $3 AND season_id IS NOT DISTINCT FROM sqlc.narg(season_id);
 
 -- name: HiddenItems :many
-SELECT * FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC;
+SELECT h.*, s.season_number
+FROM hidden_items h
+LEFT JOIN seasons s ON s.id = h.season_id
+WHERE h.profile_id = $1 AND h.section = $2
+ORDER BY h.hidden_at DESC;
 
 -- name: TitleWatches :many
 SELECT id, episode_id, watched_at, precision, action FROM watch_events
@@ -175,13 +180,13 @@ WHERE profile_id = $1 AND title_id = $2;
 
 -- name: TitleRating :one
 SELECT id, rating, rated_at FROM ratings
-WHERE profile_id = $1 AND title_id = $2 AND season_number IS NULL AND episode_id IS NULL;
+WHERE profile_id = $1 AND title_id = $2 AND season_id IS NULL AND episode_id IS NULL;
 
 -- name: TitleListing :one
 SELECT i.id, i.listed_at
 FROM list_items i
 JOIN lists l ON l.id = i.list_id
-WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL;
+WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND i.title_id = $2 AND i.season_id IS NULL AND i.episode_id IS NULL;
 
 -- name: WatchlistShows :many
 SELECT DISTINCT i.title_id
@@ -193,4 +198,4 @@ WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND t.kind = 'show';
 -- name: StartRewatch :exec
 INSERT INTO hidden_items (profile_id, section, title_id, hidden_at)
 VALUES ($1, 'progress_watched_reset', $2, $3)
-ON CONFLICT (profile_id, section, title_id, season_number) DO UPDATE SET hidden_at = excluded.hidden_at, import_id = NULL;
+ON CONFLICT (profile_id, section, title_id, season_id) DO UPDATE SET hidden_at = excluded.hidden_at, import_id = NULL;

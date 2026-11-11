@@ -58,6 +58,9 @@ func TestTitleState(t *testing.T) {
 	var seasons []int32
 	for _, season := range s.Seasons {
 		seasons = append(seasons, season.Number)
+		if season.ID == 0 {
+			t.Errorf("season %d should have an ID once the outline has it", season.Number)
+		}
 	}
 	if len(seasons) != 3 || seasons[0] != 1 || seasons[1] != 2 || seasons[2] != 0 {
 		t.Fatalf("seasons = %v, want 1, 2, then specials", seasons)

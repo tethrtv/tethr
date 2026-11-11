@@ -137,3 +137,56 @@ INSERT INTO up_next_lists (profile_id, list_id) SELECT id, 2 FROM profiles;
 	check("SELECT id FROM watch_events WHERE title_id = 1000000000 AND episode_id = 1000000003", 1000000000000)
 	check("SELECT id FROM lists WHERE slug = 'friday'", 1000000000)
 }
+
+func TestSeasonsGetIDs(t *testing.T) {
+	pool := dbtest.New(t)
+	db := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = db.Close() }()
+
+	p, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := p.DownTo(ctx, 24); err != nil {
+		t.Fatalf("down: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+INSERT INTO accounts (email, name) VALUES ('nathan@example.com', 'Nathan');
+INSERT INTO households (owner_account_id) SELECT id FROM accounts;
+INSERT INTO profiles (household_id, account_id, username, name, kind) SELECT id, owner_account_id, 'nathan', 'Nathan', 'owner' FROM households;
+INSERT INTO titles (kind, slug) VALUES ('show', 'severance-2022');
+INSERT INTO episodes (show_id, season_number, episode_number) VALUES (1, 1, 1), (1, 1, 2), (1, 2, 1);
+INSERT INTO ratings (profile_id, title_id, season_number, rating) SELECT id, 1, 3, 8 FROM profiles;
+INSERT INTO ratings (profile_id, title_id, episode_id, rating) SELECT id, 1, 2, 9 FROM profiles;
+INSERT INTO hidden_items (profile_id, section, title_id, season_number) SELECT id, 'progress_watched', 1, 1 FROM profiles;
+INSERT INTO lists (profile_id, kind, name, slug) SELECT id, 'watchlist', 'Watchlist', 'watchlist' FROM profiles;
+INSERT INTO list_items (list_id, title_id, season_number, rank) VALUES (1, 1, 2, 1);
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := p.UpTo(ctx, 25); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+
+	check := func(query string, want int64) {
+		t.Helper()
+		var got int64
+		if err := pool.QueryRow(ctx, query).Scan(&got); err != nil || got != want {
+			t.Errorf("%s = %d, %v, want %d", query, got, err, want)
+		}
+	}
+	check("SELECT count(*) FROM seasons WHERE show_id = 1", 3)
+	check("SELECT s.season_number FROM ratings r JOIN seasons s ON s.id = r.season_id", 3)
+	check("SELECT count(*) FROM ratings WHERE season_id IS NULL AND episode_id = 2", 1)
+	check("SELECT s.season_number FROM hidden_items h JOIN seasons s ON s.id = h.season_id", 1)
+	check("SELECT s.season_number FROM list_items i JOIN seasons s ON s.id = i.season_id", 2)
+	check("SELECT min(id) FROM seasons", 5)
+
+	if _, err := p.DownTo(ctx, 24); err != nil {
+		t.Fatalf("down again: %v", err)
+	}
+	check("SELECT season_number FROM ratings WHERE episode_id IS NULL", 3)
+	check("SELECT season_number FROM hidden_items", 1)
+	check("SELECT season_number FROM list_items", 2)
+}

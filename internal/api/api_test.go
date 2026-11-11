@@ -469,8 +469,15 @@ func TestNativeTracking(t *testing.T) {
 	}
 	var listed []Listing
 	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/watchlist", "", token).Body.Bytes(), &listed)
-	if len(listed) != 2 || *listed[0].Notes != "after Andor" || listed[1].Item.Type != ItemTypeSeason || *listed[1].Item.Season != 2 {
+	if len(listed) != 2 || *listed[0].Notes != "after Andor" || listed[1].Item.Type != ItemTypeSeason || listed[1].Item.Season.Number != 2 || listed[1].Item.Season.Ids.Tethr == nil {
 		t.Fatalf("watchlist = %+v", listed)
+	}
+	seasonID := strconv.FormatInt(*listed[1].Item.Season.Ids.Tethr, 10)
+	if rec := bearer(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"season","ids":{"tethr":`+seasonID+`}},"rating":7}]}`, token); !strings.Contains(rec.Body.String(), `"added":1`) {
+		t.Errorf("rate season by id = %s", rec.Body)
+	}
+	if rec := bearer(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"season","ids":{"tethr":999999},"show":{"tmdb":1399},"season":3},"rating":7},{"item":{"type":"season","show":{"tmdb":1399},"season":-1},"rating":7}]}`, token); !strings.Contains(rec.Body.String(), `"added":1`) || !strings.Contains(rec.Body.String(), `"not_found":[`) {
+		t.Errorf("an unknown season ID should fall back to show and number, and a negative season isn't one: %s", rec.Body)
 	}
 	if rec := bearer(t, h, "DELETE", "/v1/watchlist/"+strconv.FormatInt(listed[1].Id, 10), "", token); rec.Code != http.StatusNoContent {
 		t.Errorf("watchlist remove = %d", rec.Code)
@@ -633,7 +640,7 @@ func TestUpNextEndpoints(t *testing.T) {
 	}
 	var title TitleDetail
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/titles/tmdb-1396?type=show", "", cookie).Body.Bytes(), &title)
-	if title.EpisodeOrder == nil || *title.EpisodeOrder != "dvd" || (*title.Seasons)[0].Episodes[0].Episode.Number != 2 {
+	if title.EpisodeOrder == nil || *title.EpisodeOrder != "dvd" || (*title.Seasons)[0].Episodes[0].Episode.Number != 2 || (*title.Seasons)[0].Ids != nil {
 		t.Errorf("title in dvd order = %+v", title)
 	}
 	var history HistoryPage

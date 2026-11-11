@@ -54,10 +54,10 @@ WHERE NOT EXISTS (
 );
 
 -- name: ImportListItem :execrows
-INSERT INTO list_items (list_id, title_id, season_number, episode_id, rank, notes, listed_at, import_id)
+INSERT INTO list_items (list_id, title_id, season_id, episode_id, rank, notes, listed_at, import_id)
 SELECT $1, $2, $3, $4, coalesce(max(rank), 0) + 1, $5, $6, $7
 FROM list_items WHERE list_id = $1
-ON CONFLICT (list_id, title_id, season_number, episode_id) DO NOTHING;
+ON CONFLICT (list_id, title_id, season_id, episode_id) DO NOTHING;
 
 -- name: ImportPlayback :execrows
 INSERT INTO playback (profile_id, title_id, episode_id, progress, paused_at, import_id)
@@ -65,12 +65,12 @@ VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (profile_id, title_id, episode_id) DO NOTHING;
 
 -- name: ImportRating :execrows
-INSERT INTO ratings (profile_id, title_id, season_number, episode_id, rating, rated_at, import_id)
+INSERT INTO ratings (profile_id, title_id, season_id, episode_id, rating, rated_at, import_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (profile_id, title_id, season_number, episode_id) DO NOTHING;
+ON CONFLICT (profile_id, title_id, season_id, episode_id) DO NOTHING;
 
 -- name: ImportHiddenItem :execrows
-INSERT INTO hidden_items (profile_id, section, title_id, season_number, hidden_at, import_id)
+INSERT INTO hidden_items (profile_id, section, title_id, season_id, hidden_at, import_id)
 VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT DO NOTHING;
 

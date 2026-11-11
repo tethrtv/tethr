@@ -1744,7 +1744,7 @@ export interface components {
             imdb?: string;
             tvdb?: number;
         };
-        /** @description A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`. */
+        /** @description A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`. */
         ItemRef: {
             /** @enum {string} */
             type: "movie" | "show" | "season" | "episode";
@@ -1765,6 +1765,10 @@ export interface components {
             year?: number;
             /** @description From Wikidata. For a show, roughly how long an episode runs. */
             runtime_minutes?: number;
+        };
+        Season: {
+            ids: components["schemas"]["Ids"];
+            number: number;
         };
         Episode: {
             ids: components["schemas"]["Ids"];
@@ -1787,8 +1791,7 @@ export interface components {
             /** @enum {string} */
             type: "movie" | "show" | "season" | "episode";
             title: components["schemas"]["Title"];
-            /** @description For a season. */
-            season?: number;
+            season?: components["schemas"]["Season"];
             episode?: components["schemas"]["Episode"];
         };
         ScrobbleRequest: {
@@ -2309,7 +2312,9 @@ export interface components {
             /** Format: int64 */
             item_id: number;
         };
+        /** @description `ids` is left out when the show follows another episode order, since its seasons are then the order's own. */
         SeasonDetail: {
+            ids?: components["schemas"]["Ids"];
             number: number;
             episodes: components["schemas"]["EpisodeDetail"][];
         };
