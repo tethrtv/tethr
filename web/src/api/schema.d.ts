@@ -324,7 +324,7 @@ export interface paths {
         put?: never;
         /**
          * Stop the weekly email, using the token from its unsubscribe link
-         * @description Needs no session, so mail apps can unsubscribe in one click. An unknown token does nothing.
+         * @description Needs no session, so mail apps can unsubscribe in one click.
          */
         post: operations["unsubscribe"];
         delete?: never;
@@ -1572,9 +1572,9 @@ export interface components {
             name: string;
             /** Format: date-time */
             created_at: string;
-            /** @description An IANA time zone such as Europe/London. The site saves the browser's the first time it's missing. */
+            /** @description An IANA time zone such as Europe/London. The site sets it from the browser when it's empty, and the weekly email uses Europe/London until then. */
             time_zone: string | null;
-            /** @description The email that goes out on Sunday evenings with the week ahead. */
+            /** @description Whether the account gets the weekly email on Sunday evenings. */
             weekly_email: boolean;
         };
         AccountChanges: {
@@ -3015,6 +3015,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["Problem"];
         };
     };
     exportData: {
