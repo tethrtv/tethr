@@ -39,7 +39,7 @@ UPDATE profile_show_settings SET show_id = show_id - 999999999;
 UPDATE held_plays SET title_id = title_id - 999999999, episode_id = episode_id - 999999999;
 
 -- Lists made before 00012 have small IDs, so they go after the shifted ones, by way of negative IDs to dodge clashes.
-CREATE TEMPORARY TABLE list_ids ON COMMIT DROP AS
+CREATE TEMPORARY TABLE list_ids AS
 SELECT id AS old_id, id - 999999999 AS new_id FROM lists WHERE id >= 1000000000
 UNION ALL
 SELECT id, (SELECT coalesce(max(id) - 999999999, 0) FROM lists WHERE id >= 1000000000) + row_number() OVER (ORDER BY id)
@@ -53,6 +53,7 @@ UPDATE list_follows f SET list_id = m.new_id FROM list_ids m WHERE m.old_id = f.
 UPDATE list_reports r SET list_id = m.new_id FROM list_ids m WHERE m.old_id = r.list_id;
 UPDATE old_list_slugs o SET list_id = m.new_id FROM list_ids m WHERE m.old_id = o.list_id;
 UPDATE up_next_lists u SET list_id = m.new_id FROM list_ids m WHERE m.old_id = u.list_id;
+DROP TABLE list_ids;
 
 SELECT setval('catalogue_id', coalesce(max(id), 1), max(id) IS NOT NULL) FROM (SELECT id FROM titles UNION ALL SELECT id FROM episodes) c;
 SELECT setval(pg_get_serial_sequence('watch_events', 'id'), coalesce(max(id), 1), max(id) IS NOT NULL) FROM watch_events;
