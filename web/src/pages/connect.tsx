@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { api, type Me } from '../api/client'
@@ -25,7 +25,23 @@ export function useSignedIn() {
     returnTo.set(location.pathname + location.search)
     navigate({ to: '/sign-in', replace: true })
   }, [me.data, navigate])
+  useTimeZone(me.data)
   return me.data
+}
+
+export function useTimeZone(me: Me | null | undefined) {
+  const queries = useQueryClient()
+  const missing = me && !me.account.time_zone
+  useEffect(() => {
+    if (!missing) return
+    const time_zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    api
+      .PATCH('/v1/me', { body: { time_zone } })
+      .then(({ data }) => {
+        if (data) queries.setQueryData(['me'], (old: Me | null | undefined) => old && { ...old, account: data })
+      })
+      .catch(() => {})
+  }, [missing, queries])
 }
 
 export function ProfilePicker({

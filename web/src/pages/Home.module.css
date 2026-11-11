@@ -78,6 +78,11 @@
   accent-color: var(--ink);
 }
 
+.zone {
+  margin-top: 16px;
+  font-size: 0.9375rem;
+}
+
 .checkNote {
   display: block;
   margin-top: 4px;

@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"mime"
@@ -14,11 +15,15 @@ import (
 	"time"
 )
 
+// smtp.SendMail has no deadline, so a stalled server would hang whoever is sending.
+const sendTimeout = 30 * time.Second
+
 type Message struct {
-	To      string
-	Subject string
-	Text    string
-	HTML    string
+	To          string
+	Subject     string
+	Text        string
+	HTML        string
+	Unsubscribe string
 }
 
 type SMTP struct {
@@ -45,7 +50,45 @@ func (s SMTP) Send(_ context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
-	return smtp.SendMail(s.Addr, auth, from.Address, []string{m.To}, body)
+	conn, err := net.DialTimeout("tcp", s.Addr, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	if err := conn.SetDeadline(time.Now().Add(sendTimeout)); err != nil {
+		return err
+	}
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	if ok, _ := c.Extension("STARTTLS"); ok {
+		if err := c.StartTLS(&tls.Config{ServerName: host}); err != nil {
+			return err
+		}
+	}
+	if auth != nil {
+		if err := c.Auth(auth); err != nil {
+			return err
+		}
+	}
+	if err := c.Mail(from.Address); err != nil {
+		return err
+	}
+	if err := c.Rcpt(m.To); err != nil {
+		return err
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(body); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return c.Quit()
 }
 
 func encode(from *mail.Address, m Message) ([]byte, error) {
@@ -58,6 +101,10 @@ func encode(from *mail.Address, m Message) ([]byte, error) {
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", m.Subject))
 	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	fmt.Fprintf(&b, "Message-ID: <%s@%s>\r\n", randomHex(12), domain)
+	if m.Unsubscribe != "" {
+		fmt.Fprintf(&b, "List-Unsubscribe: <%s>\r\n", m.Unsubscribe)
+		b.WriteString("List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n")
+	}
 	b.WriteString("MIME-Version: 1.0\r\n")
 	fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=%q\r\n\r\n", boundary)
 	for _, part := range []struct{ kind, content string }{{"text/plain", m.Text}, {"text/html", m.HTML}} {

@@ -8,10 +8,12 @@ package store
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const accountByEmail = `-- name: AccountByEmail :one
-SELECT id, email, email_verified_at, name, created_at, updated_at, extra_invites FROM accounts WHERE email = $1
+SELECT id, email, email_verified_at, name, created_at, updated_at, extra_invites, time_zone, weekly_email, weekly_sent_at, unsubscribe_token FROM accounts WHERE email = $1
 `
 
 func (q *Queries) AccountByEmail(ctx context.Context, email string) (Account, error) {
@@ -25,12 +27,16 @@ func (q *Queries) AccountByEmail(ctx context.Context, email string) (Account, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExtraInvites,
+		&i.TimeZone,
+		&i.WeeklyEmail,
+		&i.WeeklySentAt,
+		&i.UnsubscribeToken,
 	)
 	return i, err
 }
 
 const accountByID = `-- name: AccountByID :one
-SELECT id, email, email_verified_at, name, created_at, updated_at, extra_invites FROM accounts WHERE id = $1
+SELECT id, email, email_verified_at, name, created_at, updated_at, extra_invites, time_zone, weekly_email, weekly_sent_at, unsubscribe_token FROM accounts WHERE id = $1
 `
 
 func (q *Queries) AccountByID(ctx context.Context, id int64) (Account, error) {
@@ -44,8 +50,30 @@ func (q *Queries) AccountByID(ctx context.Context, id int64) (Account, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExtraInvites,
+		&i.TimeZone,
+		&i.WeeklyEmail,
+		&i.WeeklySentAt,
+		&i.UnsubscribeToken,
 	)
 	return i, err
+}
+
+const claimWeekly = `-- name: ClaimWeekly :execrows
+UPDATE accounts SET weekly_sent_at = now()
+WHERE id = $1 AND weekly_email AND (weekly_sent_at IS NULL OR weekly_sent_at < $2::timestamptz)
+`
+
+type ClaimWeeklyParams struct {
+	ID         int64
+	SentBefore time.Time
+}
+
+func (q *Queries) ClaimWeekly(ctx context.Context, arg ClaimWeeklyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, claimWeekly, arg.ID, arg.SentBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const countEmailLinkAttempt = `-- name: CountEmailLinkAttempt :exec
@@ -445,6 +473,20 @@ func (q *Queries) RecentEmailLinks(ctx context.Context, arg RecentEmailLinksPara
 	return count, err
 }
 
+const releaseWeekly = `-- name: ReleaseWeekly :exec
+UPDATE accounts SET weekly_sent_at = $2 WHERE id = $1
+`
+
+type ReleaseWeeklyParams struct {
+	ID     int64
+	SentAt *time.Time
+}
+
+func (q *Queries) ReleaseWeekly(ctx context.Context, arg ReleaseWeeklyParams) error {
+	_, err := q.db.Exec(ctx, releaseWeekly, arg.ID, arg.SentAt)
+	return err
+}
+
 const revokeOtherSessions = `-- name: RevokeOtherSessions :exec
 UPDATE sessions SET revoked_at = now() WHERE account_id = $1 AND id <> $2 AND revoked_at IS NULL
 `
@@ -540,6 +582,52 @@ func (q *Queries) TouchSession(ctx context.Context, id int64) error {
 	return err
 }
 
+const unsubscribe = `-- name: Unsubscribe :execrows
+UPDATE accounts SET weekly_email = false, updated_at = now() WHERE unsubscribe_token = $1
+`
+
+func (q *Queries) Unsubscribe(ctx context.Context, unsubscribeToken pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, unsubscribe, unsubscribeToken)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateAccountSettings = `-- name: UpdateAccountSettings :one
+UPDATE accounts SET
+  time_zone = coalesce($2, time_zone),
+  weekly_email = coalesce($3, weekly_email),
+  updated_at = now()
+WHERE id = $1
+RETURNING id, email, email_verified_at, name, created_at, updated_at, extra_invites, time_zone, weekly_email, weekly_sent_at, unsubscribe_token
+`
+
+type UpdateAccountSettingsParams struct {
+	ID          int64
+	TimeZone    *string
+	WeeklyEmail *bool
+}
+
+func (q *Queries) UpdateAccountSettings(ctx context.Context, arg UpdateAccountSettingsParams) (Account, error) {
+	row := q.db.QueryRow(ctx, updateAccountSettings, arg.ID, arg.TimeZone, arg.WeeklyEmail)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerifiedAt,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ExtraInvites,
+		&i.TimeZone,
+		&i.WeeklyEmail,
+		&i.WeeklySentAt,
+		&i.UnsubscribeToken,
+	)
+	return i, err
+}
+
 const useEmailLink = `-- name: UseEmailLink :exec
 UPDATE email_links SET used_at = now() WHERE id = $1
 `
@@ -584,4 +672,49 @@ UPDATE accounts SET email_verified_at = coalesce(email_verified_at, now()), upda
 func (q *Queries) VerifyAccountEmail(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, verifyAccountEmail, id)
 	return err
+}
+
+const weeklyRecipients = `-- name: WeeklyRecipients :many
+SELECT a.id AS account_id, a.email, a.time_zone, a.unsubscribe_token, a.weekly_sent_at, p.id AS profile_id
+FROM accounts a
+JOIN profiles p ON p.account_id = a.id AND p.kind = 'owner'
+WHERE a.weekly_email AND a.email_verified_at IS NOT NULL
+  AND (a.weekly_sent_at IS NULL OR a.weekly_sent_at < $1::timestamptz)
+ORDER BY a.id
+`
+
+type WeeklyRecipientsRow struct {
+	AccountID        int64
+	Email            string
+	TimeZone         *string
+	UnsubscribeToken pgtype.UUID
+	WeeklySentAt     *time.Time
+	ProfileID        int64
+}
+
+func (q *Queries) WeeklyRecipients(ctx context.Context, sentBefore time.Time) ([]WeeklyRecipientsRow, error) {
+	rows, err := q.db.Query(ctx, weeklyRecipients, sentBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WeeklyRecipientsRow
+	for rows.Next() {
+		var i WeeklyRecipientsRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Email,
+			&i.TimeZone,
+			&i.UnsubscribeToken,
+			&i.WeeklySentAt,
+			&i.ProfileID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -136,6 +136,42 @@ func (q *Queries) ListEntryIDs(ctx context.Context, listID int64) ([]int64, erro
 	return items, nil
 }
 
+const listItemsAddedSince = `-- name: ListItemsAddedSince :many
+SELECT list_id, title_id FROM list_items
+WHERE list_id = ANY($1::bigint[]) AND listed_at >= $2
+ORDER BY list_id, listed_at DESC, id DESC
+`
+
+type ListItemsAddedSinceParams struct {
+	ListIds []int64
+	Since   time.Time
+}
+
+type ListItemsAddedSinceRow struct {
+	ListID  int64
+	TitleID int64
+}
+
+func (q *Queries) ListItemsAddedSince(ctx context.Context, arg ListItemsAddedSinceParams) ([]ListItemsAddedSinceRow, error) {
+	rows, err := q.db.Query(ctx, listItemsAddedSince, arg.ListIds, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListItemsAddedSinceRow
+	for rows.Next() {
+		var i ListItemsAddedSinceRow
+		if err := rows.Scan(&i.ListID, &i.TitleID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listItemsIn = `-- name: ListItemsIn :many
 SELECT li.id, li.list_id, li.title_id, li.season_number, li.episode_id, li.rank, li.notes, li.listed_at, li.import_id, t.kind AS title_kind
 FROM list_items li

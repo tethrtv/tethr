@@ -97,3 +97,29 @@ VALUES ($1, $2, $3, $4, $5);
 DELETE FROM auth_challenges
 WHERE token_hash = $1 AND kind = $2 AND expires_at > now()
 RETURNING *;
+
+-- name: UpdateAccountSettings :one
+UPDATE accounts SET
+  time_zone = coalesce(sqlc.narg(time_zone), time_zone),
+  weekly_email = coalesce(sqlc.narg(weekly_email), weekly_email),
+  updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: Unsubscribe :execrows
+UPDATE accounts SET weekly_email = false, updated_at = now() WHERE unsubscribe_token = $1;
+
+-- name: WeeklyRecipients :many
+SELECT a.id AS account_id, a.email, a.time_zone, a.unsubscribe_token, a.weekly_sent_at, p.id AS profile_id
+FROM accounts a
+JOIN profiles p ON p.account_id = a.id AND p.kind = 'owner'
+WHERE a.weekly_email AND a.email_verified_at IS NOT NULL
+  AND (a.weekly_sent_at IS NULL OR a.weekly_sent_at < sqlc.arg(sent_before)::timestamptz)
+ORDER BY a.id;
+
+-- name: ReleaseWeekly :exec
+UPDATE accounts SET weekly_sent_at = sqlc.narg(sent_at) WHERE id = $1;
+
+-- name: ClaimWeekly :execrows
+UPDATE accounts SET weekly_sent_at = now()
+WHERE id = $1 AND weekly_email AND (weekly_sent_at IS NULL OR weekly_sent_at < sqlc.arg(sent_before)::timestamptz);

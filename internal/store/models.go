@@ -11,13 +11,17 @@ import (
 )
 
 type Account struct {
-	ID              int64
-	Email           string
-	EmailVerifiedAt *time.Time
-	Name            string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	ExtraInvites    int32
+	ID               int64
+	Email            string
+	EmailVerifiedAt  *time.Time
+	Name             string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	ExtraInvites     int32
+	TimeZone         *string
+	WeeklyEmail      bool
+	WeeklySentAt     *time.Time
+	UnsubscribeToken pgtype.UUID
 }
 
 type ActivityMark struct {

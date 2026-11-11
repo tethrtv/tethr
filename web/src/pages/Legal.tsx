@@ -7,7 +7,7 @@ import home from './Home.module.css'
 import styles from './Legal.module.css'
 
 const termsChanged = '10 November 2026'
-const privacyChanged = '10 November 2026'
+const privacyChanged = '11 November 2026'
 const developerChanged = '10 November 2026'
 const contact = (
   <a href="mailto:legal@tethr.tv" className={home.inline}>
@@ -301,7 +301,8 @@ export function DeveloperTerms() {
 const kept = [
   {
     what: 'Your account',
-    detail: 'Your email address, and the public half of each passkey. Tethr never sees the private half.',
+    detail:
+      'Your email address, your time zone, whether you get the weekly email, and the public half of each passkey. Tethr never sees the private half.',
     until: 'Until you delete your account',
   },
   {
@@ -406,6 +407,11 @@ export function Privacy() {
           the service safe, which is in both our interests. If the law asks us to keep or hand over something, we do
           what it requires and no more.
         </p>
+        <p>
+          The weekly email is part of the service too. It’s about what you watch, the lists you follow and what’s
+          popular on Tethr. It’s on unless you turn it off on your account page, and each one has a link to stop it. We
+          use your time zone to send it on Sunday evening where you are.
+        </p>
       </Section>
 
       <Section title="Who else sees it">
@@ -439,13 +445,13 @@ export function Privacy() {
         </p>
         <p>
           <strong>The companies that help run Tethr.</strong> We use a hosting provider for the server and database, a
-          network provider that serves the site and keeps our encrypted backups, and an email service for sign-in
-          emails. They only handle your data to run Tethr for us. Some of them store it outside the UK, and when they
-          do, it’s protected the way UK law requires.
+          network provider that serves the site and keeps our encrypted backups, and an email service for sign-in and
+          weekly emails. They only handle your data to run Tethr for us. Some of them store it outside the UK, and when
+          they do, it’s protected the way UK law requires.
         </p>
         <p>
           <strong>TMDB.</strong> Posters and stills load straight from TMDB’s image servers, so TMDB sees your IP
-          address when your browser fetches one. We never send TMDB anything about you.
+          address when your browser or mail app fetches one. We never send TMDB anything about you.
         </p>
         <p>Nobody else. We don’t sell your data or share it for advertising.</p>
       </Section>

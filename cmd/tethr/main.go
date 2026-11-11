@@ -262,8 +262,9 @@ func serve(log *slog.Logger) error {
 	go jobs.Titles{DB: db, Wikidata: &wikidata.Client{UserAgent: "Tethr/" + version + " (https://github.com/tethrtv/tethr)"}, Log: log}.Run(ctx)
 	media := &hooks.Server{DB: db, Log: log}
 	var details *meta.Server
+	var client *tmdb.Client
 	if token := os.Getenv("TMDB_TOKEN"); token != "" {
-		client := &tmdb.Client{Token: token}
+		client = &tmdb.Client{Token: token}
 		outlines := jobs.Outlines{DB: db, TMDB: client, Log: log}
 		go outlines.Run(ctx)
 		v1.FetchOrder = outlines.Order
@@ -272,6 +273,11 @@ func serve(log *slog.Logger) error {
 	} else {
 		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in, the website shows no names or posters, and media servers can't log episodes of shows Tethr hasn't seen yet")
 	}
+	apiURL := envOr("API_URL", "http://localhost:8080")
+	if os.Getenv("API_URL") == "" && strings.HasPrefix(appURL, "https://") {
+		log.Warn("API_URL isn't set, so one-click unsubscribe in the weekly email points at localhost")
+	}
+	go jobs.Weekly{DB: db, Mail: v1.Mail, TMDB: client, AppURL: appURL, APIURL: apiURL, Zone: london, Log: log}.Run(ctx)
 
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{

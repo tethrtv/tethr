@@ -405,6 +405,44 @@ paths:
                 $ref: '#/components/schemas/Me'
         '401':
           $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateMe
+      summary: Set the account's time zone or turn the weekly email on or off
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountChanges'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/unsubscribe:
+    post:
+      operationId: unsubscribe
+      summary: Stop the weekly email, using the token from its unsubscribe link
+      description: Needs no session, so mail apps can unsubscribe in one click.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Unsubscribed
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/export:
     get:
       operationId: exportData
@@ -2560,7 +2598,7 @@ components:
             $ref: '#/components/schemas/Profile'
     Account:
       type: object
-      required: [id, email, name, created_at]
+      required: [id, email, name, created_at, time_zone, weekly_email]
       properties:
         id:
           type: integer
@@ -2572,6 +2610,20 @@ components:
         created_at:
           type: string
           format: date-time
+        time_zone:
+          type: string
+          nullable: true
+          description: An IANA time zone such as Europe/London. The site sets it from the browser when it's empty, and the weekly email uses Europe/London until then.
+        weekly_email:
+          type: boolean
+          description: Whether the account gets the weekly email on Sunday evenings.
+    AccountChanges:
+      type: object
+      properties:
+        time_zone:
+          type: string
+        weekly_email:
+          type: boolean
     Profile:
       type: object
       required: [id, username, name, kind, private, in_popular]

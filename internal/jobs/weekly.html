@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{.Title}}</title>
+<style>
+  body { margin: 0; padding: 0; }
+  a { color: inherit; }
+  @media (prefers-color-scheme: dark) {
+    body, .page, .card { background: #1a1916 !important; }
+    .ink { color: #edece5 !important; }
+    .quiet { color: #aeaca1 !important; }
+    .faint { color: #7c7a71 !important; }
+    .rule { border-color: #edece5 !important; }
+    .card { border-color: #edece5 !important; }
+    .poster { background: #2a2925 !important; }
+  }
+  @media (max-width: 520px) {
+    .pad { padding-left: 20px !important; padding-right: 20px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#fbfbf8;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{.Preview}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="page" style="background:#fbfbf8;">
+  <tr>
+    <td align="center" style="padding:32px 12px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+        <tr>
+          <td class="rule" style="padding:0 0 12px 0;border-bottom:2px solid #141412;font-family:'Archivo','Helvetica Neue',Helvetica,Arial,sans-serif;">
+            <img src="{{.AppURL}}/email-mark.png" width="24" height="24" alt="" style="display:inline-block;vertical-align:middle;border:0;">
+            <span class="ink" style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#141412;vertical-align:middle;padding-left:6px;">tethr</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 0 0 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="border:1.5px solid #141412;border-radius:2px;background:#fbfbf8;">
+              <tr>
+                <td class="pad" style="padding:28px 30px 30px 30px;font-family:'Archivo','Helvetica Neue',Helvetica,Arial,sans-serif;">
+                  <img src="{{.AppURL}}/email-weekly.png" width="200" height="156" alt="An old telly showing “This week”" style="display:block;width:200px;height:auto;margin:0 0 18px 0;border:0;border-radius:2px;">
+                  <h1 class="ink" style="margin:0 0 6px 0;font-size:28px;line-height:1.15;font-weight:800;color:#141412;">{{.Title}}</h1>
+                  <p class="quiet" style="margin:0;font-size:17px;line-height:1.5;color:#53534c;">{{.Range}}</p>
+                  {{if .Days}}
+                  <h2 class="ink rule" style="margin:28px 0 0 0;padding:0 0 8px 0;border-bottom:2px solid #141412;font-size:13px;letter-spacing:1px;text-transform:uppercase;font-weight:800;color:#141412;">New episodes</h2>
+                  {{range .Days}}
+                  <p class="quiet" style="margin:16px 0 4px 0;font-size:14px;font-weight:700;color:#53534c;">{{.Day}}</p>
+                  {{range .Rows}}{{template "row" .}}{{end}}
+                  {{end}}
+                  {{end}}
+                  {{if .Premieres}}
+                  <h2 class="ink rule" style="margin:28px 0 8px 0;padding:0 0 8px 0;border-bottom:2px solid #141412;font-size:13px;letter-spacing:1px;text-transform:uppercase;font-weight:800;color:#141412;">From your watchlist</h2>
+                  {{range .Premieres}}{{template "row" .}}{{end}}
+                  {{end}}
+                  {{if .Lists}}
+                  <h2 class="ink rule" style="margin:28px 0 0 0;padding:0 0 8px 0;border-bottom:2px solid #141412;font-size:13px;letter-spacing:1px;text-transform:uppercase;font-weight:800;color:#141412;">Lists you follow</h2>
+                  {{range .Lists}}
+                  <p style="margin:14px 0 0 0;font-size:16px;line-height:1.4;"><a href="{{.Link}}" class="ink" style="color:#141412;font-weight:700;text-decoration:none;">{{.Name}}</a><span class="faint" style="color:#85857d;"> by {{.Owner}}</span></p>
+                  <p class="quiet" style="margin:2px 0 0 0;font-size:15px;line-height:1.4;color:#53534c;">{{.Added}}</p>
+                  {{end}}
+                  {{end}}
+                  {{if .Popular}}
+                  <h2 class="ink rule" style="margin:28px 0 8px 0;padding:0 0 8px 0;border-bottom:2px solid #141412;font-size:13px;letter-spacing:1px;text-transform:uppercase;font-weight:800;color:#141412;">Popular on Tethr last week</h2>
+                  {{range .Popular}}{{template "row" .}}{{end}}
+                  {{end}}
+                  {{if .Watched}}
+                  <h2 class="ink rule" style="margin:28px 0 0 0;padding:0 0 8px 0;border-bottom:2px solid #141412;font-size:13px;letter-spacing:1px;text-transform:uppercase;font-weight:800;color:#141412;">Your last seven days</h2>
+                  <p class="quiet" style="margin:12px 0 0 0;font-size:16px;line-height:1.5;color:#53534c;">{{.Watched}}</p>
+                  {{end}}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 0 0 0;font-family:'Archivo','Helvetica Neue',Helvetica,Arial,sans-serif;">
+            <p class="faint" style="margin:0;font-size:13px;line-height:1.5;color:#85857d;">You get this on Sunday evenings because the weekly email is on. Turn it off on <a href="{{.AppURL}}/account" style="color:#85857d;">your account page</a>, or <a href="{{.Unsubscribe}}" style="color:#85857d;">unsubscribe</a>.</p>
+            {{if .TMDB}}<p class="faint" style="margin:8px 0 0 0;font-size:13px;line-height:1.5;color:#85857d;"><img src="{{.AppURL}}/email-tmdb.png" width="54" height="7" alt="TMDB" style="display:inline-block;vertical-align:middle;border:0;margin-right:6px;">Details from TMDB. Tethr uses the TMDB API but isn’t endorsed or certified by TMDB.</p>{{end}}
+            <p class="faint" style="margin:8px 0 0 0;font-size:13px;line-height:1.5;color:#85857d;">Tethr, <a href="https://tethr.tv" style="color:#85857d;">tethr.tv</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
+{{define "row"}}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;">
+  <tr>
+    <td width="46" valign="top" style="width:46px;padding:0 12px 0 0;">{{if .Poster}}<a href="{{.Link}}"><img src="{{.Poster}}" width="46" height="69" alt="" class="poster" style="display:block;width:46px;height:69px;border:0;border-radius:2px;background:#ecebe4;"></a>{{else}}<div class="poster" style="width:46px;height:69px;border-radius:2px;background:#ecebe4;"></div>{{end}}</td>
+    <td valign="middle" style="font-family:'Archivo','Helvetica Neue',Helvetica,Arial,sans-serif;">
+      <a href="{{.Link}}" class="ink" style="display:block;font-size:16px;line-height:1.3;font-weight:700;color:#141412;text-decoration:none;">{{.Name}}</a>
+      <span class="quiet" style="display:block;margin-top:2px;font-size:14px;line-height:1.4;color:#53534c;">{{.Detail}}</span>
+    </td>
+  </tr>
+</table>{{end}}

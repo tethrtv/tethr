@@ -752,6 +752,18 @@ type Account struct {
 	Email     string    `json:"email"`
 	Id        int64     `json:"id"`
 	Name      string    `json:"name"`
+
+	// TimeZone An IANA time zone such as Europe/London. The site sets it from the browser when it's empty, and the weekly email uses Europe/London until then.
+	TimeZone *string `json:"time_zone"`
+
+	// WeeklyEmail Whether the account gets the weekly email on Sunday evenings.
+	WeeklyEmail bool `json:"weekly_email"`
+}
+
+// AccountChanges defines model for AccountChanges.
+type AccountChanges struct {
+	TimeZone    *string `json:"time_zone,omitempty"`
+	WeeklyEmail *bool   `json:"weekly_email,omitempty"`
 }
 
 // Activity defines model for Activity.
@@ -2203,6 +2215,11 @@ type PickEpisodeOrderParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// UnsubscribeParams defines parameters for Unsubscribe.
+type UnsubscribeParams struct {
+	Token string `form:"token" json:"token"`
+}
+
 // GetUpNextParams defines parameters for GetUpNext.
 type GetUpNextParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -2344,6 +2361,9 @@ type ReportListJSONRequestBody = NewReport
 
 // DeleteAccountJSONRequestBody defines body for DeleteAccount for application/json ContentType.
 type DeleteAccountJSONRequestBody DeleteAccountJSONBody
+
+// UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
+type UpdateMeJSONRequestBody = AccountChanges
 
 // AddMediaServerJSONRequestBody defines body for AddMediaServer for application/json ContentType.
 type AddMediaServerJSONRequestBody = NewMediaServer
@@ -2533,6 +2553,9 @@ type ServerInterface interface {
 	// GetMe The signed-in account and its household's profiles
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// UpdateMe Set the account's time zone or turn the weekly email on or off
+	// (PATCH /v1/me)
+	UpdateMe(w http.ResponseWriter, r *http.Request)
 	// ListMediaServers Media servers that send your household's plays
 	// (GET /v1/media-servers)
 	ListMediaServers(w http.ResponseWriter, r *http.Request)
@@ -2617,6 +2640,9 @@ type ServerInterface interface {
 	// PickEpisodeOrder Follow one of the show's TMDB episode groups instead of aired order
 	// (PUT /v1/titles/{id}/episode-order)
 	PickEpisodeOrder(w http.ResponseWriter, r *http.Request, id string, params PickEpisodeOrderParams)
+	// Unsubscribe Stop the weekly email, using the token from its unsubscribe link
+	// (POST /v1/unsubscribe)
+	Unsubscribe(w http.ResponseWriter, r *http.Request, params UnsubscribeParams)
 	// GetUpNext The next episode of every show you're partway through
 	// (GET /v1/up-next)
 	GetUpNext(w http.ResponseWriter, r *http.Request, params GetUpNextParams)
@@ -4539,6 +4565,20 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateMe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMediaServers operation middleware
 func (siw *ServerInterfaceWrapper) ListMediaServers(w http.ResponseWriter, r *http.Request) {
 
@@ -5421,6 +5461,39 @@ func (siw *ServerInterfaceWrapper) PickEpisodeOrder(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// Unsubscribe operation middleware
+func (siw *ServerInterfaceWrapper) Unsubscribe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnsubscribeParams
+
+	// ------------- Required query parameter "token" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "token", r.URL.Query(), &params.Token, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "token"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Unsubscribe(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetUpNext operation middleware
 func (siw *ServerInterfaceWrapper) GetUpNext(w http.ResponseWriter, r *http.Request) {
 
@@ -6150,6 +6223,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sessions/sign-out-others", wrapper.SignOutOthers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/me", wrapper.DeleteAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/me", wrapper.UpdateMe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/unsubscribe", wrapper.Unsubscribe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/export", wrapper.ExportData)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/devices/{code}", wrapper.GetDevice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/devices/{code}/approve", wrapper.ApproveDevice)
@@ -9184,6 +9259,56 @@ func (response GetMe401JSONResponse) VisitGetMeResponse(w http.ResponseWriter) e
 	return err
 }
 
+type UpdateMeRequestObject struct {
+	Body *UpdateMeJSONRequestBody
+}
+
+type UpdateMeResponseObject interface {
+	VisitUpdateMeResponse(w http.ResponseWriter) error
+}
+
+type UpdateMe200JSONResponse Account
+
+func (response UpdateMe200JSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMe400JSONResponse struct{ ProblemJSONResponse }
+
+func (response UpdateMe400JSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMe401JSONResponse Problem
+
+func (response UpdateMe401JSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMediaServersRequestObject struct {
 }
 
@@ -10612,6 +10737,36 @@ func (response PickEpisodeOrder503JSONResponse) VisitPickEpisodeOrderResponse(w 
 	return err
 }
 
+type UnsubscribeRequestObject struct {
+	Params UnsubscribeParams
+}
+
+type UnsubscribeResponseObject interface {
+	VisitUnsubscribeResponse(w http.ResponseWriter) error
+}
+
+type Unsubscribe204Response struct {
+}
+
+func (response Unsubscribe204Response) VisitUnsubscribeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type Unsubscribe404JSONResponse struct{ ProblemJSONResponse }
+
+func (response Unsubscribe404JSONResponse) VisitUnsubscribeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetUpNextRequestObject struct {
 	Params GetUpNextParams
 }
@@ -11547,6 +11702,9 @@ type StrictServerInterface interface {
 	// GetMe The signed-in account and its household's profiles
 	// (GET /v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// UpdateMe Set the account's time zone or turn the weekly email on or off
+	// (PATCH /v1/me)
+	UpdateMe(ctx context.Context, request UpdateMeRequestObject) (UpdateMeResponseObject, error)
 	// ListMediaServers Media servers that send your household's plays
 	// (GET /v1/media-servers)
 	ListMediaServers(ctx context.Context, request ListMediaServersRequestObject) (ListMediaServersResponseObject, error)
@@ -11631,6 +11789,9 @@ type StrictServerInterface interface {
 	// PickEpisodeOrder Follow one of the show's TMDB episode groups instead of aired order
 	// (PUT /v1/titles/{id}/episode-order)
 	PickEpisodeOrder(ctx context.Context, request PickEpisodeOrderRequestObject) (PickEpisodeOrderResponseObject, error)
+	// Unsubscribe Stop the weekly email, using the token from its unsubscribe link
+	// (POST /v1/unsubscribe)
+	Unsubscribe(ctx context.Context, request UnsubscribeRequestObject) (UnsubscribeResponseObject, error)
 	// GetUpNext The next episode of every show you're partway through
 	// (GET /v1/up-next)
 	GetUpNext(ctx context.Context, request GetUpNextRequestObject) (GetUpNextResponseObject, error)
@@ -13225,6 +13386,37 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// UpdateMe operation middleware
+func (sh *strictHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	var request UpdateMeRequestObject
+
+	var body UpdateMeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMe(ctx, request.(UpdateMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMeResponseObject); ok {
+		if err := validResponse.VisitUpdateMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListMediaServers operation middleware
 func (sh *strictHandler) ListMediaServers(w http.ResponseWriter, r *http.Request) {
 	var request ListMediaServersRequestObject
@@ -13988,6 +14180,32 @@ func (sh *strictHandler) PickEpisodeOrder(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PickEpisodeOrderResponseObject); ok {
 		if err := validResponse.VisitPickEpisodeOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Unsubscribe operation middleware
+func (sh *strictHandler) Unsubscribe(w http.ResponseWriter, r *http.Request, params UnsubscribeParams) {
+	var request UnsubscribeRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Unsubscribe(ctx, request.(UnsubscribeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Unsubscribe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnsubscribeResponseObject); ok {
+		if err := validResponse.VisitUnsubscribeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
