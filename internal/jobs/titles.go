@@ -2,7 +2,10 @@ package jobs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"time"
 
@@ -22,7 +25,11 @@ func (j Titles) Run(ctx context.Context) {
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
 	for {
-		if err := j.Refresh(ctx); err != nil && ctx.Err() == nil {
+		switch err := j.Refresh(ctx); {
+		case err == nil || ctx.Err() != nil:
+		case errors.Is(err, wikidata.ErrBusy):
+			j.Log.Warn("wikidata is busy, trying again later", "err", err)
+		default:
 			j.Log.Error("looking up titles on wikidata", "err", err)
 		}
 		select {
@@ -39,9 +46,14 @@ func (j Titles) Refresh(ctx context.Context) error {
 		return err
 	}
 	type batch struct{ kind, provider string }
-	batches := map[batch][]store.DueWikidataRow{}
+	unmatched := map[batch][]store.DueWikidataRow{}
 	var order []batch
+	byKind := map[string][]store.DueWikidataRow{}
 	for _, t := range due {
+		if t.WikidataID != nil && wikidata.IsQID(*t.WikidataID) && t.WikidataDeletedAt == nil {
+			byKind[t.Kind] = append(byKind[t.Kind], t)
+			continue
+		}
 		b := batch{t.Kind, "tmdb"}
 		switch {
 		case t.TmdbID != nil:
@@ -55,45 +67,96 @@ func (j Titles) Refresh(ctx context.Context) error {
 			}
 			continue
 		}
-		if _, ok := batches[b]; !ok {
+		if _, ok := unmatched[b]; !ok {
 			order = append(order, b)
 		}
-		batches[b] = append(batches[b], t)
+		unmatched[b] = append(unmatched[b], t)
 	}
 
+	var errs []error
+	fresh := map[int64]bool{}
 	for _, b := range order {
-		for all := batches[b]; len(all) > 0; {
+		for all := unmatched[b]; len(all) > 0; {
 			n := min(len(all), 50)
-			if err := j.lookUp(ctx, b.kind, b.provider, all[:n]); err != nil {
-				return err
+			found, err := j.match(ctx, b.kind, b.provider, all[:n], fresh)
+			if errs = append(errs, err); errors.Is(err, wikidata.ErrBusy) {
+				return errors.Join(errs...)
+			}
+			byKind[b.kind] = append(byKind[b.kind], found...)
+			all = all[n:]
+		}
+	}
+
+	for _, kind := range []string{"movie", "show"} {
+		for all := byKind[kind]; len(all) > 0; {
+			n := min(len(all), 50)
+			err := j.fetch(ctx, kind, all[:n], fresh)
+			if errs = append(errs, err); errors.Is(err, wikidata.ErrBusy) {
+				return errors.Join(errs...)
 			}
 			all = all[n:]
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
-func (j Titles) lookUp(ctx context.Context, kind, provider string, titles []store.DueWikidataRow) error {
+func (j Titles) match(ctx context.Context, kind, provider string, titles []store.DueWikidataRow, fresh map[int64]bool) ([]store.DueWikidataRow, error) {
 	keys := make([]string, len(titles))
 	for i, t := range titles {
 		keys[i] = key(t, provider)
 	}
 	found, err := j.Wikidata.Find(ctx, kind, provider, keys)
 	if err != nil {
+		return nil, err
+	}
+	var matched []store.DueWikidataRow
+	var errs []error
+	for i, t := range titles {
+		qid, ok := found[keys[i]]
+		if !ok {
+			if err := core.WikidataMissing(ctx, j.DB, t.ID); err != nil {
+				errs = append(errs, fmt.Errorf("title %d: %w", t.ID, err))
+			}
+			continue
+		}
+		if t.WikidataID == nil || *t.WikidataID != qid {
+			fresh[t.ID] = true
+		}
+		t.WikidataID = &qid
+		matched = append(matched, t)
+	}
+	return matched, errors.Join(errs...)
+}
+
+func (j Titles) fetch(ctx context.Context, kind string, titles []store.DueWikidataRow, fresh map[int64]bool) error {
+	qids := make([]string, len(titles))
+	for i, t := range titles {
+		qids[i] = *t.WikidataID
+	}
+	found, deleted, err := j.Wikidata.Fetch(ctx, kind, qids)
+	if err != nil {
 		return err
 	}
-	for i, t := range titles {
-		w, ok := found[keys[i]]
-		if !ok {
-			err = core.WikidataMissing(ctx, j.DB, t.ID)
-		} else {
+	var errs []error
+	for _, t := range titles {
+		w, ok := found[*t.WikidataID]
+		switch {
+		case ok:
 			err = core.SaveWikidata(ctx, j.DB, t.ID, t.Kind, core.WikidataTitle(w))
+		case slices.Contains(deleted, *t.WikidataID) && fresh[t.ID]:
+			err = core.WikidataMissing(ctx, j.DB, t.ID)
+		case slices.Contains(deleted, *t.WikidataID):
+			j.Log.Warn("wikidata item deleted", "title", t.ID, "item", *t.WikidataID)
+			err = core.WikidataDeleted(ctx, j.DB, t.ID)
+		default:
+			j.Log.Warn("wikidata item unreadable", "title", t.ID, "item", *t.WikidataID)
+			err = core.WikidataMissing(ctx, j.DB, t.ID)
 		}
 		if err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("title %d: %w", t.ID, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func key(t store.DueWikidataRow, provider string) string {

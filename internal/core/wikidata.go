@@ -35,6 +35,10 @@ func WikidataMissing(ctx context.Context, db *pgxpool.Pool, titleID int64) error
 	return store.New(db).WikidataMissing(ctx, titleID)
 }
 
+func WikidataDeleted(ctx context.Context, db *pgxpool.Pool, titleID int64) error {
+	return store.New(db).WikidataDeleted(ctx, titleID)
+}
+
 func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind string, w WikidataTitle) error {
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		q := store.New(tx)

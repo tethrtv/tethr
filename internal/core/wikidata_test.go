@@ -288,3 +288,30 @@ func TestSlugWaitsForAWeek(t *testing.T) {
 		t.Errorf("after a settled week, slug = %q, want %q", got, want)
 	}
 }
+
+func TestWikidataDeleted(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	items, err := LookUp(ctx, db, "movie", IDs{TMDB: 603}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := items[0].Title.ID
+	flagged := func() bool {
+		t.Helper()
+		var f bool
+		if err := db.QueryRow(ctx, `SELECT wikidata_deleted_at IS NOT NULL FROM titles WHERE id = $1`, id).Scan(&f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	if err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999}); err != nil {
+		t.Fatal(err)
+	}
+	if err := WikidataDeleted(ctx, db, id); err != nil || !flagged() {
+		t.Errorf("a deleted item should be flagged: %v", err)
+	}
+	if err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999}); err != nil || flagged() {
+		t.Errorf("an item that comes back should lose the flag: %v", err)
+	}
+}

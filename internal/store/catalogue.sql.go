@@ -269,7 +269,7 @@ const createTitle = `-- name: CreateTitle :one
 INSERT INTO titles (id, kind, slug, tmdb_id)
 SELECT n, $1, 't-' || n, $2 FROM nextval('catalogue_id') AS n
 ON CONFLICT (kind, tmdb_id) DO UPDATE SET updated_at = titles.updated_at
-RETURNING id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id
+RETURNING id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at
 `
 
 type CreateTitleParams struct {
@@ -296,6 +296,7 @@ func (q *Queries) CreateTitle(ctx context.Context, arg CreateTitleParams) (Title
 		&i.WikidataID,
 		&i.WikidataCheckedAt,
 		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
 	)
 	return i, err
 }
@@ -477,7 +478,7 @@ func (q *Queries) DueOutlines(ctx context.Context, limit int32) ([]DueOutlinesRo
 }
 
 const dueWikidata = `-- name: DueWikidata :many
-SELECT t.id, t.kind, t.tmdb_id,
+SELECT t.id, t.kind, t.tmdb_id, t.wikidata_id, t.wikidata_deleted_at,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
 FROM titles t
@@ -489,11 +490,13 @@ LIMIT $1
 `
 
 type DueWikidataRow struct {
-	ID     int64
-	Kind   string
-	TmdbID *int32
-	Imdb   string
-	Tvdb   string
+	ID                int64
+	Kind              string
+	TmdbID            *int32
+	WikidataID        *string
+	WikidataDeletedAt *time.Time
+	Imdb              string
+	Tvdb              string
 }
 
 func (q *Queries) DueWikidata(ctx context.Context, limit int32) ([]DueWikidataRow, error) {
@@ -509,6 +512,8 @@ func (q *Queries) DueWikidata(ctx context.Context, limit int32) ([]DueWikidataRo
 			&i.ID,
 			&i.Kind,
 			&i.TmdbID,
+			&i.WikidataID,
+			&i.WikidataDeletedAt,
 			&i.Imdb,
 			&i.Tvdb,
 		); err != nil {
@@ -904,7 +909,7 @@ func (q *Queries) RemoveEpisode(ctx context.Context, id int64) error {
 
 const saveWikidata = `-- name: SaveWikidata :exec
 UPDATE titles
-SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, wikidata_checked_at = now(), updated_at = now()
+SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, wikidata_checked_at = now(), wikidata_deleted_at = NULL, updated_at = now()
 WHERE id = $1
 `
 
@@ -1070,7 +1075,7 @@ func (q *Queries) ShowSeasons(ctx context.Context, showID int64) ([]Season, erro
 }
 
 const titleByExternalID = `-- name: TitleByExternalID :one
-SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id, t.created_at, t.updated_at, t.outline_refreshed_at, t.tmdb_missing_at, t.original_name, t.runtime_minutes, t.wikidata_id, t.wikidata_checked_at, t.merged_into_id
+SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id, t.created_at, t.updated_at, t.outline_refreshed_at, t.tmdb_missing_at, t.original_name, t.runtime_minutes, t.wikidata_id, t.wikidata_checked_at, t.merged_into_id, t.wikidata_deleted_at
 FROM titles t
 JOIN external_ids e ON e.title_id = t.id
 WHERE e.provider = $1 AND e.value = $2 AND t.kind = $3
@@ -1101,12 +1106,13 @@ func (q *Queries) TitleByExternalID(ctx context.Context, arg TitleByExternalIDPa
 		&i.WikidataID,
 		&i.WikidataCheckedAt,
 		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
 	)
 	return i, err
 }
 
 const titleByID = `-- name: TitleByID :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id FROM titles WHERE id = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at FROM titles WHERE id = $1 AND kind = $2
 `
 
 type TitleByIDParams struct {
@@ -1133,12 +1139,13 @@ func (q *Queries) TitleByID(ctx context.Context, arg TitleByIDParams) (Title, er
 		&i.WikidataID,
 		&i.WikidataCheckedAt,
 		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
 	)
 	return i, err
 }
 
 const titleBySlug = `-- name: TitleBySlug :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id FROM titles WHERE slug = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at FROM titles WHERE slug = $1 AND kind = $2
 `
 
 type TitleBySlugParams struct {
@@ -1165,12 +1172,13 @@ func (q *Queries) TitleBySlug(ctx context.Context, arg TitleBySlugParams) (Title
 		&i.WikidataID,
 		&i.WikidataCheckedAt,
 		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
 	)
 	return i, err
 }
 
 const titleByTMDB = `-- name: TitleByTMDB :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id FROM titles WHERE tmdb_id = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at FROM titles WHERE tmdb_id = $1 AND kind = $2
 `
 
 type TitleByTMDBParams struct {
@@ -1197,12 +1205,13 @@ func (q *Queries) TitleByTMDB(ctx context.Context, arg TitleByTMDBParams) (Title
 		&i.WikidataID,
 		&i.WikidataCheckedAt,
 		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
 	)
 	return i, err
 }
 
 const titleSharingWikidata = `-- name: TitleSharingWikidata :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id FROM titles
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at FROM titles
 WHERE kind = $1 AND wikidata_id = $2 AND id <> $3 AND merged_into_id IS NULL
 ORDER BY id
 LIMIT 1
@@ -1233,6 +1242,7 @@ func (q *Queries) TitleSharingWikidata(ctx context.Context, arg TitleSharingWiki
 		&i.WikidataID,
 		&i.WikidataCheckedAt,
 		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
 	)
 	return i, err
 }
@@ -1279,6 +1289,15 @@ func (q *Queries) UpdateEpisode(ctx context.Context, arg UpdateEpisodeParams) er
 		arg.TmdbEpisodeID,
 		arg.FirstAired,
 	)
+	return err
+}
+
+const wikidataDeleted = `-- name: WikidataDeleted :exec
+UPDATE titles SET wikidata_checked_at = now(), wikidata_deleted_at = coalesce(wikidata_deleted_at, now()) WHERE id = $1
+`
+
+func (q *Queries) WikidataDeleted(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, wikidataDeleted, id)
 	return err
 }
 
