@@ -110,7 +110,7 @@ func TestListEndpoints(t *testing.T) {
 	if rec := do(t, h, "PATCH", path, `{"cover_item_id":`+strconv.FormatInt(show, 10)+`}`, cookie); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"cover_item_id":`+strconv.FormatInt(show, 10)) {
 		t.Errorf("pick a cover = %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(t, h, "PATCH", path, `{"cover_item_id":1}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_cover") {
+	if rec := do(t, h, "PATCH", path, `{"cover_item_id":12345}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_cover") {
 		t.Errorf("cover not on the list = %d %s", rec.Code, rec.Body)
 	}
 	var signedOut List
@@ -170,7 +170,7 @@ func TestUpNextListEndpoints(t *testing.T) {
 	if rec := do(t, h, "PUT", "/v1/up-next/lists/"+id, "", cookie); rec.Code != http.StatusNoContent {
 		t.Fatalf("add to up next = %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(t, h, "PUT", "/v1/up-next/lists/1", "", cookie); rec.Code != http.StatusNotFound {
+	if rec := do(t, h, "PUT", "/v1/up-next/lists/12345", "", cookie); rec.Code != http.StatusNotFound {
 		t.Errorf("adding a missing list = %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(t, h, "GET", "/v1/lists/"+id, "", cookie); !strings.Contains(rec.Body.String(), `"in_up_next":true`) {

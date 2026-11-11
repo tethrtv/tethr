@@ -23,7 +23,7 @@ func TestEpisodeOrderNumbers(t *testing.T) {
 	show := map[string]any{"ids": map[string]any{"tmdb": 1396}}
 
 	first := c.valid("POST", "/scrobble/stop", map[string]any{"progress": 100, "show": show, "episode": map[string]any{"season": 1, "number": 1}}, http.StatusCreated)
-	showID := int64(first["show"].(map[string]any)["ids"].(map[string]any)["trakt"].(float64))
+	showID := tethrID(int64(first["show"].(map[string]any)["ids"].(map[string]any)["trakt"].(float64)), catalogueOffset)
 	aired := time.Now().AddDate(-1, 0, 0)
 	if err := core.SaveOutline(ctx, db, showID, []core.OutlineEpisode{
 		{TMDBID: 900, Season: 0, Number: 1, FirstAired: &aired},

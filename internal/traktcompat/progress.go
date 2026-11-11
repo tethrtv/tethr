@@ -22,7 +22,7 @@ func episodeOrNil(e *core.OrderedEpisode) any {
 	if e == nil {
 		return nil
 	}
-	return episode{Season: e.Season, Number: e.Number, IDs: ids{Trakt: e.ID, TMDB: e.TmdbEpisodeID}}
+	return episode{Season: e.Season, Number: e.Number, IDs: ids{Trakt: traktID(e.ID, catalogueOffset), TMDB: e.TmdbEpisodeID}}
 }
 
 func (s *Server) ratings(w http.ResponseWriter, r *http.Request) {
@@ -162,7 +162,7 @@ func watchedSeasons(episodes []core.WatchedEpisode) []watchedSeason {
 func showRef(id string) core.Ref {
 	ref := core.Ref{Kind: "show"}
 	if n, err := strconv.ParseInt(id, 10, 64); err == nil {
-		ref.IDs.Trakt = n
+		ref.IDs.Tethr = tethrID(n, catalogueOffset)
 	} else {
 		ref.IDs.Slug = id
 	}

@@ -46,7 +46,7 @@ func TestLists(t *testing.T) {
 
 	anyone := newClient(t, db, app.ClientID)
 	theirs := anyone.list("GET", "/users/nathan/lists", nil)
-	if len(theirs) != 1 || theirs[0]["ids"].(map[string]any)["trakt"] != float64(public.ID) {
+	if len(theirs) != 1 || theirs[0]["ids"].(map[string]any)["trakt"] != float64(public.ID+listOffset) {
 		t.Errorf("someone else's view = %v", theirs)
 	}
 	if rec := anyone.do("GET", "/users/me/lists", nil); rec.Code != http.StatusUnauthorized {
@@ -73,14 +73,14 @@ func TestLists(t *testing.T) {
 	if len(bySlug) != 2 || bySlug[0]["type"] != "movie" || bySlug[0]["notes"] != "Twice" || bySlug[0]["movie"].(map[string]any)["ids"].(map[string]any)["tmdb"] != 27205.0 {
 		t.Errorf("items by slug = %v", bySlug)
 	}
-	byID := items(anyone, "/lists/"+strconv.FormatInt(public.ID, 10)+"/items/shows")
+	byID := items(anyone, "/lists/"+strconv.FormatInt(public.ID+listOffset, 10)+"/items/shows")
 	if len(byID) != 1 || byID[0]["type"] != "show" {
 		t.Errorf("shows by list ID = %v", byID)
 	}
-	if got := items(c, "/users/me/lists/"+strconv.FormatInt(family.ID, 10)+"/items"); len(got) != 0 {
+	if got := items(c, "/users/me/lists/"+strconv.FormatInt(family.ID+listOffset, 10)+"/items"); len(got) != 0 {
 		t.Errorf("an empty list = %v", got)
 	}
-	if rec := anyone.do("GET", "/lists/"+strconv.FormatInt(family.ID, 10), nil); rec.Code != http.StatusNotFound {
+	if rec := anyone.do("GET", "/lists/"+strconv.FormatInt(family.ID+listOffset, 10), nil); rec.Code != http.StatusNotFound {
 		t.Errorf("a household list by ID signed out = %d", rec.Code)
 	}
 

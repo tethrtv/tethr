@@ -24,7 +24,7 @@ func TestListBasics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if friday.ID < 1_000_000_000 || friday.Name != "Friday films" || friday.Slug != "friday-films" || friday.Privacy != "private" ||
+	if friday.ID != 1 || friday.Name != "Friday films" || friday.Slug != "friday-films" || friday.Privacy != "private" ||
 		friday.SortBy != "rank" || friday.SortHow != "asc" || friday.Access != "mine" || friday.ItemCount != 0 || friday.Watched == nil {
 		t.Errorf("new list = %+v", friday)
 	}

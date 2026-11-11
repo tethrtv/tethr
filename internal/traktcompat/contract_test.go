@@ -374,7 +374,7 @@ func TestProgressEndpoints(t *testing.T) {
 
 	show := shows[0]["show"].(map[string]any)["ids"].(map[string]any)["trakt"].(float64)
 	one, two, three := time.Now().AddDate(0, 0, -30), time.Now().AddDate(0, 0, -23), time.Now().AddDate(0, 0, -16)
-	if err := core.SaveOutline(ctx, db, int64(show), []core.OutlineEpisode{
+	if err := core.SaveOutline(ctx, db, tethrID(int64(show), catalogueOffset), []core.OutlineEpisode{
 		{TMDBID: 62085, Season: 1, Number: 1, FirstAired: &one},
 		{TMDBID: 62086, Season: 1, Number: 2, FirstAired: &two},
 		{TMDBID: 62087, Season: 1, Number: 3, FirstAired: &three},

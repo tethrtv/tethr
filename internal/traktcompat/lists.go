@@ -64,7 +64,7 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		out = append(out, itemFields(e.Item, map[string]any{
 			"rank":      e.Rank,
-			"id":        e.ID,
+			"id":        traktID(e.ID, entryOffset),
 			"listed_at": stamp(e.At),
 			"notes":     e.Notes,
 			"type":      e.Item.Kind(),
@@ -112,7 +112,7 @@ func (s *Server) findList(w http.ResponseWriter, r *http.Request) (core.List, bo
 	}
 	key := strings.ToLower(r.PathValue("list_id"))
 	for _, l := range lists {
-		if strconv.FormatInt(l.ID, 10) == key || l.Slug == key {
+		if strconv.FormatInt(traktID(l.ID, listOffset), 10) == key || l.Slug == key {
 			return l, true
 		}
 	}
@@ -121,12 +121,13 @@ func (s *Server) findList(w http.ResponseWriter, r *http.Request) (core.List, bo
 }
 
 func (s *Server) listByID(w http.ResponseWriter, r *http.Request, id string) (core.List, bool) {
-	n, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
+	n, _ := strconv.ParseInt(id, 10, 64)
+	listID := tethrID(n, listOffset)
+	if listID == 0 {
 		writeError(w, http.StatusNotFound, "not_found", "There’s no list with that ID, or it isn’t shared with you.")
 		return core.List{}, false
 	}
-	l, err := core.GetList(r.Context(), s.DB, caller(r).ProfileID, n)
+	l, err := core.GetList(r.Context(), s.DB, caller(r).ProfileID, listID)
 	if errors.Is(err, core.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "There’s no list with that ID, or it isn’t shared with you.")
 		return core.List{}, false
@@ -158,7 +159,7 @@ func (s *Server) listJSON(l core.List) map[string]any {
 		"item_count":      l.ItemCount,
 		"comment_count":   0,
 		"likes":           0,
-		"ids":             map[string]any{"trakt": l.ID, "slug": l.Slug},
+		"ids":             map[string]any{"trakt": traktID(l.ID, listOffset), "slug": l.Slug},
 		"user": map[string]any{
 			"username": l.Owner.Username,
 			"private":  l.Owner.Private,
