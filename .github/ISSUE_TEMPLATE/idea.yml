@@ -1,0 +1,11 @@
+name: An idea
+description: Something Tethr should do, or do differently.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What you'd like
+      description: What you want to be able to do, and why. If it's for an app or service you use, say which.
+    validations:
+      required: true
