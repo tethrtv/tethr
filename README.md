@@ -17,13 +17,13 @@ make test
 make run
 ```
 
-`make gen` regenerates the database code after a change to `migrations/` or `internal/store/queries/`.
+`make gen` regenerates the database and API code after a change to `migrations/`, `internal/store/queries/` or the spec in `spec/tethr/`.
 
 The server listens on `localhost:8080`. To connect a player, register it with `go run ./cmd/tethr app "Player name"` (add redirect URIs after the name for apps that sign in through a browser), which prints its client ID and secret. The website is in `web/`: run `pnpm install` and `pnpm dev` there.
 
 ## Contributing
 
-Every change, including the maintainer's, goes through a pull request and has to pass the checks before it's merged. Bug reports and ideas are welcome as issues. To report a security problem, see `SECURITY.md`.
+Every change, including the maintainer's, goes through a pull request and has to pass the checks before it's merged. Bug reports and ideas are welcome as issues. What's being worked on is on the [project board](https://github.com/orgs/tethrtv/projects/1), and `CONTRIBUTING.md` explains how to pick something up. To report a security problem, see `SECURITY.md`.
 
 ## Licences
 

@@ -1,0 +1,21 @@
+name: Something's broken
+description: Tethr, its website or its API did something it shouldn't.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      description: Steps, a request and response, or a screenshot all help.
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: tethr.tv, the API, a player such as Zuno, a media server, or your own server (with the version).
