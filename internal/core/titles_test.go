@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/tethrtv/tethr/internal/dbtest"
 )
@@ -44,9 +45,7 @@ func TestTitleState(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveWikidata(ctx, db, show, "show", WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Year: 2008, TMDB: 1396}); err != nil {
-		t.Fatal(err)
-	}
+	settle(t, db, show, "show", WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Year: 2008, Released: time.Date(2008, 1, 20, 0, 0, 0, 0, time.UTC), TMDB: 1396})
 
 	s, err := Title(ctx, db, profile, "breaking-bad-2008", "")
 	if err != nil {

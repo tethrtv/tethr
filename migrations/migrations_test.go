@@ -190,3 +190,28 @@ INSERT INTO list_items (list_id, title_id, season_number, rank) VALUES (1, 1, 2,
 	check("SELECT season_number FROM hidden_items", 1)
 	check("SELECT season_number FROM list_items", 2)
 }
+
+func TestSlugsPerKindDown(t *testing.T) {
+	pool := dbtest.New(t)
+	db := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = db.Close() }()
+
+	p, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `INSERT INTO titles (kind, slug) VALUES ('movie', 'batman-1966'), ('show', 'batman-1966')`); err != nil {
+		t.Fatalf("a film and a show should share a slug: %v", err)
+	}
+	if _, err := p.DownTo(ctx, 25); err != nil {
+		t.Fatalf("down: %v", err)
+	}
+	var movie, show string
+	if err := pool.QueryRow(ctx, `SELECT (SELECT slug FROM titles WHERE kind = 'movie'), (SELECT slug FROM titles WHERE kind = 'show')`).Scan(&movie, &show); err != nil {
+		t.Fatal(err)
+	}
+	if movie != "batman-1966" || show != "t-2" {
+		t.Errorf("after down, film %q and show %q", movie, show)
+	}
+}

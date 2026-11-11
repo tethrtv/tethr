@@ -66,10 +66,10 @@ export function TitlePage({ slug, kind }: { slug: string; kind: Kind }) {
   const navigate = useNavigate()
   const tmdb = Number(/^tmdb-(\d+)$/.exec(slug)?.[1]) || undefined
   const title = useQuery({
-    queryKey: ['title', profile.id, slug],
+    queryKey: ['title', profile.id, kind, slug],
     queryFn: async () => {
       const { data, response } = await api.GET('/v1/titles/{id}', {
-        params: { path: { id: slug }, query: { profile_id: profile.id, type: tmdb ? kind : undefined } },
+        params: { path: { id: slug }, query: { profile_id: profile.id, type: kind } },
       })
       if (response.status === 404) return null
       if (!data) throw new Error('could not load the title')

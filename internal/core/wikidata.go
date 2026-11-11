@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -19,6 +20,7 @@ type WikidataTitle struct {
 	Name     string
 	Original string
 	Year     int
+	Released time.Time
 	Runtime  int
 	TMDB     int32
 	IMDB     string
@@ -36,6 +38,10 @@ func WikidataMissing(ctx context.Context, db *pgxpool.Pool, titleID int64) error
 func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind string, w WikidataTitle) error {
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		q := store.New(tx)
+		before, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
+		if err != nil {
+			return err
+		}
 		params := store.SaveWikidataParams{ID: titleID, WikidataID: &w.QID, Name: text(w.Name), OriginalName: text(w.Original)}
 		if w.Year > 0 {
 			year := int16(w.Year)
@@ -52,8 +58,10 @@ func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 		if err != nil {
 			return err
 		}
-		if err := nameSlug(ctx, q, t, w.Name, w.Year); err != nil {
-			return err
+		if settled(before, w) {
+			if err := nameSlug(ctx, q, t, w.Name, w.Year); err != nil {
+				return err
+			}
 		}
 		if err := learnIDs(ctx, q, t, IDs{TMDB: int64(w.TMDB)}); err != nil {
 			return err
@@ -174,6 +182,17 @@ func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into i
 	return q.MarkTitleMerged(ctx, store.MarkTitleMergedParams{FromID: from, IntoID: &into})
 }
 
+func settled(before store.Title, w WikidataTitle) bool {
+	now := time.Now()
+	if w.Released.IsZero() || w.Released.After(now) || before.WikidataCheckedAt == nil || before.WikidataCheckedAt.After(now.Add(-6*24*time.Hour)) {
+		return false
+	}
+	if before.WikidataID == nil || *before.WikidataID != w.QID || before.Name == nil || before.Year == nil {
+		return false
+	}
+	return slugFor(*before.Name, int(*before.Year)) == slugFor(w.Name, w.Year)
+}
+
 func nameSlug(ctx context.Context, q *store.Queries, t store.Title, name string, year int) error {
 	base := slugFor(name, year)
 	if base == "" || t.Slug != "t-"+strconv.FormatInt(t.ID, 10) {
@@ -199,10 +218,12 @@ func slugFor(name string, year int) string {
 	return base + "-" + strconv.Itoa(year)
 }
 
+var folds = strings.NewReplacer("ı", "i", "ø", "o", "æ", "ae", "œ", "oe", "ß", "ss", "đ", "d", "ð", "d", "ł", "l", "þ", "th", "ə", "e", "ħ", "h", "ŋ", "ng")
+
 func slugify(name string) string {
 	var b strings.Builder
 	gap := false
-	for _, r := range norm.NFKD.String(strings.ToLower(name)) {
+	for _, r := range norm.NFKD.String(folds.Replace(strings.ToLower(name))) {
 		switch {
 		case unicode.Is(unicode.Mn, r), r == '\'', r == '’':
 		case r < utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r)):

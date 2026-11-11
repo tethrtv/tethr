@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFind(t *testing.T) {
@@ -19,7 +20,7 @@ func TestFind(t *testing.T) {
 			return
 		}
 		_, _ = w.Write([]byte(`{"results":{"bindings":[
-			{"key":{"value":"57243"},"item":{"value":"http://www.wikidata.org/entity/Q39243484"},"name":{"value":"Doctor Who (2005)"},"original":{"value":"Doctor Who"},"year":{"value":"2005"},"runtime":{"value":"44.5"},"tvdbID":{"value":"78804"},"imdbID":{"value":"not an id"}},
+			{"key":{"value":"57243"},"item":{"value":"http://www.wikidata.org/entity/Q39243484"},"name":{"value":"Doctor Who (2005)"},"original":{"value":"Doctor Who"},"year":{"value":"2005"},"released":{"value":"2005-03-26T00:00:00Z"},"runtime":{"value":"44.5"},"tvdbID":{"value":"78804"},"imdbID":{"value":"not an id"}},
 			{"key":{"value":"1"},"item":{"value":"http://www.wikidata.org/entity/Q2"},"fallback":{"value":"Pride"}}]}}`))
 	}))
 	defer fake.Close()
@@ -32,10 +33,10 @@ func TestFind(t *testing.T) {
 	if strings.Contains(sent, "%3Fz") {
 		t.Errorf("a value that isn't an ID reached the query: %s", sent)
 	}
-	if w := found["57243"]; w.Name != "Doctor Who" || w.Year != 2005 || w.Runtime != 45 || w.TVDB != "78804" || w.IMDB != "" {
+	if w := found["57243"]; w.Name != "Doctor Who" || w.Year != 2005 || !w.Released.Equal(time.Date(2005, 3, 26, 0, 0, 0, 0, time.UTC)) || w.Runtime != 45 || w.TVDB != "78804" || w.IMDB != "" {
 		t.Errorf("doctor who = %+v", w)
 	}
-	if w := found["1"]; w.Name != "Pride" || w.Year != 0 {
+	if w := found["1"]; w.Name != "Pride" || w.Year != 0 || !w.Released.IsZero() {
 		t.Errorf("a title with no English label should use the default one: %+v", w)
 	}
 	if _, err := c.Find(context.Background(), "movie", "tvdb", []string{"1"}); err == nil {

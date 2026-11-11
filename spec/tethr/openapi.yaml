@@ -1819,7 +1819,7 @@ paths:
     get:
       operationId: getTitle
       summary: A film or show, with what you've watched, rated and listed
-      description: '`id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a TMDB ID, since films and shows share numbers there. A show lists every episode Tethr knows of, aired or not, season by season in its episode order with specials last.'
+      description: '`id` is a Tethr ID, a slug, or `tmdb-` with a TMDB ID. Give `type` with a slug or a TMDB ID, since a film and a show can share either; without it a film comes first. A show lists every episode Tethr knows of, aired or not, season by season in its episode order with specials last.'
       security:
         - session: []
         - bearer: []
