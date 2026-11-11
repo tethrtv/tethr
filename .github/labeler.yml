@@ -1,0 +1,39 @@
+api:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/api/**', 'spec/tethr/**']
+
+trakt-compat:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/traktcompat/**', 'spec/trakt/**']
+
+web:
+  - changed-files:
+      - any-glob-to-any-file: ['web/**']
+
+catalogue:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/wikidata/**', 'internal/core/catalogue*', 'internal/core/titles*', 'internal/core/wikidata*', 'internal/core/outline*', 'internal/jobs/titles*', 'internal/jobs/outlines*']
+
+lists:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/core/lists*', 'internal/core/autolists*', 'internal/core/follows*', 'web/src/pages/*List*']
+
+imports:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/traktexport/**', 'internal/simklexport/**', 'internal/core/imports*', 'internal/jobs/imports*', 'web/src/letterboxd*', 'web/src/pages/Import*', 'web/src/pages/MatchFilms*']
+
+integrations:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/hooks/**', 'internal/core/servers*', 'web/src/pages/MediaServers*']
+
+email:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/mail/**', 'internal/core/weekly*', 'internal/jobs/weekly*']
+
+moderation:
+  - changed-files:
+      - any-glob-to-any-file: ['internal/core/reports*', 'internal/jobs/reports*']
+
+self-hosting:
+  - changed-files:
+      - any-glob-to-any-file: ['deploy/**', 'compose.yaml']

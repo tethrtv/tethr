@@ -2,6 +2,24 @@ name: Something's broken
 description: Tethr, its website or its API did something it shouldn't.
 labels: [bug]
 body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Tethr?
+      options:
+        - The website
+        - Lists
+        - Imports from other trackers
+        - Media servers or other apps
+        - The API
+        - The Trakt-compatible API
+        - Emails
+        - Skip markers
+        - Titles, IDs or search
+        - Running my own Tethr
+        - Not sure
+    validations:
+      required: true
   - type: textarea
     id: what
     attributes:
