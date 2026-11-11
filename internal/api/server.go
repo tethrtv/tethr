@@ -257,13 +257,17 @@ func (s *Server) me(ctx context.Context, accountID int64) (Me, error) {
 		return Me{}, err
 	}
 	me := Me{
-		Account:  Account{Id: account.ID, Email: account.Email, Name: account.Name, CreatedAt: account.CreatedAt},
+		Account:  toAccount(account),
 		Profiles: make([]Profile, 0, len(profiles)),
 	}
 	for _, p := range profiles {
 		me.Profiles = append(me.Profiles, toProfile(p))
 	}
 	return me, nil
+}
+
+func toAccount(a store.Account) Account {
+	return Account{Id: a.ID, Email: a.Email, Name: a.Name, CreatedAt: a.CreatedAt, TimeZone: a.TimeZone, WeeklyEmail: a.WeeklyEmail}
 }
 
 func toProfile(p store.Profile) Profile {
@@ -309,6 +313,8 @@ func inputProblem(err error) (ProblemJSONResponse, bool) {
 		return problem("name_required", "What should we call you?"), true
 	case errors.Is(err, core.ErrInvalidKind):
 		return problem("invalid_kind", "A profile is a person, kids or a guest."), true
+	case errors.Is(err, core.ErrInvalidTimeZone):
+		return problem("invalid_time_zone", "We don’t know that time zone. Try one like Europe/London."), true
 	}
 	return ProblemJSONResponse{}, false
 }

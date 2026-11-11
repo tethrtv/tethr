@@ -99,3 +99,8 @@ JOIN profiles v ON v.id = sqlc.arg(profile_id)
 WHERE l.kind = 'custom' AND o.household_id = v.household_id AND (l.profile_id = v.id OR l.privacy <> 'private')
   AND i.title_id = sqlc.arg(title_id) AND i.season_number IS NULL AND i.episode_id IS NULL
 ORDER BY i.list_id;
+
+-- name: ListItemsAddedSince :many
+SELECT list_id, title_id FROM list_items
+WHERE list_id = ANY(sqlc.arg(list_ids)::bigint[]) AND listed_at >= sqlc.arg(since)
+ORDER BY list_id, listed_at DESC, id DESC;

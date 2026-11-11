@@ -23,6 +23,7 @@ import { MyLists } from './pages/MyLists'
 import { SignIn } from './pages/SignIn'
 import { TitlePage } from './pages/Title'
 import { Today } from './pages/Today'
+import { Unsubscribe } from './pages/Unsubscribe'
 import { UpNext } from './pages/UpNext'
 import { UserPage } from './pages/User'
 import { Verify } from './pages/Verify'
@@ -219,6 +220,14 @@ const routes = [
   createRoute({ getParentRoute: () => root, path: '/privacy', component: Privacy }),
   createRoute({ getParentRoute: () => root, path: '/import', component: Import }),
   createRoute({ getParentRoute: () => root, path: '/media-servers', component: MediaServers }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/unsubscribe',
+    component: Unsubscribe,
+    validateSearch: (search: Record<string, unknown>) => ({
+      token: typeof search.token === 'string' ? search.token : '',
+    }),
+  }),
   createRoute({
     getParentRoute: () => root,
     path: '/verify',

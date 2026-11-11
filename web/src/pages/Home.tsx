@@ -11,6 +11,7 @@ import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { describeDevice } from '../device'
 import { addPasskey, passkeysSupported } from '../passkeys'
 import { returnTo } from '../returnTo'
+import { useTimeZone } from './connect'
 import styles from './Home.module.css'
 
 type Profile = components['schemas']['Profile']
@@ -43,6 +44,7 @@ export function Home() {
   useEffect(() => {
     if (me.data === null) navigate({ to: '/sign-in', replace: true })
   }, [me.data, navigate])
+  useTimeZone(me.data)
 
   if (!me.data) return <Plain>{me.isError ? <p>Couldn’t reach Tethr. Try again in a moment.</p> : null}</Plain>
 
@@ -68,6 +70,7 @@ export function Home() {
           </p>
         </header>
         <Household me={me.data} />
+        <WeeklyEmail me={me.data} />
         <Invites />
         <ConnectedApps />
         <SigningIn />
@@ -639,6 +642,57 @@ function Invites() {
           </ul>
         )}
       </div>
+    </section>
+  )
+}
+
+const zones = Intl.supportedValuesOf('timeZone')
+
+function WeeklyEmail({ me }: { me: Me }) {
+  const queries = useQueryClient()
+  const { account } = me
+  const save = useMutation({
+    mutationFn: async (body: { weekly_email?: boolean; time_zone?: string }) => {
+      const { data, error } = await api.PATCH('/v1/me', { body })
+      if (error) throw error
+      return data
+    },
+    onSuccess: (data) => queries.setQueryData(['me'], { ...me, account: data }),
+  })
+  const zone = account.time_zone ?? 'Europe/London'
+
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>Weekly email</h2>
+      <label className={styles.check}>
+        <input
+          type="checkbox"
+          checked={account.weekly_email}
+          disabled={save.isPending}
+          onChange={(e) => save.mutate({ weekly_email: e.target.checked })}
+        />
+        <span>
+          Send me the week ahead
+          <span className={styles.checkNote}>
+            New episodes of what you watch, new shows and seasons from your watchlist, new picks on lists you follow,
+            what’s popular on Tethr and a look back at your week. It comes on Sunday evenings, about 6pm, and only when
+            there’s something for you.
+          </span>
+        </span>
+      </label>
+      <p className={styles.zone}>
+        <label>
+          Your time zone{' '}
+          <select value={zone} disabled={save.isPending} onChange={(e) => save.mutate({ time_zone: e.target.value })}>
+            {(zones.includes(zone) ? zones : [zone, ...zones]).map((z) => (
+              <option key={z} value={z}>
+                {z.replaceAll('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </label>
+      </p>
+      {save.isError && <p className={styles.error}>{problemMessage(save.error)}</p>}
     </section>
   )
 }

@@ -31,6 +31,7 @@ services:
       <<: *mail
       DATABASE_URL: postgres://tethr:${TETHR_DB_PASSWORD:?}@postgres:5432/tethr?sslmode=disable
       APP_URL: https://tethr.tv
+      API_URL: https://api.tethr.tv
       SESSION_COOKIE: tethr_session
       WEBAUTHN_RP_ID: tethr.tv
       SIGNUPS: invite
@@ -45,6 +46,7 @@ services:
       <<: *mail
       DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable
       APP_URL: https://staging.tethr.tv
+      API_URL: https://staging-api.tethr.tv
       SESSION_COOKIE: tethr_staging_session
       WEBAUTHN_RP_ID: staging.tethr.tv
       TMDB_TOKEN: ${TMDB_TOKEN:-}

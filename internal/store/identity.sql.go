@@ -12,7 +12,7 @@ import (
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (email, name)
 VALUES ($1, $2)
-RETURNING id, email, email_verified_at, name, created_at, updated_at, extra_invites
+RETURNING id, email, email_verified_at, name, created_at, updated_at, extra_invites, time_zone, weekly_email, weekly_sent_at, unsubscribe_token
 `
 
 type CreateAccountParams struct {
@@ -31,6 +31,10 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExtraInvites,
+		&i.TimeZone,
+		&i.WeeklyEmail,
+		&i.WeeklySentAt,
+		&i.UnsubscribeToken,
 	)
 	return i, err
 }

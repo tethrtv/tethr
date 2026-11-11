@@ -19,7 +19,10 @@ type UpcomingEntry struct {
 }
 
 func Upcoming(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpcomingEntry, error) {
-	q := store.New(db)
+	return upcoming(ctx, store.New(db), profileID, time.Now().UTC().Truncate(24*time.Hour))
+}
+
+func upcoming(ctx context.Context, q *store.Queries, profileID int64, today time.Time) ([]UpcomingEntry, error) {
 	rows, err := q.WatchedEpisodes(ctx, store.WatchedEpisodesParams{ProfileID: profileID})
 	if err != nil {
 		return nil, err
@@ -68,7 +71,6 @@ func Upcoming(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]Upcomin
 		}
 	}
 
-	today := time.Now().UTC().Truncate(24 * time.Hour)
 	week := today.AddDate(0, 0, upcomingDays)
 	since := today.AddDate(0, 0, -1)
 	var entries []UpcomingEntry

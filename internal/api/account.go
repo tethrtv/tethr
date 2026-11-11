@@ -260,3 +260,29 @@ func toOptions(o core.PasskeyOptions) (PasskeyOptions, error) {
 func toPasskey(p store.Passkey) Passkey {
 	return Passkey{Id: p.ID, Name: p.Name, CreatedAt: p.CreatedAt, LastUsedAt: p.LastUsedAt}
 }
+
+func (s *Server) UpdateMe(ctx context.Context, req UpdateMeRequestObject) (UpdateMeResponseObject, error) {
+	accountID, _, ok, err := s.signedIn(ctx)
+	if !ok {
+		return UpdateMe401JSONResponse(notSignedIn), err
+	}
+	account, err := core.UpdateAccount(ctx, s.DB, accountID, core.AccountChanges{TimeZone: req.Body.TimeZone, WeeklyEmail: req.Body.WeeklyEmail})
+	if err != nil {
+		if p, ok := inputProblem(err); ok {
+			return UpdateMe400JSONResponse{p}, nil
+		}
+		return nil, err
+	}
+	return UpdateMe200JSONResponse(toAccount(account)), nil
+}
+
+func (s *Server) Unsubscribe(ctx context.Context, req UnsubscribeRequestObject) (UnsubscribeResponseObject, error) {
+	err := core.Unsubscribe(ctx, s.DB, req.Params.Token)
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+		return Unsubscribe404JSONResponse{problem("not_found", "That unsubscribe link didn’t work. You can turn the weekly email off on your account page.")}, nil
+	case err != nil:
+		return nil, err
+	}
+	return Unsubscribe204Response{}, nil
+}

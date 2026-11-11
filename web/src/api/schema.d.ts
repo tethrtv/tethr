@@ -309,6 +309,27 @@ export interface paths {
         delete: operations["deleteAccount"];
         options?: never;
         head?: never;
+        /** Set the account's time zone or turn the weekly email on or off */
+        patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/v1/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop the weekly email, using the token from its unsubscribe link
+         * @description Needs no session, so mail apps can unsubscribe in one click. An unknown token does nothing.
+         */
+        post: operations["unsubscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -1551,6 +1572,14 @@ export interface components {
             name: string;
             /** Format: date-time */
             created_at: string;
+            /** @description An IANA time zone such as Europe/London. The site saves the browser's the first time it's missing. */
+            time_zone: string | null;
+            /** @description The email that goes out on Sunday evenings with the week ahead. */
+            weekly_email: boolean;
+        };
+        AccountChanges: {
+            time_zone?: string;
+            weekly_email?: boolean;
         };
         Profile: {
             /** Format: int64 */
@@ -2940,6 +2969,52 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountChanges"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    unsubscribe: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unsubscribed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     exportData: {
