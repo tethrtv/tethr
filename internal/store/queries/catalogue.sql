@@ -150,7 +150,7 @@ ORDER BY t.outline_refreshed_at NULLS FIRST
 LIMIT $1;
 
 -- name: DueWikidata :many
-SELECT t.id, t.kind, t.tmdb_id,
+SELECT t.id, t.kind, t.tmdb_id, t.wikidata_id, t.wikidata_deleted_at,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
 FROM titles t
@@ -162,7 +162,7 @@ LIMIT $1;
 
 -- name: SaveWikidata :exec
 UPDATE titles
-SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, wikidata_checked_at = now(), updated_at = now()
+SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, wikidata_checked_at = now(), wikidata_deleted_at = NULL, updated_at = now()
 WHERE id = $1;
 
 -- name: NameSlug :execrows
@@ -171,6 +171,9 @@ WHERE t.id = sqlc.arg(id) AND t.slug = 't-' || t.id AND NOT EXISTS (SELECT 1 FRO
 
 -- name: WikidataMissing :exec
 UPDATE titles SET wikidata_checked_at = now() WHERE id = $1;
+
+-- name: WikidataDeleted :exec
+UPDATE titles SET wikidata_checked_at = now(), wikidata_deleted_at = coalesce(wikidata_deleted_at, now()) WHERE id = $1;
 
 -- name: AddMissingExternalID :exec
 INSERT INTO external_ids (title_id, provider, value)

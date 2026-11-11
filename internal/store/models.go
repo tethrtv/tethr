@@ -386,6 +386,7 @@ type Title struct {
 	WikidataID         *string
 	WikidataCheckedAt  *time.Time
 	MergedIntoID       *int64
+	WikidataDeletedAt  *time.Time
 }
 
 type UpNextList struct {
