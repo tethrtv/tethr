@@ -135,18 +135,18 @@ func (q *Queries) ImportByID(ctx context.Context, arg ImportByIDParams) (ImportB
 }
 
 const importHiddenItem = `-- name: ImportHiddenItem :execrows
-INSERT INTO hidden_items (profile_id, section, title_id, season_number, hidden_at, import_id)
+INSERT INTO hidden_items (profile_id, section, title_id, season_id, hidden_at, import_id)
 VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT DO NOTHING
 `
 
 type ImportHiddenItemParams struct {
-	ProfileID    int64
-	Section      string
-	TitleID      int64
-	SeasonNumber *int32
-	HiddenAt     time.Time
-	ImportID     *int64
+	ProfileID int64
+	Section   string
+	TitleID   int64
+	SeasonID  *int64
+	HiddenAt  time.Time
+	ImportID  *int64
 }
 
 func (q *Queries) ImportHiddenItem(ctx context.Context, arg ImportHiddenItemParams) (int64, error) {
@@ -154,7 +154,7 @@ func (q *Queries) ImportHiddenItem(ctx context.Context, arg ImportHiddenItemPara
 		arg.ProfileID,
 		arg.Section,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 		arg.HiddenAt,
 		arg.ImportID,
 	)
@@ -176,27 +176,27 @@ func (q *Queries) ImportInProgress(ctx context.Context, profileID int64) (bool, 
 }
 
 const importListItem = `-- name: ImportListItem :execrows
-INSERT INTO list_items (list_id, title_id, season_number, episode_id, rank, notes, listed_at, import_id)
+INSERT INTO list_items (list_id, title_id, season_id, episode_id, rank, notes, listed_at, import_id)
 SELECT $1, $2, $3, $4, coalesce(max(rank), 0) + 1, $5, $6, $7
 FROM list_items WHERE list_id = $1
-ON CONFLICT (list_id, title_id, season_number, episode_id) DO NOTHING
+ON CONFLICT (list_id, title_id, season_id, episode_id) DO NOTHING
 `
 
 type ImportListItemParams struct {
-	ListID       int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Notes        *string
-	ListedAt     time.Time
-	ImportID     *int64
+	ListID    int64
+	TitleID   int64
+	SeasonID  *int64
+	EpisodeID *int64
+	Notes     *string
+	ListedAt  time.Time
+	ImportID  *int64
 }
 
 func (q *Queries) ImportListItem(ctx context.Context, arg ImportListItemParams) (int64, error) {
 	result, err := q.db.Exec(ctx, importListItem,
 		arg.ListID,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 		arg.EpisodeID,
 		arg.Notes,
 		arg.ListedAt,
@@ -239,26 +239,26 @@ func (q *Queries) ImportPlayback(ctx context.Context, arg ImportPlaybackParams) 
 }
 
 const importRating = `-- name: ImportRating :execrows
-INSERT INTO ratings (profile_id, title_id, season_number, episode_id, rating, rated_at, import_id)
+INSERT INTO ratings (profile_id, title_id, season_id, episode_id, rating, rated_at, import_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (profile_id, title_id, season_number, episode_id) DO NOTHING
+ON CONFLICT (profile_id, title_id, season_id, episode_id) DO NOTHING
 `
 
 type ImportRatingParams struct {
-	ProfileID    int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Rating       int16
-	RatedAt      time.Time
-	ImportID     *int64
+	ProfileID int64
+	TitleID   int64
+	SeasonID  *int64
+	EpisodeID *int64
+	Rating    int16
+	RatedAt   time.Time
+	ImportID  *int64
 }
 
 func (q *Queries) ImportRating(ctx context.Context, arg ImportRatingParams) (int64, error) {
 	result, err := q.db.Exec(ctx, importRating,
 		arg.ProfileID,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 		arg.EpisodeID,
 		arg.Rating,
 		arg.RatedAt,

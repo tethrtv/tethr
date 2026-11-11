@@ -41,7 +41,7 @@ func Ratings(ctx context.Context, db *pgxpool.Pool, profileID int64, kind string
 	}
 	entries := make([]Entry, 0, len(rows))
 	for _, row := range rows {
-		entries = append(entries, Entry{ID: row.ID, At: row.RatedAt, Rating: row.Rating, Item: c.item(row.TitleID, row.SeasonNumber, row.EpisodeID)})
+		entries = append(entries, Entry{ID: row.ID, At: row.RatedAt, Rating: row.Rating, Item: c.item(row.TitleID, seasonOf(row.TitleID, row.SeasonID, row.SeasonNumber), row.EpisodeID)})
 	}
 	return entries, nil
 }
@@ -64,12 +64,12 @@ func Rate(ctx context.Context, db *pgxpool.Pool, profileID int64, ratings []Rati
 				return err
 			}
 			n, err := q.RateItem(ctx, store.RateItemParams{
-				ProfileID:    profileID,
-				TitleID:      r.title.ID,
-				SeasonNumber: r.season,
-				EpisodeID:    r.episodeID(),
-				Rating:       rt.Rating,
-				RatedAt:      rt.At,
+				ProfileID: profileID,
+				TitleID:   r.title.ID,
+				SeasonID:  r.seasonID(),
+				EpisodeID: r.episodeID(),
+				Rating:    rt.Rating,
+				RatedAt:   rt.At,
 			})
 			if err != nil {
 				return err
@@ -101,7 +101,7 @@ func Unrate(ctx context.Context, db *pgxpool.Pool, profileID int64, refs []Ref) 
 			if err != nil {
 				return err
 			}
-			n, err := q.UnrateItem(ctx, store.UnrateItemParams{ProfileID: profileID, TitleID: r.title.ID, SeasonNumber: r.season, EpisodeID: r.episodeID()})
+			n, err := q.UnrateItem(ctx, store.UnrateItemParams{ProfileID: profileID, TitleID: r.title.ID, SeasonID: r.seasonID(), EpisodeID: r.episodeID()})
 			if err != nil {
 				return err
 			}
@@ -126,7 +126,10 @@ func RemoveRating(ctx context.Context, db *pgxpool.Pool, profileID, id int64) er
 		if err != nil {
 			return notFound(err)
 		}
-		r := resolved{title: store.Title{Kind: row.Kind}, season: row.SeasonNumber}
+		r := resolved{title: store.Title{Kind: row.Kind}}
+		if row.SeasonID != nil {
+			r.season = &store.Season{ID: *row.SeasonID}
+		}
 		if row.EpisodeID != nil {
 			r.episode = &store.Episode{ID: *row.EpisodeID}
 		}
@@ -150,7 +153,7 @@ func Hidden(ctx context.Context, db *pgxpool.Pool, profileID int64, section, kin
 	}
 	entries := make([]Entry, 0, len(rows))
 	for _, row := range rows {
-		e := Entry{At: row.HiddenAt, Item: c.item(row.TitleID, row.SeasonNumber, nil)}
+		e := Entry{At: row.HiddenAt, Item: c.item(row.TitleID, seasonOf(row.TitleID, row.SeasonID, row.SeasonNumber), nil)}
 		if kind == "" || e.Item.Kind() == kind {
 			entries = append(entries, e)
 		}
@@ -161,18 +164,18 @@ func Hidden(ctx context.Context, db *pgxpool.Pool, profileID int64, section, kin
 func Hide(ctx context.Context, db *pgxpool.Pool, profileID int64, section string, refs []Ref) (SyncResult, error) {
 	return changeHidden(ctx, db, profileID, section, refs, false, func(q *store.Queries, r resolved) (int64, error) {
 		return q.ImportHiddenItem(ctx, store.ImportHiddenItemParams{
-			ProfileID:    profileID,
-			Section:      section,
-			TitleID:      r.title.ID,
-			SeasonNumber: r.season,
-			HiddenAt:     time.Now(),
+			ProfileID: profileID,
+			Section:   section,
+			TitleID:   r.title.ID,
+			SeasonID:  r.seasonID(),
+			HiddenAt:  time.Now(),
 		})
 	})
 }
 
 func Unhide(ctx context.Context, db *pgxpool.Pool, profileID int64, section string, refs []Ref) (SyncResult, error) {
 	return changeHidden(ctx, db, profileID, section, refs, true, func(q *store.Queries, r resolved) (int64, error) {
-		return q.UnhideItem(ctx, store.UnhideItemParams{ProfileID: profileID, Section: section, TitleID: r.title.ID, SeasonNumber: r.season})
+		return q.UnhideItem(ctx, store.UnhideItemParams{ProfileID: profileID, Section: section, TitleID: r.title.ID, SeasonID: r.seasonID()})
 	})
 }
 

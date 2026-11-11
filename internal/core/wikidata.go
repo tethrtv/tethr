@@ -112,6 +112,12 @@ func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into i
 	if err := q.TouchListsWithTitles(ctx, []int64{from, into}); err != nil {
 		return err
 	}
+	if err := q.CopyTitleSeasons(ctx, store.CopyTitleSeasonsParams{FromID: from, IntoID: into}); err != nil {
+		return err
+	}
+	if err := q.MergeTitleSeasons(ctx, store.MergeTitleSeasonsParams{FromID: from, IntoID: into}); err != nil {
+		return err
+	}
 	if err := q.DropClashingTitleListItems(ctx, store.DropClashingTitleListItemsParams{FromID: from, IntoID: into}); err != nil {
 		return err
 	}

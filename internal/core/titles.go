@@ -32,6 +32,7 @@ type InList struct {
 }
 
 type SeasonState struct {
+	ID       int64
 	Number   int32
 	Episodes []EpisodeState
 }
@@ -134,6 +135,20 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 		}
 		season := &s.Seasons[len(s.Seasons)-1]
 		season.Episodes = append(season.Episodes, EpisodeState{Episode: e, Watches: plays[e.ID], Resume: resume[e.ID]})
+	}
+	if s.Order != "" {
+		return s, nil
+	}
+	seasons, err := q.ShowSeasons(ctx, t.ID)
+	if err != nil {
+		return s, err
+	}
+	ids := map[int32]int64{}
+	for _, season := range seasons {
+		ids[season.SeasonNumber] = season.ID
+	}
+	for i := range s.Seasons {
+		s.Seasons[i].ID = ids[s.Seasons[i].Number]
 	}
 	return s, nil
 }

@@ -200,7 +200,7 @@ func UpNextLists(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNe
 	entries := map[int64][]ListEntry{}
 	for _, item := range items {
 		p := progress[item.ID]
-		e := Entry{ID: item.ID, At: item.ListedAt, Rank: item.Rank, Item: c.item(item.TitleID, item.SeasonNumber, item.EpisodeID)}
+		e := Entry{ID: item.ID, At: item.ListedAt, Rank: item.Rank, Item: c.item(item.TitleID, seasonOf(item.TitleID, item.SeasonID, item.SeasonNumber), item.EpisodeID)}
 		entries[item.ListID] = append(entries[item.ListID], ListEntry{Entry: e, Progress: &p})
 	}
 

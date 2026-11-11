@@ -89,7 +89,7 @@ func itemFields(i core.Item, out map[string]any) map[string]any {
 	case "show":
 		out["show"] = titleJSON(i)
 	case "season":
-		out["season"] = season{Number: *i.Season}
+		out["season"] = season{Number: i.Season.SeasonNumber, IDs: ids{Trakt: traktID(i.Season.ID, catalogueOffset)}}
 		out["show"] = titleJSON(i)
 	case "episode":
 		out["episode"] = episodeJSON(i)

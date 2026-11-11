@@ -51,7 +51,7 @@ function Row({ listing: l, profileID }: { listing: Listing; profileID: number })
     l.item.type === 'movie'
       ? 'Film'
       : l.item.type === 'season'
-        ? `Season ${l.item.season}`
+        ? `Season ${l.item.season?.number}`
         : l.item.episode
           ? ep(l.item.episode.season, l.item.episode.number)
           : 'Show'

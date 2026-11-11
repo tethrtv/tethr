@@ -12,7 +12,7 @@ import (
 
 const deleteRating = `-- name: DeleteRating :one
 DELETE FROM ratings r WHERE r.id = $1 AND r.profile_id = $2
-RETURNING r.season_number, r.episode_id, (SELECT kind FROM titles t WHERE t.id = r.title_id)::text AS kind
+RETURNING r.season_id, r.episode_id, (SELECT kind FROM titles t WHERE t.id = r.title_id)::text AS kind
 `
 
 type DeleteRatingParams struct {
@@ -21,22 +21,23 @@ type DeleteRatingParams struct {
 }
 
 type DeleteRatingRow struct {
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Kind         string
+	SeasonID  *int64
+	EpisodeID *int64
+	Kind      string
 }
 
 func (q *Queries) DeleteRating(ctx context.Context, arg DeleteRatingParams) (DeleteRatingRow, error) {
 	row := q.db.QueryRow(ctx, deleteRating, arg.ID, arg.ProfileID)
 	var i DeleteRatingRow
-	err := row.Scan(&i.SeasonNumber, &i.EpisodeID, &i.Kind)
+	err := row.Scan(&i.SeasonID, &i.EpisodeID, &i.Kind)
 	return i, err
 }
 
 const hiddenSeasons = `-- name: HiddenSeasons :many
-SELECT season_number::integer FROM hidden_items
-WHERE profile_id = $1 AND section = 'progress_watched' AND title_id = $2 AND season_number IS NOT NULL
-ORDER BY season_number
+SELECT s.season_number FROM hidden_items h
+JOIN seasons s ON s.id = h.season_id
+WHERE h.profile_id = $1 AND h.section = 'progress_watched' AND h.title_id = $2
+ORDER BY s.season_number
 `
 
 type HiddenSeasonsParams struct {
@@ -85,7 +86,7 @@ FROM ratings r
 JOIN profiles p ON p.id = r.profile_id
 JOIN profiles me ON me.household_id = p.household_id
 WHERE me.id = $1
-  AND r.season_number IS NULL AND r.episode_id IS NULL AND r.rating >= 9
+  AND r.season_id IS NULL AND r.episode_id IS NULL AND r.rating >= 9
   AND p.kind <> 'guest' AND (me.kind <> 'kids' OR p.kind = 'kids')
 ORDER BY r.rated_at DESC, r.id DESC
 `
@@ -152,27 +153,27 @@ func (q *Queries) OutlineEpisodes(ctx context.Context, showIds []int64) ([]Episo
 }
 
 const rateItem = `-- name: RateItem :execrows
-INSERT INTO ratings (profile_id, title_id, season_number, episode_id, rating, rated_at)
+INSERT INTO ratings (profile_id, title_id, season_id, episode_id, rating, rated_at)
 VALUES ($1, $2, $3, $4, $5, coalesce($6::timestamptz, now()))
-ON CONFLICT (profile_id, title_id, season_number, episode_id)
+ON CONFLICT (profile_id, title_id, season_id, episode_id)
 DO UPDATE SET rating = excluded.rating, rated_at = excluded.rated_at, import_id = NULL
 WHERE ratings.rating <> excluded.rating
 `
 
 type RateItemParams struct {
-	ProfileID    int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Rating       int16
-	RatedAt      *time.Time
+	ProfileID int64
+	TitleID   int64
+	SeasonID  *int64
+	EpisodeID *int64
+	Rating    int16
+	RatedAt   *time.Time
 }
 
 func (q *Queries) RateItem(ctx context.Context, arg RateItemParams) (int64, error) {
 	result, err := q.db.Exec(ctx, rateItem,
 		arg.ProfileID,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 		arg.EpisodeID,
 		arg.Rating,
 		arg.RatedAt,
@@ -184,14 +185,15 @@ func (q *Queries) RateItem(ctx context.Context, arg RateItemParams) (int64, erro
 }
 
 const ratings = `-- name: Ratings :many
-SELECT r.id, r.profile_id, r.title_id, r.season_number, r.episode_id, r.rating, r.rated_at, r.import_id
+SELECT r.id, r.profile_id, r.title_id, r.episode_id, r.rating, r.rated_at, r.import_id, r.season_id, s.season_number
 FROM ratings r
 JOIN titles t ON t.id = r.title_id
+LEFT JOIN seasons s ON s.id = r.season_id
 WHERE r.profile_id = $1
   AND ($2::text IS NULL
     OR ($2 = 'movie' AND t.kind = 'movie')
-    OR ($2 = 'show' AND t.kind = 'show' AND r.season_number IS NULL AND r.episode_id IS NULL)
-    OR ($2 = 'season' AND r.season_number IS NOT NULL)
+    OR ($2 = 'show' AND t.kind = 'show' AND r.season_id IS NULL AND r.episode_id IS NULL)
+    OR ($2 = 'season' AND r.season_id IS NOT NULL)
     OR ($2 = 'episode' AND r.episode_id IS NOT NULL))
   AND (cardinality($3::smallint[]) = 0 OR r.rating = ANY($3::smallint[]))
 ORDER BY r.rated_at DESC, r.id DESC
@@ -203,24 +205,37 @@ type RatingsParams struct {
 	Ratings   []int16
 }
 
-func (q *Queries) Ratings(ctx context.Context, arg RatingsParams) ([]Rating, error) {
+type RatingsRow struct {
+	ID           int64
+	ProfileID    int64
+	TitleID      int64
+	EpisodeID    *int64
+	Rating       int16
+	RatedAt      time.Time
+	ImportID     *int64
+	SeasonID     *int64
+	SeasonNumber *int32
+}
+
+func (q *Queries) Ratings(ctx context.Context, arg RatingsParams) ([]RatingsRow, error) {
 	rows, err := q.db.Query(ctx, ratings, arg.ProfileID, arg.Kind, arg.Ratings)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Rating
+	var items []RatingsRow
 	for rows.Next() {
-		var i Rating
+		var i RatingsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProfileID,
 			&i.TitleID,
-			&i.SeasonNumber,
 			&i.EpisodeID,
 			&i.Rating,
 			&i.RatedAt,
 			&i.ImportID,
+			&i.SeasonID,
+			&i.SeasonNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -235,22 +250,22 @@ func (q *Queries) Ratings(ctx context.Context, arg RatingsParams) ([]Rating, err
 const unrateItem = `-- name: UnrateItem :execrows
 DELETE FROM ratings
 WHERE profile_id = $1 AND title_id = $2
-  AND season_number IS NOT DISTINCT FROM $3
+  AND season_id IS NOT DISTINCT FROM $3
   AND episode_id IS NOT DISTINCT FROM $4
 `
 
 type UnrateItemParams struct {
-	ProfileID    int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
+	ProfileID int64
+	TitleID   int64
+	SeasonID  *int64
+	EpisodeID *int64
 }
 
 func (q *Queries) UnrateItem(ctx context.Context, arg UnrateItemParams) (int64, error) {
 	result, err := q.db.Exec(ctx, unrateItem,
 		arg.ProfileID,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 		arg.EpisodeID,
 	)
 	if err != nil {

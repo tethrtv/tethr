@@ -387,9 +387,8 @@ func toItem(i core.Item) Item {
 		title.Ids.Tvdb = &tvdb
 	}
 	out := Item{Type: ItemType(i.Kind()), Title: title}
-	if i.Season != nil {
-		season := int(*i.Season)
-		out.Season = &season
+	if s := i.Season; s != nil {
+		out.Season = &Season{Ids: Ids{Tethr: &s.ID}, Number: int(s.SeasonNumber)}
 	}
 	if e := i.Episode; e != nil {
 		episode := &Episode{Season: int(e.SeasonNumber), Number: int(e.EpisodeNumber), Ids: Ids{Tethr: &e.ID}}

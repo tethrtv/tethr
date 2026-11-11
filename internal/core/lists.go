@@ -262,7 +262,7 @@ func addCovers(ctx context.Context, q *store.Queries, viewer int64, lists []List
 	}
 	for i := range lists {
 		for _, item := range covers[lists[i].ID] {
-			lists[i].Cover = append(lists[i].Cover, c.item(item.TitleID, item.SeasonNumber, item.EpisodeID))
+			lists[i].Cover = append(lists[i].Cover, c.item(item.TitleID, seasonOf(item.TitleID, item.SeasonID, item.SeasonNumber), item.EpisodeID))
 		}
 	}
 	return nil
@@ -295,7 +295,7 @@ func ListEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query 
 	}
 	entries := make([]ListEntry, 0, len(rows))
 	for _, row := range rows {
-		e := ListEntry{Entry: Entry{ID: row.ID, At: row.ListedAt, Rank: row.Rank, Notes: row.Notes, Item: c.item(row.TitleID, row.SeasonNumber, row.EpisodeID)}}
+		e := ListEntry{Entry: Entry{ID: row.ID, At: row.ListedAt, Rank: row.Rank, Notes: row.Notes, Item: c.item(row.TitleID, seasonOf(row.TitleID, row.SeasonID, row.SeasonNumber), row.EpisodeID)}}
 		if query.Kind != "" && e.Item.Kind() != query.Kind {
 			continue
 		}
@@ -553,12 +553,12 @@ func AddToList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, items
 				return err
 			}
 			_, err = q.AddListItem(ctx, store.AddListItemParams{
-				ListID:       list.ID,
-				TitleID:      r.title.ID,
-				SeasonNumber: r.season,
-				EpisodeID:    r.episodeID(),
-				Notes:        optional(strings.TrimSpace(l.Notes)),
-				ListedAt:     l.At,
+				ListID:    list.ID,
+				TitleID:   r.title.ID,
+				SeasonID:  r.seasonID(),
+				EpisodeID: r.episodeID(),
+				Notes:     optional(strings.TrimSpace(l.Notes)),
+				ListedAt:  l.At,
 			})
 			if errors.Is(err, pgx.ErrNoRows) {
 				result.Existing.add(l.Ref.Kind)

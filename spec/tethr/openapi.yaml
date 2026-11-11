@@ -2904,7 +2904,7 @@ components:
           type: integer
     ItemRef:
       type: object
-      description: A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+      description: A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
       required: [type]
       properties:
         type:
@@ -2939,6 +2939,14 @@ components:
         runtime_minutes:
           type: integer
           description: From Wikidata. For a show, roughly how long an episode runs.
+    Season:
+      type: object
+      required: [ids, number]
+      properties:
+        ids:
+          $ref: '#/components/schemas/Ids'
+        number:
+          type: integer
     Episode:
       type: object
       required: [ids, season, number]
@@ -2980,8 +2988,7 @@ components:
         title:
           $ref: '#/components/schemas/Title'
         season:
-          type: integer
-          description: For a season.
+          $ref: '#/components/schemas/Season'
         episode:
           $ref: '#/components/schemas/Episode'
     ScrobbleRequest:
@@ -3830,7 +3837,10 @@ components:
     SeasonDetail:
       type: object
       required: [number, episodes]
+      description: '`ids` is left out when the show follows another episode order, since its seasons are then the order''s own.'
       properties:
+        ids:
+          $ref: '#/components/schemas/Ids'
         number:
           type: integer
         episodes:

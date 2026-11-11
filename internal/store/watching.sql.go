@@ -40,27 +40,27 @@ func (q *Queries) ActivityMarks(ctx context.Context, profileID int64) ([]Activit
 }
 
 const addListItem = `-- name: AddListItem :one
-INSERT INTO list_items (list_id, title_id, season_number, episode_id, rank, notes, listed_at)
+INSERT INTO list_items (list_id, title_id, season_id, episode_id, rank, notes, listed_at)
 SELECT $1, $2, $3, $4, coalesce(max(rank), 0) + 1, $5, coalesce($6::timestamptz, now())
 FROM list_items WHERE list_id = $1
-ON CONFLICT (list_id, title_id, season_number, episode_id) DO NOTHING
-RETURNING id, list_id, title_id, season_number, episode_id, rank, notes, listed_at, import_id
+ON CONFLICT (list_id, title_id, season_id, episode_id) DO NOTHING
+RETURNING id, list_id, title_id, episode_id, rank, notes, listed_at, import_id, season_id
 `
 
 type AddListItemParams struct {
-	ListID       int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Notes        *string
-	ListedAt     *time.Time
+	ListID    int64
+	TitleID   int64
+	SeasonID  *int64
+	EpisodeID *int64
+	Notes     *string
+	ListedAt  *time.Time
 }
 
 func (q *Queries) AddListItem(ctx context.Context, arg AddListItemParams) (ListItem, error) {
 	row := q.db.QueryRow(ctx, addListItem,
 		arg.ListID,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 		arg.EpisodeID,
 		arg.Notes,
 		arg.ListedAt,
@@ -70,12 +70,12 @@ func (q *Queries) AddListItem(ctx context.Context, arg AddListItemParams) (ListI
 		&i.ID,
 		&i.ListID,
 		&i.TitleID,
-		&i.SeasonNumber,
 		&i.EpisodeID,
 		&i.Rank,
 		&i.Notes,
 		&i.ListedAt,
 		&i.ImportID,
+		&i.SeasonID,
 	)
 	return i, err
 }
@@ -182,7 +182,7 @@ const deleteListItem = `-- name: DeleteListItem :one
 DELETE FROM list_items li
 USING lists l
 WHERE li.id = $1 AND l.id = li.list_id AND l.profile_id = $2 AND l.kind = 'watchlist'
-RETURNING li.list_id, li.season_number, li.episode_id, (SELECT kind FROM titles WHERE id = li.title_id)::text AS kind
+RETURNING li.list_id, li.season_id, li.episode_id, (SELECT kind FROM titles WHERE id = li.title_id)::text AS kind
 `
 
 type DeleteListItemParams struct {
@@ -191,10 +191,10 @@ type DeleteListItemParams struct {
 }
 
 type DeleteListItemRow struct {
-	ListID       int64
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Kind         string
+	ListID    int64
+	SeasonID  *int64
+	EpisodeID *int64
+	Kind      string
 }
 
 func (q *Queries) DeleteListItem(ctx context.Context, arg DeleteListItemParams) (DeleteListItemRow, error) {
@@ -202,7 +202,7 @@ func (q *Queries) DeleteListItem(ctx context.Context, arg DeleteListItemParams) 
 	var i DeleteListItemRow
 	err := row.Scan(
 		&i.ListID,
-		&i.SeasonNumber,
+		&i.SeasonID,
 		&i.EpisodeID,
 		&i.Kind,
 	)
@@ -362,7 +362,11 @@ func (q *Queries) EpisodePlayback(ctx context.Context, arg EpisodePlaybackParams
 }
 
 const hiddenItems = `-- name: HiddenItems :many
-SELECT profile_id, section, title_id, season_number, hidden_at, import_id FROM hidden_items WHERE profile_id = $1 AND section = $2 ORDER BY hidden_at DESC
+SELECT h.profile_id, h.section, h.title_id, h.hidden_at, h.import_id, h.season_id, s.season_number
+FROM hidden_items h
+LEFT JOIN seasons s ON s.id = h.season_id
+WHERE h.profile_id = $1 AND h.section = $2
+ORDER BY h.hidden_at DESC
 `
 
 type HiddenItemsParams struct {
@@ -370,22 +374,33 @@ type HiddenItemsParams struct {
 	Section   string
 }
 
-func (q *Queries) HiddenItems(ctx context.Context, arg HiddenItemsParams) ([]HiddenItem, error) {
+type HiddenItemsRow struct {
+	ProfileID    int64
+	Section      string
+	TitleID      int64
+	HiddenAt     time.Time
+	ImportID     *int64
+	SeasonID     *int64
+	SeasonNumber *int32
+}
+
+func (q *Queries) HiddenItems(ctx context.Context, arg HiddenItemsParams) ([]HiddenItemsRow, error) {
 	rows, err := q.db.Query(ctx, hiddenItems, arg.ProfileID, arg.Section)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []HiddenItem
+	var items []HiddenItemsRow
 	for rows.Next() {
-		var i HiddenItem
+		var i HiddenItemsRow
 		if err := rows.Scan(
 			&i.ProfileID,
 			&i.Section,
 			&i.TitleID,
-			&i.SeasonNumber,
 			&i.HiddenAt,
 			&i.ImportID,
+			&i.SeasonID,
+			&i.SeasonNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -398,16 +413,16 @@ func (q *Queries) HiddenItems(ctx context.Context, arg HiddenItemsParams) ([]Hid
 }
 
 const hideItem = `-- name: HideItem :exec
-INSERT INTO hidden_items (profile_id, section, title_id, season_number)
+INSERT INTO hidden_items (profile_id, section, title_id, season_id)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT DO NOTHING
 `
 
 type HideItemParams struct {
-	ProfileID    int64
-	Section      string
-	TitleID      int64
-	SeasonNumber *int32
+	ProfileID int64
+	Section   string
+	TitleID   int64
+	SeasonID  *int64
 }
 
 func (q *Queries) HideItem(ctx context.Context, arg HideItemParams) error {
@@ -415,7 +430,7 @@ func (q *Queries) HideItem(ctx context.Context, arg HideItemParams) error {
 		arg.ProfileID,
 		arg.Section,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 	)
 	return err
 }
@@ -487,14 +502,15 @@ func (q *Queries) History(ctx context.Context, arg HistoryParams) ([]WatchEvent,
 }
 
 const listItems = `-- name: ListItems :many
-SELECT li.id, li.list_id, li.title_id, li.season_number, li.episode_id, li.rank, li.notes, li.listed_at, li.import_id, t.kind AS title_kind
+SELECT li.id, li.list_id, li.title_id, li.episode_id, li.rank, li.notes, li.listed_at, li.import_id, li.season_id, t.kind AS title_kind, s.season_number
 FROM list_items li
 JOIN titles t ON t.id = li.title_id
+LEFT JOIN seasons s ON s.id = li.season_id
 WHERE li.list_id = $1
   AND ($2::text IS NULL
     OR ($2 = 'movie' AND t.kind = 'movie' AND li.episode_id IS NULL)
-    OR ($2 = 'show' AND t.kind = 'show' AND li.season_number IS NULL AND li.episode_id IS NULL)
-    OR ($2 = 'season' AND li.season_number IS NOT NULL AND li.episode_id IS NULL)
+    OR ($2 = 'show' AND t.kind = 'show' AND li.season_id IS NULL AND li.episode_id IS NULL)
+    OR ($2 = 'season' AND li.season_id IS NOT NULL AND li.episode_id IS NULL)
     OR ($2 = 'episode' AND li.episode_id IS NOT NULL))
 ORDER BY li.rank, li.id
 `
@@ -508,13 +524,14 @@ type ListItemsRow struct {
 	ID           int64
 	ListID       int64
 	TitleID      int64
-	SeasonNumber *int32
 	EpisodeID    *int64
 	Rank         int32
 	Notes        *string
 	ListedAt     time.Time
 	ImportID     *int64
+	SeasonID     *int64
 	TitleKind    string
+	SeasonNumber *int32
 }
 
 func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListItemsRow, error) {
@@ -530,13 +547,14 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 			&i.ID,
 			&i.ListID,
 			&i.TitleID,
-			&i.SeasonNumber,
 			&i.EpisodeID,
 			&i.Rank,
 			&i.Notes,
 			&i.ListedAt,
 			&i.ImportID,
+			&i.SeasonID,
 			&i.TitleKind,
+			&i.SeasonNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -689,22 +707,22 @@ func (q *Queries) RecentWatchEvent(ctx context.Context, arg RecentWatchEventPara
 const removeListItem = `-- name: RemoveListItem :execrows
 DELETE FROM list_items
 WHERE list_id = $1 AND title_id = $2
-  AND season_number IS NOT DISTINCT FROM $3
+  AND season_id IS NOT DISTINCT FROM $3
   AND episode_id IS NOT DISTINCT FROM $4
 `
 
 type RemoveListItemParams struct {
-	ListID       int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
+	ListID    int64
+	TitleID   int64
+	SeasonID  *int64
+	EpisodeID *int64
 }
 
 func (q *Queries) RemoveListItem(ctx context.Context, arg RemoveListItemParams) (int64, error) {
 	result, err := q.db.Exec(ctx, removeListItem,
 		arg.ListID,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 		arg.EpisodeID,
 	)
 	if err != nil {
@@ -787,7 +805,7 @@ func (q *Queries) SetWatching(ctx context.Context, arg SetWatchingParams) error 
 const startRewatch = `-- name: StartRewatch :exec
 INSERT INTO hidden_items (profile_id, section, title_id, hidden_at)
 VALUES ($1, 'progress_watched_reset', $2, $3)
-ON CONFLICT (profile_id, section, title_id, season_number) DO UPDATE SET hidden_at = excluded.hidden_at, import_id = NULL
+ON CONFLICT (profile_id, section, title_id, season_id) DO UPDATE SET hidden_at = excluded.hidden_at, import_id = NULL
 `
 
 type StartRewatchParams struct {
@@ -805,7 +823,7 @@ const titleListing = `-- name: TitleListing :one
 SELECT i.id, i.listed_at
 FROM list_items i
 JOIN lists l ON l.id = i.list_id
-WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND i.title_id = $2 AND i.season_number IS NULL AND i.episode_id IS NULL
+WHERE l.profile_id = $1 AND l.kind = 'watchlist' AND i.title_id = $2 AND i.season_id IS NULL AND i.episode_id IS NULL
 `
 
 type TitleListingParams struct {
@@ -863,7 +881,7 @@ func (q *Queries) TitlePlayback(ctx context.Context, arg TitlePlaybackParams) ([
 
 const titleRating = `-- name: TitleRating :one
 SELECT id, rating, rated_at FROM ratings
-WHERE profile_id = $1 AND title_id = $2 AND season_number IS NULL AND episode_id IS NULL
+WHERE profile_id = $1 AND title_id = $2 AND season_id IS NULL AND episode_id IS NULL
 `
 
 type TitleRatingParams struct {
@@ -942,14 +960,14 @@ func (q *Queries) TouchList(ctx context.Context, id int64) (time.Time, error) {
 
 const unhideItem = `-- name: UnhideItem :execrows
 DELETE FROM hidden_items
-WHERE profile_id = $1 AND section = $2 AND title_id = $3 AND season_number IS NOT DISTINCT FROM $4
+WHERE profile_id = $1 AND section = $2 AND title_id = $3 AND season_id IS NOT DISTINCT FROM $4
 `
 
 type UnhideItemParams struct {
-	ProfileID    int64
-	Section      string
-	TitleID      int64
-	SeasonNumber *int32
+	ProfileID int64
+	Section   string
+	TitleID   int64
+	SeasonID  *int64
 }
 
 func (q *Queries) UnhideItem(ctx context.Context, arg UnhideItemParams) (int64, error) {
@@ -957,7 +975,7 @@ func (q *Queries) UnhideItem(ctx context.Context, arg UnhideItemParams) (int64, 
 		arg.ProfileID,
 		arg.Section,
 		arg.TitleID,
-		arg.SeasonNumber,
+		arg.SeasonID,
 	)
 	if err != nil {
 		return 0, err

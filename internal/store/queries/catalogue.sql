@@ -52,6 +52,31 @@ RETURNING *;
 -- name: CatalogueEpisodes :many
 SELECT * FROM episodes WHERE id = ANY(@ids::bigint[]);
 
+-- name: SeasonByID :one
+SELECT * FROM seasons WHERE id = $1;
+
+-- name: SeasonByNumber :one
+SELECT * FROM seasons WHERE show_id = $1 AND season_number = $2;
+
+-- name: CreateSeason :one
+INSERT INTO seasons (show_id, season_number)
+VALUES ($1, $2)
+ON CONFLICT (show_id, season_number) DO UPDATE SET season_number = excluded.season_number
+RETURNING *;
+
+-- name: AddShowSeasons :exec
+INSERT INTO seasons (show_id, season_number)
+SELECT DISTINCT e.show_id, e.season_number FROM episodes e
+WHERE e.show_id = $1
+  AND NOT EXISTS (SELECT 1 FROM seasons s WHERE s.show_id = e.show_id AND s.season_number = e.season_number)
+ON CONFLICT DO NOTHING;
+
+-- name: ShowSeasons :many
+SELECT * FROM seasons WHERE show_id = $1 ORDER BY season_number;
+
+-- name: CatalogueSeasons :many
+SELECT * FROM seasons WHERE id = ANY(@ids::bigint[]);
+
 -- name: ShowEpisodes :many
 SELECT * FROM episodes WHERE show_id = $1 FOR UPDATE;
 
@@ -188,13 +213,33 @@ UPDATE playback SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_
 -- name: MergeTitleWatching :exec
 UPDATE watching SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
 
+-- name: CopyTitleSeasons :exec
+INSERT INTO seasons (show_id, season_number)
+SELECT sqlc.arg(into_id), o.season_number FROM seasons o
+WHERE o.show_id = sqlc.arg(from_id)
+  AND NOT EXISTS (SELECT 1 FROM seasons n WHERE n.show_id = sqlc.arg(into_id) AND n.season_number = o.season_number)
+ON CONFLICT DO NOTHING;
+
+-- name: MergeTitleSeasons :exec
+WITH m AS (
+    SELECT o.id AS from_id, n.id AS into_id
+    FROM seasons o
+    JOIN seasons n ON n.show_id = sqlc.arg(into_id) AND n.season_number = o.season_number
+    WHERE o.show_id = sqlc.arg(from_id)
+), l AS (
+    UPDATE list_items i SET season_id = m.into_id FROM m WHERE i.season_id = m.from_id
+), r AS (
+    UPDATE ratings r SET season_id = m.into_id FROM m WHERE r.season_id = m.from_id
+)
+UPDATE hidden_items h SET season_id = m.into_id FROM m WHERE h.season_id = m.from_id;
+
 -- name: DropClashingTitleListItems :exec
 DELETE FROM list_items l
 WHERE l.title_id = sqlc.arg(from_id)
   AND EXISTS (
     SELECT 1 FROM list_items m
     WHERE m.list_id = l.list_id AND m.title_id = sqlc.arg(into_id)
-      AND m.season_number IS NOT DISTINCT FROM l.season_number AND m.episode_id IS NOT DISTINCT FROM l.episode_id);
+      AND m.season_id IS NOT DISTINCT FROM l.season_id AND m.episode_id IS NOT DISTINCT FROM l.episode_id);
 
 -- name: MergeTitleListItems :exec
 UPDATE list_items SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
@@ -205,7 +250,7 @@ WHERE r.title_id = sqlc.arg(from_id)
   AND EXISTS (
     SELECT 1 FROM ratings s
     WHERE s.profile_id = r.profile_id AND s.title_id = sqlc.arg(into_id)
-      AND s.season_number IS NOT DISTINCT FROM r.season_number AND s.episode_id IS NOT DISTINCT FROM r.episode_id);
+      AND s.season_id IS NOT DISTINCT FROM r.season_id AND s.episode_id IS NOT DISTINCT FROM r.episode_id);
 
 -- name: MergeTitleRatings :exec
 UPDATE ratings SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
@@ -216,7 +261,7 @@ WHERE h.title_id = sqlc.arg(from_id)
   AND EXISTS (
     SELECT 1 FROM hidden_items g
     WHERE g.profile_id = h.profile_id AND g.section = h.section AND g.title_id = sqlc.arg(into_id)
-      AND g.season_number IS NOT DISTINCT FROM h.season_number);
+      AND g.season_id IS NOT DISTINCT FROM h.season_id);
 
 -- name: MergeTitleHidden :exec
 UPDATE hidden_items SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);

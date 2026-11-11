@@ -1112,11 +1112,9 @@ type Invites struct {
 // Item defines model for Item.
 type Item struct {
 	Episode *Episode `json:"episode,omitempty"`
-
-	// Season For a season.
-	Season *int     `json:"season,omitempty"`
-	Title  Title    `json:"title"`
-	Type   ItemType `json:"type"`
+	Season  *Season  `json:"season,omitempty"`
+	Title   Title    `json:"title"`
+	Type    ItemType `json:"type"`
 }
 
 // ItemType defines model for Item.Type.
@@ -1129,7 +1127,7 @@ type ItemProgress struct {
 	Watched       int        `json:"watched"`
 }
 
-// ItemRef A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+// ItemRef A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 type ItemRef struct {
 	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
 	Ids    *Ids `json:"ids,omitempty"`
@@ -1353,7 +1351,7 @@ type NewList struct {
 // NewListings defines model for NewListings.
 type NewListings struct {
 	Items []struct {
-		// Item A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+		// Item A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 		Item  ItemRef `json:"item"`
 		Notes *string `json:"notes,omitempty"`
 	} `json:"items"`
@@ -1382,7 +1380,7 @@ type NewProfileKind string
 // NewRatings defines model for NewRatings.
 type NewRatings struct {
 	Items []struct {
-		// Item A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+		// Item A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 		Item ItemRef `json:"item"`
 
 		// RatedAt Left out, it's now.
@@ -1406,7 +1404,7 @@ type NewReportReason string
 // NewWatches defines model for NewWatches.
 type NewWatches struct {
 	Items []struct {
-		// Item A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+		// Item A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 		Item ItemRef `json:"item"`
 
 		// WatchedAt Left out, it's now.
@@ -1551,7 +1549,7 @@ type ScrobbleRequest struct {
 	DurationSeconds *float64             `json:"duration_seconds,omitempty"`
 	Event           ScrobbleRequestEvent `json:"event"`
 
-	// Item A film or show by its IDs, a season by its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
+	// Item A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 	Item ItemRef `json:"item"`
 
 	// Progress Percent watched, 0 to 100.
@@ -1573,10 +1571,20 @@ type ScrobbleResult struct {
 // ScrobbleResultResult defines model for ScrobbleResult.Result.
 type ScrobbleResultResult string
 
-// SeasonDetail defines model for SeasonDetail.
+// Season defines model for Season.
+type Season struct {
+	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	Ids    Ids `json:"ids"`
+	Number int `json:"number"`
+}
+
+// SeasonDetail `ids` is left out when the show follows another episode order, since its seasons are then the order's own.
 type SeasonDetail struct {
 	Episodes []EpisodeDetail `json:"episodes"`
-	Number   int             `json:"number"`
+
+	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	Ids    *Ids `json:"ids,omitempty"`
+	Number int  `json:"number"`
 }
 
 // ServerUserMatch defines model for ServerUserMatch.

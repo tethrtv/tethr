@@ -78,6 +78,9 @@ func SaveOutline(ctx context.Context, db *pgxpool.Pool, showID int64, outline []
 				return err
 			}
 		}
+		if err := q.AddShowSeasons(ctx, showID); err != nil {
+			return err
+		}
 		return q.OutlineDone(ctx, store.OutlineDoneParams{ID: showID})
 	})
 }

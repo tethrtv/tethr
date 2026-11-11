@@ -132,12 +132,12 @@ type HeldPlay struct {
 }
 
 type HiddenItem struct {
-	ProfileID    int64
-	Section      string
-	TitleID      int64
-	SeasonNumber *int32
-	HiddenAt     time.Time
-	ImportID     *int64
+	ProfileID int64
+	Section   string
+	TitleID   int64
+	HiddenAt  time.Time
+	ImportID  *int64
+	SeasonID  *int64
 }
 
 type HiddenList struct {
@@ -196,15 +196,15 @@ type ListFollow struct {
 }
 
 type ListItem struct {
-	ID           int64
-	ListID       int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Rank         int32
-	Notes        *string
-	ListedAt     time.Time
-	ImportID     *int64
+	ID        int64
+	ListID    int64
+	TitleID   int64
+	EpisodeID *int64
+	Rank      int32
+	Notes     *string
+	ListedAt  time.Time
+	ImportID  *int64
+	SeasonID  *int64
 }
 
 type ListReport struct {
@@ -337,14 +337,20 @@ type ProfileShowSetting struct {
 }
 
 type Rating struct {
+	ID        int64
+	ProfileID int64
+	TitleID   int64
+	EpisodeID *int64
+	Rating    int16
+	RatedAt   time.Time
+	ImportID  *int64
+	SeasonID  *int64
+}
+
+type Season struct {
 	ID           int64
-	ProfileID    int64
-	TitleID      int64
-	SeasonNumber *int32
-	EpisodeID    *int64
-	Rating       int16
-	RatedAt      time.Time
-	ImportID     *int64
+	ShowID       int64
+	SeasonNumber int32
 }
 
 type Session struct {
