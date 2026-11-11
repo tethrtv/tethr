@@ -24,6 +24,7 @@ type Title struct {
 	Name     string
 	Original string
 	Year     int
+	Released time.Time
 	Runtime  int
 	TMDB     int32
 	IMDB     string
@@ -69,7 +70,7 @@ func (c *Client) Find(ctx context.Context, kind, provider string, values []strin
 		tmdbProp, started, tvdb = "P4983", "wdt:P580|wdt:P577", "OPTIONAL { ?item wdt:P4835 ?tvdb }"
 	}
 	query := fmt.Sprintf(`SELECT ?key ?item (MIN(STR(?en)) AS ?name) (MIN(STR(?mul)) AS ?fallback) (MIN(STR(?orig)) AS ?original)
-  (YEAR(MIN(?date)) AS ?year) (MIN(?minutes) AS ?runtime) (MIN(?tmdb) AS ?tmdbID) (MIN(?imdb) AS ?imdbID) (MIN(?tvdb) AS ?tvdbID)
+  (YEAR(MIN(?date)) AS ?year) (MIN(?date) AS ?released) (MIN(?minutes) AS ?runtime) (MIN(?tmdb) AS ?tmdbID) (MIN(?imdb) AS ?imdbID) (MIN(?tvdb) AS ?tvdbID)
 WHERE {
   VALUES ?key { %s }
   ?item wdt:%s ?key .
@@ -113,6 +114,9 @@ GROUP BY ?key ?item`, strings.Join(keys, " "), prop, started, tmdbProp, tvdb)
 		if y, err := strconv.Atoi(b["year"].Value); err == nil && y > 1800 && y < 2200 {
 			t.Year = y
 			t.Name = strings.TrimSuffix(t.Name, fmt.Sprintf(" (%d)", y))
+			if t.Released, err = time.Parse(time.RFC3339, b["released"].Value); err != nil {
+				t.Released = time.Date(y, 1, 1, 0, 0, 0, 0, time.UTC)
+			}
 		}
 		if m, err := strconv.ParseFloat(b["runtime"].Value, 64); err == nil && m >= 1 && m < 1000 {
 			t.Runtime = int(math.Round(m))

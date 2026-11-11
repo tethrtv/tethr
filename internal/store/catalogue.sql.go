@@ -483,7 +483,7 @@ SELECT t.id, t.kind, t.tmdb_id,
 FROM titles t
 WHERE t.merged_into_id IS NULL
   AND (t.wikidata_checked_at IS NULL
-   OR t.wikidata_checked_at < now() - CASE WHEN t.wikidata_id IS NULL THEN interval '7 days' ELSE interval '90 days' END)
+   OR t.wikidata_checked_at < now() - CASE WHEN t.wikidata_id IS NULL OR t.slug = 't-' || t.id THEN interval '7 days' ELSE interval '90 days' END)
 ORDER BY t.wikidata_checked_at NULLS FIRST, t.id
 LIMIT $1
 `
@@ -863,7 +863,7 @@ func (q *Queries) MoveEpisode(ctx context.Context, arg MoveEpisodeParams) error 
 
 const nameSlug = `-- name: NameSlug :execrows
 UPDATE titles t SET slug = $1, updated_at = now()
-WHERE t.id = $2 AND t.slug = 't-' || t.id AND NOT EXISTS (SELECT 1 FROM titles o WHERE o.slug = $1)
+WHERE t.id = $2 AND t.slug = 't-' || t.id AND NOT EXISTS (SELECT 1 FROM titles o WHERE o.kind = t.kind AND o.slug = $1)
 `
 
 type NameSlugParams struct {

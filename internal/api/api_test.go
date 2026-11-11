@@ -414,8 +414,13 @@ func TestNativeTracking(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"added":1,"existing":1`) || !strings.Contains(rec.Body.String(), `"not_found":[{"ids":{"tmdb":1399},"type":"show"}]`) {
 		t.Errorf("add history = %s", rec.Body)
 	}
-	if err := core.SaveWikidata(ctx, s.DB, *paused.Item.Title.Ids.Tethr, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Original: "Breaking Bad", Year: 2008}); err != nil {
-		t.Fatal(err)
+	for range 2 {
+		if err := core.SaveWikidata(ctx, s.DB, *paused.Item.Title.Ids.Tethr, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Original: "Breaking Bad", Year: 2008, Released: time.Date(2008, 1, 20, 0, 0, 0, 0, time.UTC)}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.DB.Exec(ctx, "UPDATE titles SET wikidata_checked_at = wikidata_checked_at - interval '8 days'"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var history HistoryPage
 	_ = json.Unmarshal(bearer(t, h, "GET", "/v1/history?limit=1", "", token).Body.Bytes(), &history)

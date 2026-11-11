@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/dbtest"
 )
 
@@ -122,6 +123,23 @@ func TestMergeSharedWikidata(t *testing.T) {
 	}
 }
 
+func aWeekPasses(t *testing.T, db *pgxpool.Pool) {
+	t.Helper()
+	if _, err := db.Exec(context.Background(), "UPDATE titles SET wikidata_checked_at = wikidata_checked_at - interval '8 days'"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func settle(t *testing.T, db *pgxpool.Pool, id int64, kind string, w WikidataTitle) {
+	t.Helper()
+	for range 2 {
+		if err := SaveWikidata(context.Background(), db, id, kind, w); err != nil {
+			t.Fatal(err)
+		}
+		aWeekPasses(t, db)
+	}
+}
+
 func TestSlugFor(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -133,6 +151,11 @@ func TestSlugFor(t *testing.T) {
 		{"Grey’s Anatomy", 2005, "greys-anatomy-2005"},
 		{"Rob & Romesh Vs", 2019, "rob-romesh-vs-2019"},
 		{"  M*A*S*H  ", 1972, "m-a-s-h-1972"},
+		{"Axırıncı aşırım", 1971, "axirinci-asirim-1971"},
+		{"Smørrebrød", 2010, "smorrebrod-2010"},
+		{"Æon Flux", 2005, "aeon-flux-2005"},
+		{"Die Straße", 1923, "die-strasse-1923"},
+		{"Łódź", 1990, "lodz-1990"},
 		{"進撃の巨人", 2013, ""},
 		{"Doctor Who", 0, ""},
 	} {
@@ -162,16 +185,11 @@ func TestNameSlugs(t *testing.T) {
 		return items[0].Title.Slug
 	}
 	first, second, unnamed := create(194), create(9194), create(19194)
+	released := time.Date(2001, 4, 25, 0, 0, 0, 0, time.UTC)
 
-	if err := SaveWikidata(ctx, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Amélie", Year: 2001}); err != nil {
-		t.Fatal(err)
-	}
-	if err := SaveWikidata(ctx, db, second, "movie", WikidataTitle{QID: "Q1", Name: "Amelie", Year: 2001}); err != nil {
-		t.Fatal(err)
-	}
-	if err := SaveWikidata(ctx, db, unnamed, "movie", WikidataTitle{QID: "Q2", Name: "Untitled"}); err != nil {
-		t.Fatal(err)
-	}
+	settle(t, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Amélie", Year: 2001, Released: released})
+	settle(t, db, second, "movie", WikidataTitle{QID: "Q1", Name: "Amelie", Year: 2001, Released: released})
+	settle(t, db, unnamed, "movie", WikidataTitle{QID: "Q2", Name: "Untitled"})
 	if got := slug(first); got != "amelie-2001" {
 		t.Errorf("slug = %q", got)
 	}
@@ -182,7 +200,7 @@ func TestNameSlugs(t *testing.T) {
 		t.Errorf("no year should keep the ID slug: %q", got)
 	}
 
-	if err := SaveWikidata(ctx, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Le Fabuleux Destin d'Amélie Poulain", Year: 2001}); err != nil {
+	if err := SaveWikidata(ctx, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Le Fabuleux Destin d'Amélie Poulain", Year: 2001, Released: released}); err != nil {
 		t.Fatal(err)
 	}
 	if got := slug(first); got != "amelie-2001" {
@@ -190,5 +208,83 @@ func TestNameSlugs(t *testing.T) {
 	}
 	if items, err := LookUp(ctx, db, "", IDs{Slug: fmt.Sprintf("t-%d", first)}, false); err != nil || len(items) != 1 || items[0].Title.ID != first {
 		t.Errorf("the ID slug should still resolve: %+v, %v", items, err)
+	}
+}
+
+func TestSlugsPerKind(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	create := func(kind string, tmdb int64) int64 {
+		t.Helper()
+		items, err := LookUp(ctx, db, kind, IDs{TMDB: tmdb}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return items[0].Title.ID
+	}
+	film, show := create("movie", 2661), create("show", 2287)
+	released := time.Date(1966, 1, 12, 0, 0, 0, 0, time.UTC)
+	settle(t, db, film, "movie", WikidataTitle{QID: "Q1056053", Name: "Batman", Year: 1966, Released: released})
+	settle(t, db, show, "show", WikidataTitle{QID: "Q2900869", Name: "Batman", Year: 1966, Released: released})
+	for kind, id := range map[string]int64{"movie": film, "show": show} {
+		items, err := LookUp(ctx, db, kind, IDs{Slug: "batman-1966"}, false)
+		if err != nil || len(items) != 1 || items[0].Title.ID != id {
+			t.Errorf("%s batman-1966 = %+v, %v", kind, items, err)
+		}
+	}
+	if items, err := LookUp(ctx, db, "", IDs{Slug: "batman-1966"}, false); err != nil || len(items) != 2 {
+		t.Errorf("without a kind, both should come back: %+v, %v", items, err)
+	}
+	if got, err := Title(ctx, db, 0, "batman-1966", "show"); err != nil || got.Item.Title.ID != show {
+		t.Errorf("the show's page = %+v, %v", got.Item.Title, err)
+	}
+}
+
+func TestSlugWaitsForAWeek(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	items, err := LookUp(ctx, db, "movie", IDs{TMDB: 1061474}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := items[0].Title.ID
+	save := func(name string, released time.Time) string {
+		t.Helper()
+		if err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q3", Name: name, Year: released.Year(), Released: released}); err != nil {
+			t.Fatal(err)
+		}
+		items, err := LookUp(ctx, db, "movie", IDs{Tethr: id}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return items[0].Title.Slug
+	}
+	placeholder := fmt.Sprintf("t-%d", id)
+	next, yesterday := time.Now().AddDate(1, 0, 0), time.Now().AddDate(0, 0, -1)
+
+	if got := save("Working Title", next); got != placeholder {
+		t.Errorf("on first sight = %q", got)
+	}
+	aWeekPasses(t, db)
+	if got := save("Working Title", next); got != placeholder {
+		t.Errorf("an unreleased title should keep its ID slug: %q", got)
+	}
+	aWeekPasses(t, db)
+	if due, err := DueWikidata(ctx, db, 10); err != nil || len(due) != 1 {
+		t.Errorf("a title waiting for its slug should be looked at again within a week: %+v, %v", due, err)
+	}
+	if got := save("Supermen", yesterday); got != placeholder {
+		t.Errorf("a name seen once shouldn't become a slug: %q", got)
+	}
+	if got := save("Supermen", yesterday); got != placeholder {
+		t.Errorf("the same name a moment later isn't a week: %q", got)
+	}
+	aWeekPasses(t, db)
+	if got := save("Superman", yesterday); got != placeholder {
+		t.Errorf("a renamed title should wait another week: %q", got)
+	}
+	aWeekPasses(t, db)
+	if got, want := save("Superman", yesterday), fmt.Sprintf("superman-%d", yesterday.Year()); got != want {
+		t.Errorf("after a settled week, slug = %q, want %q", got, want)
 	}
 }
