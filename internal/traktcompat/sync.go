@@ -56,7 +56,7 @@ func (s *Server) scrobble(step scrobbler) http.HandlerFunc {
 			s.fail(w, r, err)
 		default:
 			writeJSON(w, http.StatusCreated, itemFields(result.Item, map[string]any{
-				"id":       result.ID,
+				"id":       traktID(result.ID, entryOffset),
 				"action":   result.Action,
 				"progress": result.Progress,
 			}))
@@ -154,7 +154,7 @@ func (s *Server) playback(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, itemFields(e.Item, map[string]any{
-			"id":        e.ID,
+			"id":        traktID(e.ID, entryOffset),
 			"progress":  e.Progress,
 			"paused_at": stamp(e.At),
 			"type":      e.Item.Kind(),
@@ -165,7 +165,7 @@ func (s *Server) playback(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) removePlayback(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	err := core.RemovePlayback(r.Context(), s.DB, caller(r).ProfileID, id)
+	err := core.RemovePlayback(r.Context(), s.DB, caller(r).ProfileID, tethrID(id, entryOffset))
 	if errors.Is(err, core.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "There's no playback with that ID.")
 		return
@@ -183,10 +183,15 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "History types are movies, shows and episodes.")
 		return
 	}
-	if id := r.PathValue("id"); id != "" {
-		filter.ID, _ = strconv.ParseInt(id, 10, 64)
-	}
 	page := paging(r, 10)
+	if raw := r.PathValue("id"); raw != "" {
+		id, _ := strconv.ParseInt(raw, 10, 64)
+		if filter.ID = tethrID(id, catalogueOffset); filter.ID == 0 {
+			writePage(w, page.Page, page.Limit, 0)
+			writeJSON(w, http.StatusOK, []any{})
+			return
+		}
+	}
 	entries, total, err := core.History(r.Context(), s.DB, caller(r).ProfileID, filter, page)
 	if err != nil {
 		s.fail(w, r, err)
@@ -195,7 +200,7 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, itemFields(e.Item, map[string]any{
-			"id":         e.ID,
+			"id":         traktID(e.ID, entryOffset),
 			"watched_at": stamp(e.At),
 			"action":     e.Action,
 			"type":       e.Item.Kind(),
@@ -238,14 +243,26 @@ func (s *Server) removeHistory(w http.ResponseWriter, r *http.Request) {
 	for _, e := range in.entries(caller(r).ProfileID) {
 		refs = append(refs, e.ref)
 	}
-	result, err := core.RemoveHistory(r.Context(), s.DB, caller(r).ProfileID, in.IDs, refs)
+	var ids []int64
+	for _, n := range in.IDs {
+		if id := tethrID(n, entryOffset); id != 0 {
+			ids = append(ids, id)
+		}
+	}
+	result, err := core.RemoveHistory(r.Context(), s.DB, caller(r).ProfileID, ids, refs)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	missing := result.NotIDs
-	if missing == nil {
-		missing = []int64{}
+	left := map[int64]bool{}
+	for _, id := range result.NotIDs {
+		left[id] = true
+	}
+	missing := []int64{}
+	for _, n := range in.IDs {
+		if id := tethrID(n, entryOffset); id == 0 || left[id] {
+			missing = append(missing, n)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"deleted":   countsJSON(result.Deleted),
@@ -288,7 +305,7 @@ func (s *Server) watchlist(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		out = append(out, itemFields(e.Item, map[string]any{
 			"rank":      e.Rank,
-			"id":        e.ID,
+			"id":        traktID(e.ID, entryOffset),
 			"listed_at": stamp(e.At),
 			"notes":     e.Notes,
 			"type":      e.Item.Kind(),
@@ -387,7 +404,8 @@ func (s *Server) lookUp(w http.ResponseWriter, r *http.Request) {
 	var ids core.IDs
 	switch r.PathValue("id_type") {
 	case "trakt":
-		ids.Trakt, _ = strconv.ParseInt(value, 10, 64)
+		n, _ := strconv.ParseInt(value, 10, 64)
+		ids.Tethr = tethrID(n, catalogueOffset)
 	case "imdb":
 		ids.IMDB = value
 	case "tmdb":

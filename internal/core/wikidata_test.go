@@ -73,7 +73,7 @@ func TestMergeSharedWikidata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if lookUp(byTVDB) != winner || lookUp(IDs{Trakt: loser}) != winner {
+	if lookUp(byTVDB) != winner || lookUp(IDs{Tethr: loser}) != winner {
 		t.Error("the merged row's IDs should lead to the one it was merged into")
 	}
 	history, total, err := History(ctx, db, caller.ProfileID, HistoryFilter{}, Page{Page: 1, Limit: 10})
@@ -150,7 +150,7 @@ func TestNameSlugs(t *testing.T) {
 	}
 	slug := func(id int64) string {
 		t.Helper()
-		items, err := LookUp(ctx, db, "movie", IDs{Trakt: id}, false)
+		items, err := LookUp(ctx, db, "movie", IDs{Tethr: id}, false)
 		if err != nil {
 			t.Fatal(err)
 		}

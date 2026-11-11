@@ -12,6 +12,27 @@ const timeLayout = "2006-01-02T15:04:05.000Z"
 
 func stamp(t time.Time) string { return t.UTC().Format(timeLayout) }
 
+// Trakt clients cache Trakt's own IDs, so Tethr's go out from a billion or a trillion up, above any Trakt has issued.
+const (
+	catalogueOffset = 999_999_999
+	listOffset      = 999_999_999
+	entryOffset     = 999_999_999_999
+)
+
+func traktID(id, offset int64) int64 {
+	if id == 0 {
+		return 0
+	}
+	return id + offset
+}
+
+func tethrID(n, offset int64) int64 {
+	if n <= offset {
+		return 0
+	}
+	return n - offset
+}
+
 type ids struct {
 	Trakt int64   `json:"trakt"`
 	Slug  *string `json:"slug,omitempty"`
@@ -40,7 +61,7 @@ type episode struct {
 
 func titleJSON(i core.Item) title {
 	t := i.Title
-	out := title{Year: t.Year, IDs: ids{Trakt: t.ID, Slug: &t.Slug, TMDB: t.TmdbID}}
+	out := title{Year: t.Year, IDs: ids{Trakt: traktID(t.ID, catalogueOffset), Slug: &t.Slug, TMDB: t.TmdbID}}
 	if t.Name != nil {
 		out.Title = *t.Name
 	}
@@ -58,7 +79,7 @@ func titleJSON(i core.Item) title {
 
 func episodeJSON(i core.Item) episode {
 	e := i.Episode
-	return episode{Season: e.Season, Number: e.Number, IDs: ids{Trakt: e.ID, TMDB: e.TmdbEpisodeID}}
+	return episode{Season: e.Season, Number: e.Number, IDs: ids{Trakt: traktID(e.ID, catalogueOffset), TMDB: e.TmdbEpisodeID}}
 }
 
 func itemFields(i core.Item, out map[string]any) map[string]any {
@@ -86,7 +107,11 @@ type idsIn struct {
 }
 
 func (i idsIn) core() core.IDs {
-	return core.IDs{Trakt: i.Trakt, Slug: i.Slug, IMDB: i.IMDB, TMDB: i.TMDB, TVDB: i.TVDB}
+	out := core.IDs{Tethr: tethrID(i.Trakt, catalogueOffset), Slug: i.Slug, IMDB: i.IMDB, TMDB: i.TMDB, TVDB: i.TVDB}
+	if out.Tethr == 0 {
+		out.Trakt = i.Trakt
+	}
+	return out
 }
 
 func (i *idsIn) UnmarshalJSON(b []byte) error {
@@ -239,7 +264,11 @@ type idsOut struct {
 }
 
 func echo(i core.IDs) notFoundIDs {
-	return notFoundIDs{IDs: idsOut{Trakt: i.Trakt, Slug: i.Slug, IMDB: i.IMDB, TMDB: i.TMDB, TVDB: i.TVDB}}
+	trakt := i.Trakt
+	if i.Tethr != 0 {
+		trakt = traktID(i.Tethr, catalogueOffset)
+	}
+	return notFoundIDs{IDs: idsOut{Trakt: trakt, Slug: i.Slug, IMDB: i.IMDB, TMDB: i.TMDB, TVDB: i.TVDB}}
 }
 
 func notFound(refs []core.Ref, missingIDs []int64) map[string]any {

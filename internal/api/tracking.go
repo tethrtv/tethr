@@ -302,7 +302,7 @@ func fromIDs(ids *Ids) core.IDs {
 	}
 	out := core.IDs{IMDB: value(ids.Imdb)}
 	if ids.Tethr != nil {
-		out.Trakt = *ids.Tethr
+		out.Tethr = *ids.Tethr
 	}
 	if ids.Tmdb != nil {
 		out.TMDB = int64(*ids.Tmdb)
@@ -328,8 +328,8 @@ func fromRef(r ItemRef) core.Ref {
 
 func toIDs(ids core.IDs) *Ids {
 	out := &Ids{}
-	if ids.Trakt != 0 {
-		out.Tethr = &ids.Trakt
+	if ids.Tethr != 0 {
+		out.Tethr = &ids.Tethr
 	}
 	if ids.TMDB != 0 {
 		tmdb := int(ids.TMDB)

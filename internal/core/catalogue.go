@@ -11,9 +11,8 @@ import (
 	"github.com/tethrtv/tethr/internal/store"
 )
 
-const firstCatalogueID = 1_000_000_000
-
 type IDs struct {
+	Tethr int64
 	Trakt int64
 	Slug  string
 	IMDB  string
@@ -22,7 +21,7 @@ type IDs struct {
 }
 
 func (ids IDs) empty() bool {
-	return ids.Trakt < firstCatalogueID && ids.Slug == "" && ids.IMDB == "" && ids.TMDB == 0 && ids.TVDB == 0
+	return ids.Tethr <= 0 && ids.Slug == "" && ids.IMDB == "" && ids.TMDB == 0 && ids.TVDB == 0
 }
 
 type Ref struct {
@@ -98,9 +97,9 @@ func resolveTitle(ctx context.Context, q *store.Queries, kind string, ids IDs, c
 
 func findTitle(ctx context.Context, q *store.Queries, kind string, ids IDs) (store.Title, error) {
 	lookups := []func() (store.Title, error){}
-	if ids.Trakt >= firstCatalogueID {
+	if ids.Tethr > 0 {
 		lookups = append(lookups, func() (store.Title, error) {
-			return q.TitleByID(ctx, store.TitleByIDParams{ID: ids.Trakt, Kind: kind})
+			return q.TitleByID(ctx, store.TitleByIDParams{ID: ids.Tethr, Kind: kind})
 		})
 	}
 	if id := int32ID(ids.TMDB); id != nil {
@@ -177,8 +176,8 @@ func resolveEpisode(ctx context.Context, q *store.Queries, ref Ref, create bool)
 }
 
 func findEpisode(ctx context.Context, q *store.Queries, ref Ref, create bool) (store.Episode, error) {
-	if ref.IDs.Trakt >= firstCatalogueID {
-		return q.EpisodeByID(ctx, ref.IDs.Trakt)
+	if ref.IDs.Tethr > 0 {
+		return q.EpisodeByID(ctx, ref.IDs.Tethr)
 	}
 	if ref.OrderedFor != 0 && ref.IDs.TMDB != 0 {
 		e, err := q.EpisodeByTMDB(ctx, int32ID(ref.IDs.TMDB))

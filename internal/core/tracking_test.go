@@ -27,7 +27,7 @@ func TestScrobbleRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	movie := started.Item.Title
-	if started.Action != "start" || movie.ID < 1_000_000_000 || movie.Slug == "" || movie.Imdb != "tt1375666" {
+	if started.Action != "start" || movie.ID != 1 || movie.Slug != "t-1" || movie.Imdb != "tt1375666" {
 		t.Errorf("start = %+v", started)
 	}
 
@@ -35,8 +35,8 @@ func TestScrobbleRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if paused.Item.Title.ID != movie.ID || paused.ID < 1_000_000_000_000 {
-		t.Errorf("pause matched another title or used a small id: %+v", paused)
+	if paused.Item.Title.ID != movie.ID || paused.ID != 1 {
+		t.Errorf("pause matched another title or didn't count from 1: %+v", paused)
 	}
 	playback, err := Playback(ctx, db, caller.ProfileID, "", Range{}, Page{Page: 1, Limit: 100})
 	if err != nil || len(playback) != 1 || playback[0].Progress != 41.5 {
@@ -55,7 +55,7 @@ func TestScrobbleRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopped, err = ScrobbleStop(ctx, db, caller, Scrobble{Ref: inception(), Progress: 91})
-	if err != nil || stopped.Action != "scrobble" || stopped.ID < 1_000_000_000_000 {
+	if err != nil || stopped.Action != "scrobble" || stopped.ID != 1 {
 		t.Fatalf("stop at 91%% = %+v, %v", stopped, err)
 	}
 	var already AlreadyScrobbled
@@ -105,11 +105,11 @@ func TestEpisodesAreCreatedFromNumbers(t *testing.T) {
 		t.Errorf("show = %+v", first.Item.Title)
 	}
 
-	byID := Ref{Kind: "episode", IDs: IDs{Trakt: second.Item.Episode.ID}}
+	byID := Ref{Kind: "episode", IDs: IDs{Tethr: second.Item.Episode.ID}}
 	added, err := AddHistory(ctx, db, caller, []Watch{
 		{Ref: byID, At: time.Date(2024, 3, 1, 20, 0, 0, 0, time.UTC)},
 		{Ref: byID, At: time.Date(2024, 3, 1, 20, 0, 0, 0, time.UTC)},
-		{Ref: Ref{Kind: "episode", IDs: IDs{Trakt: 12345}}, At: time.Now()},
+		{Ref: Ref{Kind: "episode", IDs: IDs{Tethr: 12345}}, At: time.Now()},
 		{Ref: Ref{Kind: "show", IDs: IDs{TMDB: 1396}}, At: time.Now()},
 	})
 	if err != nil {
@@ -125,11 +125,11 @@ func TestEpisodesAreCreatedFromNumbers(t *testing.T) {
 	}
 
 	season := int32(1)
-	removed, err := RemoveHistory(ctx, db, caller.ProfileID, []int64{first.ID, 1}, []Ref{{Kind: "season", Show: IDs{TMDB: 1396}, Season: &season}})
+	removed, err := RemoveHistory(ctx, db, caller.ProfileID, []int64{first.ID, 12345}, []Ref{{Kind: "season", Show: IDs{TMDB: 1396}, Season: &season}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if removed.Deleted.Episodes != 3 || len(removed.NotIDs) != 1 || removed.NotIDs[0] != 1 {
+	if removed.Deleted.Episodes != 3 || len(removed.NotIDs) != 1 || removed.NotIDs[0] != 12345 {
 		t.Errorf("remove = %+v", removed)
 	}
 }

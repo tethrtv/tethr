@@ -141,7 +141,7 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 func titleByPath(ctx context.Context, q *store.Queries, id, kind string) (store.Title, error) {
 	ids := IDs{Slug: id}
 	if n, err := strconv.ParseInt(id, 10, 64); err == nil {
-		ids = IDs{Trakt: n}
+		ids = IDs{Tethr: n}
 	} else if n, err := strconv.ParseInt(strings.TrimPrefix(id, "tmdb-"), 10, 64); err == nil && strings.HasPrefix(id, "tmdb-") {
 		ids = IDs{TMDB: n}
 	}
