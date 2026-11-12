@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -21,7 +22,7 @@ type IDs struct {
 }
 
 func (ids IDs) empty() bool {
-	return ids.Tethr <= 0 && ids.Slug == "" && ids.IMDB == "" && ids.TMDB == 0 && ids.TVDB == 0
+	return ids.Tethr <= 0 && ids.Trakt <= 0 && ids.Slug == "" && ids.IMDB == "" && ids.TMDB == 0 && ids.TVDB == 0
 }
 
 type Ref struct {
@@ -91,6 +92,7 @@ func resolve(ctx context.Context, q *store.Queries, ref Ref, create bool) (resol
 }
 
 func resolveTitle(ctx context.Context, q *store.Queries, kind string, ids IDs, create bool) (store.Title, error) {
+	ids = ids.clean()
 	t, err := findTitle(ctx, q, kind, ids)
 	if err == nil {
 		return t, learnIDs(ctx, q, t, ids)
@@ -106,57 +108,102 @@ func resolveTitle(ctx context.Context, q *store.Queries, kind string, ids IDs, c
 }
 
 func findTitle(ctx context.Context, q *store.Queries, kind string, ids IDs) (store.Title, error) {
-	lookups := []func() (store.Title, error){}
+	type lookup struct {
+		byOutsideID bool
+		find        func() (store.Title, error)
+	}
+	var lookups []lookup
 	if ids.Tethr > 0 {
-		lookups = append(lookups, func() (store.Title, error) {
+		lookups = append(lookups, lookup{false, func() (store.Title, error) {
 			return q.TitleByID(ctx, store.TitleByIDParams{ID: ids.Tethr, Kind: kind})
-		})
+		}})
 	}
 	if id := int32ID(ids.TMDB); id != nil {
-		lookups = append(lookups, func() (store.Title, error) {
+		lookups = append(lookups, lookup{false, func() (store.Title, error) {
 			return q.TitleByTMDB(ctx, store.TitleByTMDBParams{TmdbID: id, Kind: kind})
-		})
+		}})
+	}
+	byOutsideID := func(provider, value string) {
+		lookups = append(lookups, lookup{true, func() (store.Title, error) {
+			return q.TitleByExternalID(ctx, store.TitleByExternalIDParams{Provider: provider, Value: value, Kind: kind})
+		}})
 	}
 	if ids.IMDB != "" {
-		lookups = append(lookups, func() (store.Title, error) {
-			return q.TitleByExternalID(ctx, store.TitleByExternalIDParams{Provider: "imdb", Value: ids.IMDB, Kind: kind})
-		})
+		byOutsideID("imdb", ids.IMDB)
 	}
 	if ids.TVDB > 0 {
-		lookups = append(lookups, func() (store.Title, error) {
-			return q.TitleByExternalID(ctx, store.TitleByExternalIDParams{Provider: "tvdb", Value: strconv.FormatInt(ids.TVDB, 10), Kind: kind})
-		})
+		byOutsideID("tvdb", strconv.FormatInt(ids.TVDB, 10))
+	}
+	if ids.Trakt > 0 && ids.Trakt <= maxTraktID {
+		byOutsideID(traktProvider(kind), strconv.FormatInt(ids.Trakt, 10))
 	}
 	if id, err := strconv.ParseInt(strings.TrimPrefix(ids.Slug, "t-"), 10, 64); err == nil && strings.HasPrefix(ids.Slug, "t-") {
-		lookups = append(lookups, func() (store.Title, error) {
+		lookups = append(lookups, lookup{false, func() (store.Title, error) {
 			return q.TitleByID(ctx, store.TitleByIDParams{ID: id, Kind: kind})
-		})
+		}})
 	} else if ids.Slug != "" {
-		lookups = append(lookups, func() (store.Title, error) {
+		lookups = append(lookups, lookup{false, func() (store.Title, error) {
 			return q.TitleBySlug(ctx, store.TitleBySlugParams{Slug: ids.Slug, Kind: kind})
-		})
+		}})
 	}
-	for _, lookup := range lookups {
-		t, err := lookup()
+	for _, l := range lookups {
+		t, err := l.find()
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}
 		if err == nil && t.MergedIntoID != nil {
-			return q.TitleByID(ctx, store.TitleByIDParams{ID: *t.MergedIntoID, Kind: kind})
+			t, err = q.TitleByID(ctx, store.TitleByIDParams{ID: *t.MergedIntoID, Kind: kind})
 		}
-		return t, err
+		if err != nil {
+			return store.Title{}, err
+		}
+		if l.byOutsideID && ids.TMDB != 0 && t.TmdbID != nil && int64(*t.TmdbID) != ids.TMDB {
+			continue
+		}
+		return t, nil
 	}
 	return store.Title{}, ErrNotFound
 }
 
-func learnIDs(ctx context.Context, q *store.Queries, t store.Title, ids IDs) error {
-	if t.TmdbID == nil && ids.TMDB != 0 {
-		if _, err := q.TitleByTMDB(ctx, store.TitleByTMDBParams{TmdbID: int32ID(ids.TMDB), Kind: t.Kind}); errors.Is(err, pgx.ErrNoRows) {
-			if err := q.SetTitleTMDB(ctx, store.SetTitleTMDBParams{ID: t.ID, TmdbID: int32ID(ids.TMDB)}); err != nil {
-				return err
-			}
-		}
+const maxTraktID = 999_999_999
+
+func traktProvider(kind string) string {
+	if kind == "show" {
+		return "trakt_show"
 	}
+	return "trakt_film"
+}
+
+var imdbID = regexp.MustCompile(`^tt[0-9]{7,9}$`)
+
+func (ids IDs) clean() IDs {
+	if !imdbID.MatchString(ids.IMDB) {
+		ids.IMDB = ""
+	}
+	if ids.TMDB < 0 || ids.TMDB > math.MaxInt32 {
+		ids.TMDB = 0
+	}
+	if ids.TVDB < 0 || ids.TVDB > math.MaxInt32 {
+		ids.TVDB = 0
+	}
+	if ids.Trakt < 0 || ids.Trakt > maxTraktID {
+		ids.Trakt = 0
+	}
+	return ids
+}
+
+func fillTMDB(ctx context.Context, q *store.Queries, t store.Title, tmdb int32) error {
+	if t.TmdbID != nil || tmdb == 0 {
+		return nil
+	}
+	_, err := q.TitleByTMDB(ctx, store.TitleByTMDBParams{TmdbID: &tmdb, Kind: t.Kind})
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	return q.SetTitleTMDB(ctx, store.SetTitleTMDBParams{ID: t.ID, TmdbID: &tmdb})
+}
+
+func learnIDs(ctx context.Context, q *store.Queries, t store.Title, ids IDs) error {
 	if ids.IMDB != "" {
 		if err := q.AddExternalID(ctx, store.AddExternalIDParams{TitleID: t.ID, Provider: "imdb", Value: ids.IMDB}); err != nil {
 			return err

@@ -28,6 +28,8 @@ type WikidataTitle struct {
 }
 
 type IDConflict struct {
+	Import   int64
+	Title    int64
 	Provider string
 	Value    string
 	Other    int64
@@ -76,7 +78,7 @@ func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 				return err
 			}
 		}
-		if err := learnIDs(ctx, q, t, IDs{TMDB: int64(w.TMDB)}); err != nil {
+		if err := fillTMDB(ctx, q, t, w.TMDB); err != nil {
 			return err
 		}
 		tmdb := strconv.Itoa(int(w.TMDB))

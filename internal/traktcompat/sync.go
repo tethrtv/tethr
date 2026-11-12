@@ -186,7 +186,18 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 	page := paging(r, 10)
 	if raw := r.PathValue("id"); raw != "" {
 		id, _ := strconv.ParseInt(raw, 10, 64)
-		if filter.ID = tethrID(id, catalogueOffset); filter.ID == 0 {
+		filter.ID = tethrID(id, catalogueOffset)
+		if filter.ID == 0 && id > 0 && (filter.Kind == "movie" || filter.Kind == "show") {
+			items, err := core.LookUp(r.Context(), s.DB, filter.Kind, core.IDs{Trakt: id}, false)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if len(items) == 1 {
+				filter.ID = items[0].Title.ID
+			}
+		}
+		if filter.ID == 0 {
 			writePage(w, page.Page, page.Limit, 0)
 			writeJSON(w, http.StatusOK, []any{})
 			return
@@ -406,6 +417,9 @@ func (s *Server) lookUp(w http.ResponseWriter, r *http.Request) {
 	case "trakt":
 		n, _ := strconv.ParseInt(value, 10, 64)
 		ids.Tethr = tethrID(n, catalogueOffset)
+		if ids.Tethr == 0 {
+			ids.Trakt = n
+		}
 	case "imdb":
 		ids.IMDB = value
 	case "tmdb":

@@ -22,9 +22,7 @@ RETURNING *;
 -- name: AddExternalID :exec
 INSERT INTO external_ids (title_id, provider, value)
 SELECT sqlc.arg(title_id)::bigint, sqlc.arg(provider)::text, sqlc.arg(value)::text
-WHERE NOT EXISTS (
-    SELECT 1 FROM external_ids WHERE title_id = sqlc.arg(title_id) AND provider = sqlc.arg(provider) AND source = 'wikidata'
-)
+WHERE NOT EXISTS (SELECT 1 FROM external_ids WHERE title_id = sqlc.arg(title_id) AND provider = sqlc.arg(provider))
 ON CONFLICT DO NOTHING;
 
 -- name: SetTitleTMDB :exec
@@ -33,7 +31,9 @@ UPDATE titles SET tmdb_id = $2, updated_at = now() WHERE id = $1 AND tmdb_id IS 
 -- name: CatalogueTitles :many
 SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.runtime_minutes, t.tmdb_id, t.wikidata_id,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
-    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
+    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb,
+    coalesce((SELECT min(value::bigint) FROM external_ids
+        WHERE title_id = t.id AND provider = CASE t.kind WHEN 'movie' THEN 'trakt_film' ELSE 'trakt_show' END), 0)::bigint AS trakt
 FROM titles t
 WHERE t.id = ANY(@ids::bigint[]);
 

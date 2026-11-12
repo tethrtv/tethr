@@ -29,12 +29,15 @@ func (e BadFileError) Unwrap() error { return e.Err }
 const maxUnpacked = 512 << 20
 
 type ids struct {
-	IMDB string `json:"imdb"`
-	TMDB int64  `json:"tmdb"`
-	TVDB int64  `json:"tvdb"`
+	Trakt int64  `json:"trakt"`
+	IMDB  string `json:"imdb"`
+	TMDB  int64  `json:"tmdb"`
+	TVDB  int64  `json:"tvdb"`
 }
 
-func (i ids) core() core.IDs { return core.IDs{IMDB: i.IMDB, TMDB: i.TMDB, TVDB: i.TVDB} }
+func (i ids) core() core.IDs {
+	return core.IDs{Trakt: i.Trakt, IMDB: i.IMDB, TMDB: i.TMDB, TVDB: i.TVDB}
+}
 
 type media struct {
 	Title string `json:"title"`

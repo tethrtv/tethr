@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -192,10 +193,12 @@ func ExpireImports(ctx context.Context, db *pgxpool.Pool) error {
 	return store.New(db).ExpireImports(ctx)
 }
 
-func ApplyNextImport(ctx context.Context, db *pgxpool.Pool) (bool, error) {
+func ApplyNextImport(ctx context.Context, db *pgxpool.Pool) (bool, []IDConflict, error) {
 	var found bool
 	var failed *store.Import
+	var conflicts []IDConflict
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		conflicts = nil
 		q := store.New(tx)
 		imp, err := q.NextQueuedImport(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -215,10 +218,12 @@ func ApplyNextImport(ctx context.Context, db *pgxpool.Pool) (bool, error) {
 			failed = &imp
 			return err
 		}
-		if err := applyImport(ctx, q, imp, f, &summary); err != nil {
+		im, err := applyImport(ctx, q, imp, f, &summary)
+		if err != nil {
 			failed = &imp
 			return err
 		}
+		conflicts = im.conflicts
 		summaryJSON, err := json.Marshal(summary)
 		if err != nil {
 			return err
@@ -227,19 +232,23 @@ func ApplyNextImport(ctx context.Context, db *pgxpool.Pool) (bool, error) {
 	})
 	if failed != nil {
 		if ferr := store.New(db).FinishImport(ctx, store.FinishImportParams{ID: failed.ID, Status: "failed", Summary: failed.Summary}); ferr != nil {
-			return found, errors.Join(err, ferr)
+			return found, nil, errors.Join(err, ferr)
 		}
 	}
-	return found, err
+	if err != nil {
+		return found, nil, err
+	}
+	return found, conflicts, nil
 }
 
 type importer struct {
-	ctx      context.Context
-	q        *store.Queries
-	imp      store.Import
-	summary  *ImportSummary
-	resolved map[string]*resolved
-	areas    map[string]bool
+	ctx       context.Context
+	q         *store.Queries
+	imp       store.Import
+	summary   *ImportSummary
+	resolved  map[string]*resolved
+	areas     map[string]bool
+	conflicts []IDConflict
 }
 
 func refKey(r Ref) string {
@@ -265,8 +274,62 @@ func (im *importer) resolve(ref Ref) (*resolved, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := im.learnTraktID(ref, r); err != nil {
+		return nil, err
+	}
 	im.resolved[key] = &r
 	return &r, nil
+}
+
+func (im *importer) learnTraktID(ref Ref, r resolved) error {
+	ids := ref.Show
+	if ref.Kind == "movie" || ref.Kind == "show" {
+		ids = ref.IDs
+	}
+	ids = ids.clean()
+	if ids.Trakt == 0 {
+		return nil
+	}
+	t := r.title
+	provider, value := traktProvider(t.Kind), strconv.FormatInt(ids.Trakt, 10)
+	conflict := func(other int64, outcome string) error {
+		im.conflicts = append(im.conflicts, IDConflict{Import: im.imp.ID, Title: t.ID, Provider: provider, Value: value, Other: other, Outcome: outcome})
+		return nil
+	}
+
+	rows, err := im.q.TitleExternalIDs(im.ctx, t.ID)
+	if err != nil {
+		return err
+	}
+	held := map[string][]string{}
+	for _, h := range rows {
+		held[h.Provider] = append(held[h.Provider], h.Value)
+	}
+	if slices.Contains(held[provider], value) {
+		return nil
+	}
+	disagrees := func(provider, value string) bool {
+		return value != "" && len(held[provider]) > 0 && !slices.Contains(held[provider], value)
+	}
+	tvdb := ""
+	if ids.TVDB != 0 {
+		tvdb = strconv.FormatInt(ids.TVDB, 10)
+	}
+	switch {
+	case ids.TMDB != 0 && t.TmdbID != nil && int64(*t.TmdbID) != ids.TMDB, disagrees("imdb", ids.IMDB), disagrees("tvdb", tvdb):
+		return conflict(0, "ignored an import's, its other ids disagree")
+	case len(held[provider]) > 0:
+		return conflict(0, "ignored an import's, the title has one")
+	}
+	owner, err := im.q.ExternalIDOwner(im.ctx, store.ExternalIDOwnerParams{Provider: provider, Value: value})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		return err
+	default:
+		return conflict(owner.TitleID, "ignored an import's, another title has it")
+	}
+	return im.q.AddExternalID(im.ctx, store.AddExternalIDParams{TitleID: t.ID, Provider: provider, Value: value})
 }
 
 func (im *importer) each(items []ImportItem, c *ImportCount, kinds []string, field func(ImportItem) string, write func(ImportItem, resolved) (int64, error)) error {
@@ -308,7 +371,7 @@ func hiddenField(item ImportItem) string {
 	return "hidden_at"
 }
 
-func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f ImportFile, summary *ImportSummary) error {
+func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f ImportFile, summary *ImportSummary) (*importer, error) {
 	im := &importer{ctx: ctx, q: q, imp: imp, summary: summary, resolved: map[string]*resolved{}, areas: map[string]bool{}}
 	profileID, importID := imp.ProfileID, &imp.ID
 
@@ -332,12 +395,12 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	list, err := q.Watchlist(ctx, profileID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = im.each(f.Watchlist, &summary.Watchlist, []string{"movie", "show", "season", "episode"}, field("watchlisted_at"), func(item ImportItem, r resolved) (int64, error) {
 		at := time.Now()
@@ -355,7 +418,7 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = im.each(f.Playback, &summary.Playback, []string{"movie", "episode"}, field("paused_at"), func(item ImportItem, r resolved) (int64, error) {
@@ -372,7 +435,7 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = im.each(f.Ratings, &summary.Ratings, []string{"movie", "show", "season", "episode"}, field("rated_at"), func(item ImportItem, r resolved) (int64, error) {
@@ -394,7 +457,7 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = im.each(f.Hidden, &summary.Hidden, []string{"movie", "show", "season"}, hiddenField, func(item ImportItem, r resolved) (int64, error) {
@@ -415,12 +478,12 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if summary.Watchlist.Added > 0 {
 		if _, err := q.TouchList(ctx, list.ID); err != nil {
-			return err
+			return nil, err
 		}
 		im.areas["watchlist.updated_at"] = true
 	}
@@ -429,7 +492,7 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		areas = append(areas, a)
 	}
 	slices.Sort(areas)
-	return mark(ctx, q, profileID, areas...)
+	return im, mark(ctx, q, profileID, areas...)
 }
 
 func UndoImport(ctx context.Context, db *pgxpool.Pool, profileID, id int64) (Import, error) {

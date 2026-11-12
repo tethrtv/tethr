@@ -13,9 +13,7 @@ import (
 const addExternalID = `-- name: AddExternalID :exec
 INSERT INTO external_ids (title_id, provider, value)
 SELECT $1::bigint, $2::text, $3::text
-WHERE NOT EXISTS (
-    SELECT 1 FROM external_ids WHERE title_id = $1 AND provider = $2 AND source = 'wikidata'
-)
+WHERE NOT EXISTS (SELECT 1 FROM external_ids WHERE title_id = $1 AND provider = $2)
 ON CONFLICT DO NOTHING
 `
 
@@ -127,7 +125,9 @@ func (q *Queries) CatalogueSeasons(ctx context.Context, ids []int64) ([]Season, 
 const catalogueTitles = `-- name: CatalogueTitles :many
 SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.runtime_minutes, t.tmdb_id, t.wikidata_id,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
-    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb
+    coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb,
+    coalesce((SELECT min(value::bigint) FROM external_ids
+        WHERE title_id = t.id AND provider = CASE t.kind WHEN 'movie' THEN 'trakt_film' ELSE 'trakt_show' END), 0)::bigint AS trakt
 FROM titles t
 WHERE t.id = ANY($1::bigint[])
 `
@@ -144,6 +144,7 @@ type CatalogueTitlesRow struct {
 	WikidataID     *string
 	Imdb           string
 	Tvdb           string
+	Trakt          int64
 }
 
 func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]CatalogueTitlesRow, error) {
@@ -167,6 +168,7 @@ func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]Catalogue
 			&i.WikidataID,
 			&i.Imdb,
 			&i.Tvdb,
+			&i.Trakt,
 		); err != nil {
 			return nil, err
 		}
