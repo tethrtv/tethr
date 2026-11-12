@@ -34,6 +34,23 @@ type Title struct {
 	Runtime  int
 	TMDB     int32
 	IDs      map[string][]string
+
+	InstanceOf []string
+	Genres     []string
+	Countries  []string
+	Languages  []string
+	Started    string
+	Ended      string
+	Sitelinks  int
+	OtherNames map[string]string
+}
+
+type Class struct {
+	QID      string
+	Label    string
+	Country  string
+	Language string
+	Parents  []string
 }
 
 var (
@@ -149,7 +166,7 @@ func (c *Client) Fetch(ctx context.Context, kind string, qids []string) (map[str
 	var res struct {
 		Entities map[string]entity `json:"entities"`
 	}
-	if err := c.get(ctx, url.Values{"action": {"wbgetentities"}, "ids": {strings.Join(ids, "|")}, "props": {"labels|claims"}}, &res); err != nil {
+	if err := c.get(ctx, url.Values{"action": {"wbgetentities"}, "ids": {strings.Join(ids, "|")}, "props": {"labels|claims|sitelinks"}}, &res); err != nil {
 		return nil, nil, err
 	}
 	if len(res.Entities) == 0 {
@@ -176,7 +193,8 @@ type entity struct {
 	Labels  map[string]struct {
 		Value string `json:"value"`
 	} `json:"labels"`
-	Claims map[string]json.RawMessage `json:"claims"`
+	Claims    map[string]json.RawMessage `json:"claims"`
+	Sitelinks map[string]json.RawMessage `json:"sitelinks"`
 }
 
 type snak struct {
@@ -187,7 +205,7 @@ type snak struct {
 }
 
 func (e entity) readable() bool {
-	used := []string{"P577", "P580", "P1476", "P2047", "P4947", "P4983"}
+	used := []string{"P31", "P136", "P279", "P297", "P218", "P305", "P364", "P495", "P577", "P580", "P582", "P1476", "P2047", "P4947", "P4983"}
 	for _, id := range outsideIDs {
 		used = append(used, id.movie, id.show)
 	}
@@ -280,7 +298,32 @@ func (e entity) title(kind string) Title {
 	}
 
 	t.Name = trimDisambiguator(e.name(t.Original), t.Year)
+	if e.Labels["en"].Value == "" && e.Labels["mul"].Value == "" && t.Original == "" {
+		t.OtherNames = map[string]string{}
+		for lang, l := range e.Labels {
+			if l.Value != "" {
+				t.OtherNames[lang] = trimDisambiguator(l.Value, t.Year)
+			}
+		}
+	}
 	t.Runtime = e.runtime()
+	t.InstanceOf = e.items("P31")
+	t.Genres = e.items("P136")
+	t.Countries = e.items("P495")
+	t.Languages = e.items("P364")
+	t.Sitelinks = len(e.Sitelinks)
+	if kind == "show" {
+		for _, raw := range e.statements("P580", false) {
+			if d, ok := partialDate(raw); ok && (t.Started == "" || d < t.Started) {
+				t.Started = d
+			}
+		}
+		for _, raw := range e.statements("P582", false) {
+			if d, ok := partialDate(raw); ok && d > t.Ended {
+				t.Ended = d
+			}
+		}
+	}
 
 	tmdbProp, _ := property(kind, "tmdb")
 	for _, v := range e.strings(tmdbProp, digits) {
@@ -347,32 +390,125 @@ func trimDisambiguator(name string, year int) string {
 	return name
 }
 
-func releaseDate(raw json.RawMessage) (int, time.Time, bool) {
+func parseDate(raw json.RawMessage) (y, m, d int, ok bool) {
 	var v struct {
 		Time      string `json:"time"`
 		Precision int    `json:"precision"`
 	}
 	if json.Unmarshal(raw, &v) != nil || v.Precision < 9 || !strings.HasPrefix(v.Time, "+") {
-		return 0, time.Time{}, false
+		return 0, 0, 0, false
 	}
 	parts := strings.SplitN(strings.TrimPrefix(v.Time, "+"), "-", 3)
 	if len(parts) < 3 || len(parts[2]) < 2 {
-		return 0, time.Time{}, false
+		return 0, 0, 0, false
 	}
 	y, errY := strconv.Atoi(parts[0])
 	m, errM := strconv.Atoi(parts[1])
 	d, errD := strconv.Atoi(parts[2][:2])
 	if errY != nil || errM != nil || errD != nil || y <= 1800 || y >= 2200 || m > 12 || d > 31 {
+		return 0, 0, 0, false
+	}
+	if v.Precision == 9 {
+		m = 0
+	}
+	if v.Precision <= 10 {
+		d = 0
+	}
+	return y, m, d, true
+}
+
+func releaseDate(raw json.RawMessage) (int, time.Time, bool) {
+	y, m, d, ok := parseDate(raw)
+	if !ok {
 		return 0, time.Time{}, false
 	}
 	// A date known only to the year or month counts as released once that year or month is over.
 	switch {
-	case v.Precision == 9 || m == 0:
+	case m == 0:
 		return y, time.Date(y+1, 1, 1, 0, 0, 0, 0, time.UTC), true
-	case v.Precision == 10 || d == 0:
+	case d == 0:
 		return y, time.Date(y, time.Month(m)+1, 1, 0, 0, 0, 0, time.UTC), true
 	}
 	return y, time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC), true
+}
+
+func partialDate(raw json.RawMessage) (string, bool) {
+	y, m, d, ok := parseDate(raw)
+	switch {
+	case !ok:
+		return "", false
+	case m == 0:
+		return fmt.Sprintf("%04d", y), true
+	case d == 0:
+		return fmt.Sprintf("%04d-%02d", y, m), true
+	}
+	return fmt.Sprintf("%04d-%02d-%02d", y, m, d), true
+}
+
+func (e entity) items(p string) []string {
+	var out []string
+	for _, raw := range e.statements(p, true) {
+		var v struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(raw, &v) == nil && IsQID(v.ID) && !slices.Contains(out, v.ID) {
+			out = append(out, v.ID)
+		}
+	}
+	return out
+}
+
+func (e entity) first(p string) string {
+	for _, raw := range e.statements(p, true) {
+		var v string
+		if json.Unmarshal(raw, &v) == nil && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func (c *Client) FetchClasses(ctx context.Context, qids []string) (map[string]Class, []string, error) {
+	var ids []string
+	for _, q := range qids {
+		if IsQID(q) && !slices.Contains(ids, q) {
+			ids = append(ids, q)
+		}
+	}
+	if len(ids) > 50 {
+		return nil, nil, fmt.Errorf("wikidata takes 50 items at a time, not %d", len(ids))
+	}
+	found := map[string]Class{}
+	var unreadable []string
+	if len(ids) == 0 {
+		return found, nil, nil
+	}
+	var res struct {
+		Entities map[string]entity `json:"entities"`
+	}
+	if err := c.get(ctx, url.Values{"action": {"wbgetentities"}, "ids": {strings.Join(ids, "|")}, "props": {"labels|claims"}, "languages": {"en"}}, &res); err != nil {
+		return nil, nil, err
+	}
+	if len(res.Entities) == 0 {
+		return nil, nil, errors.New("wikidata api: no items in answer")
+	}
+	for _, q := range ids {
+		e, ok := res.Entities[q]
+		if !ok || (e.Missing == nil && !e.readable()) {
+			found[q] = Class{QID: q}
+			unreadable = append(unreadable, q)
+			continue
+		}
+		class := Class{QID: q, Label: e.Labels["en"].Value, Country: e.first("P297"), Language: e.first("P305"), Parents: e.items("P279")}
+		if class.Language == "" {
+			class.Language = e.first("P218")
+		}
+		if e.Missing == nil && e.ID != q {
+			class.Parents = append([]string{e.ID}, class.Parents...)
+		}
+		found[q] = class
+	}
+	return found, unreadable, nil
 }
 
 func (e entity) runtime() int {

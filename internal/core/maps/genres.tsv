@@ -1,0 +1,166 @@
+# Wikidata class	Tethr genres	label
+# A raw genre takes the tags of the nearest mapped class on each subclass-of path; "-" means none and stops the walk.
+Q1762165	action	action fiction
+Q21802675	adventure	adventure fiction
+Q15706467	biography	biographical work
+Q40831	comedy	comedy
+Q60548032	comedy	humor
+Q5151421	comedy	comedy
+Q5937792	crime	crime fiction
+Q4164344	documentary	documentary
+Q133731295	documentary	documentary program
+Q21010853	drama	drama fiction
+Q25372	drama	drama
+Q1361932	family	family film
+Q107040579	family	family television program
+Q132311	fantasy	fantasy
+Q1196408	history	historical fiction
+Q16575965	horror	horror fiction
+Q56451354	kids	children's fiction
+Q23811232	kids	film and series for children
+Q27912070	kids	children's television program
+Q842256	music	musical film
+Q430525	music	concert film
+Q2743	music	musical play
+Q6585139	mystery	mystery fiction
+Q182415	reality	reality television
+Q19765983	romance	romantic fiction
+Q24925	science-fiction	science fiction
+Q23739	soap	soap opera
+Q23745	soap	telenovela
+Q22925400	sport	sport art
+Q622812	talk-and-game	talk show
+Q846662	talk-and-game	game show
+Q336181	talk-and-game	variety show
+Q182015	thriller	thriller
+Q111956902	war	war fiction
+Q21590660	western	Western
+Q10901350	-	anime and manga (a format, see types)
+Q1107	-	anime
+Q8274	-	manga
+Q627603	-	cartoon
+Q8812380	-	pseudo-documentary
+Q459435	comedy	mockumentary
+Q3272147	horror	found footage film
+Q7168625	drama,history	historical drama
+Q3038946	drama,romance	romantic drama
+Q133307276	romance	romance television program
+Q1342372	horror	monster film
+Q3072049	horror	zombie film
+Q31888058	horror	ghost film
+Q3634883	horror	supernatural film
+Q1341051	science-fiction	post-apocalyptic film
+Q197949	science-fiction	post-apocalyptic fiction
+Q2561438	drama	slice of life
+Q699	fantasy	fairy tale
+Q275934	action,science-fiction	tokusatsu
+Q124834075	action,science-fiction	tokusatsu
+Q11304653	thriller	suspense film
+Q1457145	reality	cooking show
+Q7050677	kids	Nordic Christmas calendar
+Q1535153	action,adventure	superhero film
+Q7643432	action,adventure	superhero fiction
+Q643873	drama	legal drama
+Q4292083	action,science-fiction	mecha
+Q1358344	news	news program
+Q1857766	news	current affairs
+Q5401282	news	magazine format program
+Q11664270	music	music program
+Q6942441	music	music television
+Q109733358	music	music-themed film
+Q3072043	music	dance film
+Q1800833	documentary,music	rockumentary
+Q110593123	documentary,music	music documentary film
+Q37073	music	pop music
+Q11399	music	rock music
+Q3541116	crime,documentary	true crime
+Q754803	action,fantasy	wuxia
+Q102245189	war	war television series
+Q56320653	thriller	espionage television series
+Q20664331	thriller	spy fiction
+Q482612	drama	Korean drama
+Q1711400	drama	youth series
+Q18022096	kids	children's television
+Q738473	romance	romance
+Q690342	comedy,romance	harem
+Q2281511	sport	spokon
+Q338632	reality	docu-soap
+Q3327002	history	medieval film
+Q11504513	documentary	travel television show
+Q1193236	news	news media
+Q61942616	fantasy	supernatural anime and manga
+Q373342	music	popular music
+Q38926	news	news
+Q2605607	sport	sports program
+Q861402	kids	educational television
+Q179875	talk-and-game	debate
+Q178651	talk-and-game	interview
+Q7379160	drama,music	Rumberas film
+Q137613441	documentary	documentary series
+Q35874	comedy	humor
+Q156035	news	opinion journalism
+Q309	history	history
+Q101860688	fantasy	paranormal television program
+Q638	music	music
+Q3919251	science-fiction	apocalyptic fiction
+Q995600	documentary	popularisation of science
+Q2389651	kids,music	children's music
+Q116672084	music	music anime and manga
+Q242488	romance	yaoi
+Q74303978	news	news and journalism podcast
+Q1472288	news,talk-and-game	breakfast television
+Q123777276	drama,music	musical drama
+Q349	sport	sport
+Q117830868	drama,sport	sports drama
+Q4875794	comedy,music	beach party film
+Q121438691	crime,mystery	Sherlock Holmes television program
+Q111700305	western	bushranging film
+Q83267	crime	crime
+Q1190039	sport	sports entertainment
+Q33111443	romance	boys' love
+Q16909344	music	opera film
+Q444178	reality	court show
+Q113645087	drama,romance	love drama
+Q3677206	crime	Quinqui
+Q1140700	comedy	improvisational theatre
+Q1257444	-	film adaptation
+Q101441130	comedy	cute girls doing cute things
+Q5769663	horror	Gothic film
+Q113259281	horror	zombie fiction
+Q599510	romance	romance
+Q9503	thriller	suspense
+Q3951815	drama	sceneggiato
+Q125122051	drama	social issue television series
+Q66744724	biography	biographical fiction
+Q918727	music	revue
+Q1955280	music,reality,talk-and-game	music competition
+Q55760865	comedy	sketch
+Q39892385	drama	spoken drama
+Q1452460	kids	children and youth program
+Q141899047	action,thriller	battle royale anime and manga
+Q118752966	action	martial arts television series
+Q110024700	drama,fantasy	fantasy drama
+Q10594993	documentary	nature program
+Q5814190	drama	rural drama
+Q7257679	news	public affairs program
+Q3745400	comedy	comical film
+Q17024724	reality,talk-and-game	dance competition
+Q2111686	reality	culinary art
+Q131539	kids	children's literature
+Q104587761	kids	preschool education
+Q7239233	sport	Pre-game show
+Q4461646	documentary	travelogue
+Q1189047	romance	romantic love
+Q121432240	crime,drama,mystery	detective and mystery play
+Q21449401	war	Anti-Japanese god drama
+Q2376899	science-fiction	dieselpunk
+Q101716172	-	television adaptation
+Q16538713	action	chase film
+Q7551315	drama	social problem film
+Q56064758	adventure	adventure television series
+Q622370	drama	docudrama
+Q3072039	drama	trial film
+Q222639	action,adventure	swashbuckler film
+Q60723717	music,reality,talk-and-game	singing competition
+Q5428822	documentary	factual television program
+Q131359	sport	professional wrestling

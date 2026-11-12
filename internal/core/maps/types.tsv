@@ -1,0 +1,28 @@
+# Wikidata class	Tethr type flags	label
+# Applied to both "instance of" and genre values. "-" stops the walk.
+Q11424	-	film
+Q5398426	-	television series
+Q15416	-	television program
+Q838948	-	work of art
+Q11425	animated	animation
+Q202866	animated	animated film
+Q581714	animated	animated series
+Q117467246	animated	animated television series
+Q627603	animated	cartoon
+Q1107	anime,animated	anime
+Q10901350	anime,animated	anime and manga
+Q63952888	anime,animated	anime television series
+Q20650540	anime,animated	anime film
+Q220898	anime,animated	original video animation
+Q24862	short	short film
+Q226730	silent	silent film
+Q506240	tv-film	television film
+Q1259759	miniseries	miniseries
+Q1261214	special	television special
+Q526877	web	web series
+Q17317604	event	professional wrestling event
+Q4504495	event	award ceremony
+Q182832	event	concert
+Q7751682	-	serial film
+Q1047299	anime,animated,web	original net animation
+Q123126551	animated,special	animated television special

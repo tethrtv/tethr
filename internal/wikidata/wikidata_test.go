@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -49,6 +50,10 @@ func claim(rank string, value any) map[string]any {
 	return map[string]any{"rank": rank, "mainsnak": map[string]any{"snaktype": "value", "datavalue": map[string]any{"value": value}}}
 }
 
+func item(qid string) map[string]any {
+	return map[string]any{"entity-type": "item", "id": qid}
+}
+
 func date(t string, precision int) map[string]any {
 	return map[string]any{"time": t, "precision": precision}
 }
@@ -64,7 +69,12 @@ func entities(t *testing.T) []byte {
 	body, err := json.Marshal(map[string]any{"entities": map[string]any{
 		"Q39243484": map[string]any{"id": "Q39243484", "labels": labels("en", "Doctor Who (2005 TV series)", "fr", "Doctor Who"), "claims": map[string]any{
 			"P1476": []any{claim("normal", map[string]string{"text": "Doctor Who", "language": "en"})},
-			"P580":  []any{claim("normal", date("+2005-03-26T00:00:00Z", 11))},
+			"P580":  []any{claim("normal", date("+2005-03-26T00:00:00Z", 11)), claim("normal", date("+2010-00-00T00:00:00Z", 9))},
+			"P582":  []any{claim("normal", date("+2022-10-00T00:00:00Z", 10))},
+			"P31":   []any{claim("normal", item("Q5398426")), claim("deprecated", item("Q11424"))},
+			"P136":  []any{claim("normal", item("Q24925")), claim("normal", item("Q24925"))},
+			"P495":  []any{claim("normal", item("Q145"))},
+			"P364":  []any{claim("normal", item("Q1860"))},
 			"P577":  []any{claim("deprecated", date("+1999-01-01T00:00:00Z", 11))},
 			"P2047": []any{claim("normal", map[string]string{"amount": "+44.5", "unit": "http://www.wikidata.org/entity/Q7727"}), claim("normal", map[string]string{"amount": "+3", "unit": "http://www.wikidata.org/entity/Q1"})},
 			"P4983": []any{claim("normal", "57243")},
@@ -87,7 +97,7 @@ func entities(t *testing.T) []byte {
 		"Q1": map[string]any{"id": "Q2", "redirects": map[string]string{"from": "Q1", "to": "Q2"}, "labels": labels("fr", "Pride"), "claims": map[string]any{
 			"P577": []any{claim("normal", date("+2014-00-00T00:00:00Z", 9))},
 		}},
-		"Q3":         map[string]any{"id": "Q3", "labels": labels("ja", "千と千尋の神隠し", "zh", "千与千寻"), "claims": map[string]any{"P577": []any{claim("normal", date("+2001-07-00T00:00:00Z", 10))}}},
+		"Q3":         map[string]any{"id": "Q3", "labels": labels("ja", "千と千尋の神隠し", "zh", "千与千寻 (2001 film)"), "sitelinks": map[string]any{"jawiki": map[string]string{"title": "x"}, "zhwiki": map[string]string{"title": "y"}}, "claims": map[string]any{"P577": []any{claim("normal", date("+2001-07-00T00:00:00Z", 10))}}},
 		"Q137784704": map[string]any{"id": "Q137784704", "missing": ""},
 		"Q5":         map[string]any{"id": "Q5", "labels": labels("en", "Broken"), "claims": map[string]any{"P577": "not a list"}},
 	}})
@@ -137,11 +147,17 @@ func TestFetch(t *testing.T) {
 	if w := found["Q39243484"]; w.Name != "Doctor Who" || w.Original != "Doctor Who" || w.Year != 2005 || !w.Released.Equal(time.Date(2005, 3, 26, 0, 0, 0, 0, time.UTC)) || w.Runtime != 45 || w.TMDB != 57243 || !reflect.DeepEqual(w.IDs, map[string][]string{"tvdb": {"78804"}, "appletv": {"umc.cmc.4iygvvnqsxa8knd287saief60"}}) {
 		t.Errorf("doctor who = %+v", w)
 	}
+	if w := found["Q39243484"]; fmt.Sprintf("%v %v %v %v %s %s %v", w.InstanceOf, w.Genres, w.Countries, w.Languages, w.Started, w.Ended, w.OtherNames == nil) != "[Q5398426] [Q24925] [Q145] [Q1860] 2005-03-26 2022-10 true" {
+		t.Errorf("doctor who's facts = %v %v %v %v %q %q %v", w.InstanceOf, w.Genres, w.Countries, w.Languages, w.Started, w.Ended, w.OtherNames)
+	}
 	if w := found["Q1"]; w.QID != "Q2" || w.Name != "Pride" || w.Year != 2014 || !w.Released.Equal(time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("a redirect should come back as its target, released once its year is over: %+v", w)
 	}
 	if w := found["Q3"]; w.Name != "千と千尋の神隠し" || !w.Released.Equal(time.Date(2001, 8, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("with no English, mul or original title, any language will do, released once its month is over: %+v", w)
+	}
+	if w := found["Q3"]; w.Sitelinks != 2 || len(w.OtherNames) != 2 || strings.Contains(w.OtherNames["zh"], "(") || w.Started != "" {
+		t.Errorf("names in every language should come back trimmed, for the title's own language later: %+v", w)
 	}
 
 	calls = 1
@@ -217,6 +233,45 @@ func TestReleaseDate(t *testing.T) {
 		year, released, ok := releaseDate(raw)
 		if year != c.year || !released.Equal(c.released) || ok != c.ok {
 			t.Errorf("%s at %d = %d, %s, %v", c.time, c.precision, year, released, ok)
+		}
+	}
+}
+
+func TestFetchClasses(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("languages") != "en" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		body, _ := json.Marshal(map[string]any{"entities": map[string]any{
+			"Q17":   map[string]any{"id": "Q17", "labels": map[string]any{"en": map[string]string{"value": "Japan"}}, "claims": map[string]any{"P297": []any{claim("normal", "JP")}}},
+			"Q5287": map[string]any{"id": "Q5287", "claims": map[string]any{"P218": []any{claim("normal", "ja")}}},
+			"Q9186": map[string]any{"id": "Q9186", "claims": map[string]any{"P218": []any{claim("normal", "zh")}, "P305": []any{claim("normal", "yue")}}},
+			"Q1":    map[string]any{"id": "Q2", "claims": map[string]any{"P279": []any{claim("normal", item("Q3")), claim("deprecated", item("Q4"))}}},
+			"Q5":    map[string]any{"id": "Q5", "missing": ""},
+			"Q6":    map[string]any{"id": "Q6", "claims": map[string]any{"P279": "not a list"}},
+		}})
+		_, _ = w.Write(body)
+	}))
+	defer fake.Close()
+
+	c := &Client{APIURL: fake.URL}
+	got, unreadable, err := c.FetchClasses(context.Background(), []string{"Q17", "Q5287", "Q9186", "Q1", "Q5", "Q6", "Q404", "Q17", "nonsense"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(unreadable) != "[Q6 Q404]" {
+		t.Errorf("unreadable = %v, want the broken and the missing-from-the-answer class, not the deleted one", unreadable)
+	}
+	if fmt.Sprint(got["Q17"], got["Q5287"], got["Q9186"]) != "{Q17 Japan JP  []} {Q5287   ja []} {Q9186   yue []}" {
+		t.Errorf("countries and languages = %v %v %v", got["Q17"], got["Q5287"], got["Q9186"])
+	}
+	if p := got["Q1"].Parents; fmt.Sprint(p) != "[Q2 Q3]" {
+		t.Errorf("a redirected class should lead to its target: %v", p)
+	}
+	for _, q := range []string{"Q5", "Q6", "Q404"} {
+		if c, ok := got[q]; !ok || len(c.Parents) != 0 {
+			t.Errorf("%s should come back empty, so it isn't asked for again: %+v, %v", q, c, ok)
 		}
 	}
 }

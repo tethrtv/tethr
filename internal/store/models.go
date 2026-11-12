@@ -388,6 +388,20 @@ type Title struct {
 	WikidataCheckedAt  *time.Time
 	MergedIntoID       *int64
 	WikidataDeletedAt  *time.Time
+	WikidataInstanceOf []string
+	WikidataGenres     []string
+	WikidataCountries  []string
+	WikidataLanguages  []string
+	Sitelinks          int32
+	Started            *string
+	Ended              *string
+	Genres             []string
+	TypeFlags          []string
+	Adult              bool
+	Countries          []string
+	Languages          []string
+	FactsVersion       *string
+	SexualContent      bool
 }
 
 type UpNextList struct {
@@ -418,4 +432,13 @@ type Watching struct {
 	Progress  float64
 	StartedAt time.Time
 	ExpiresAt time.Time
+}
+
+type WikidataClass struct {
+	Qid       string
+	Label     string
+	Country   string
+	Language  string
+	Parents   []string
+	CheckedAt time.Time
 }

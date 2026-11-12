@@ -97,7 +97,7 @@ func (j Titles) Refresh(ctx context.Context) error {
 			all = all[n:]
 		}
 	}
-	return errors.Join(errs...)
+	return errors.Join(append(errs, j.rederive(ctx))...)
 }
 
 func (j Titles) match(ctx context.Context, kind, provider string, titles []store.DueWikidataRow, fresh map[int64]bool) ([]store.DueWikidataRow, error) {
@@ -137,6 +137,15 @@ func (j Titles) fetch(ctx context.Context, kind string, titles []store.DueWikida
 	if err != nil {
 		return err
 	}
+	var classes []string
+	for _, w := range found {
+		classes = append(classes, slices.Concat(w.InstanceOf, w.Genres, w.Countries, w.Languages)...)
+	}
+	if err := j.fillClasses(ctx, classes); errors.Is(err, wikidata.ErrBusy) {
+		return err
+	} else if err != nil {
+		j.Log.Warn("fetching wikidata classes, facts wait for the next run", "err", err)
+	}
 	var errs []error
 	for _, t := range titles {
 		w, ok := found[*t.WikidataID]
@@ -171,4 +180,53 @@ func key(t store.DueWikidataRow, provider string) string {
 		return t.Tvdb
 	}
 	return strconv.Itoa(int(*t.TmdbID))
+}
+
+func (j Titles) fillClasses(ctx context.Context, qids []string) error {
+	for range 13 {
+		missing, err := core.ClassesNeeded(ctx, j.DB, qids)
+		if err != nil || len(missing) == 0 {
+			return err
+		}
+		for len(missing) > 0 {
+			n := min(len(missing), 50)
+			found, unreadable, err := j.Wikidata.FetchClasses(ctx, missing[:n])
+			if err != nil {
+				return err
+			}
+			for _, q := range unreadable {
+				j.Log.Warn("wikidata class unreadable, its facts are left out", "class", q)
+			}
+			batch := make([]core.WikidataClass, 0, len(found))
+			for _, c := range found {
+				batch = append(batch, core.WikidataClass(c))
+			}
+			if err := core.SaveClasses(ctx, j.DB, batch); err != nil {
+				return err
+			}
+			missing = missing[n:]
+		}
+	}
+	return nil
+}
+
+func (j Titles) rederive(ctx context.Context) error {
+	titles, err := core.OutdatedFacts(ctx, j.DB, 200)
+	if err != nil || len(titles) == 0 {
+		return err
+	}
+	var qids []string
+	for _, t := range titles {
+		qids = append(qids, slices.Concat(t.WikidataInstanceOf, t.WikidataGenres, t.WikidataCountries, t.WikidataLanguages)...)
+	}
+	if err := j.fillClasses(ctx, qids); err != nil {
+		return err
+	}
+	var errs []error
+	for _, t := range titles {
+		if err := core.RederiveFacts(ctx, j.DB, t); err != nil {
+			errs = append(errs, fmt.Errorf("title %d: %w", t.ID, err))
+		}
+	}
+	return errors.Join(errs...)
 }

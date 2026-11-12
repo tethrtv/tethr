@@ -15,7 +15,8 @@ SELECT w.title_id, count(DISTINCT p.household_id)::int AS households
 FROM watch_events w
 JOIN profiles p ON p.id = w.profile_id
 JOIN households h ON h.id = p.household_id
-WHERE w.watched_at >= $1 AND w.watched_at <= now() AND w.precision <> 'none'
+JOIN titles t ON t.id = w.title_id
+WHERE NOT t.adult AND w.watched_at >= $1 AND w.watched_at <= now() AND w.precision <> 'none'
   AND p.kind IN ('owner', 'person') AND p.in_popular
   AND h.created_at <= $2
 GROUP BY w.title_id

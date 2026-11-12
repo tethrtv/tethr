@@ -2,7 +2,9 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -33,7 +35,15 @@ func TestRefreshTitles(t *testing.T) {
 		}
 	}
 
-	var queries, fetches []string
+	var queries, fetches, classFetches []string
+	parent := func(q string) []any {
+		return []any{map[string]any{"rank": "normal", "mainsnak": map[string]any{"snaktype": "value", "datavalue": map[string]any{"value": map[string]string{"id": q}}}}}
+	}
+	classClaims := map[string]any{
+		"Q188473":  map[string]any{"P279": parent("Q1762165")},
+		"Q30":      map[string]any{"P297": []any{map[string]any{"rank": "normal", "mainsnak": map[string]any{"snaktype": "value", "datavalue": map[string]any{"value": "US"}}}}},
+		"Q1762165": map[string]any{"P279": parent("Q7725634")},
+	}
 	matrix := "Q83495"
 	busy := true
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +51,17 @@ func TestRefreshTitles(t *testing.T) {
 			queries = append(queries, "busy")
 			w.Header().Set("Retry-After", "600")
 			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Query().Get("languages") == "en" {
+			ids := r.URL.Query().Get("ids")
+			classFetches = append(classFetches, ids)
+			out := map[string]any{}
+			for _, q := range strings.Split(ids, "|") {
+				out[q] = map[string]any{"id": q, "claims": classClaims[q]}
+			}
+			body, _ := json.Marshal(map[string]any{"entities": out})
+			_, _ = w.Write(body)
 			return
 		}
 		if r.Method == http.MethodGet {
@@ -54,7 +75,10 @@ func TestRefreshTitles(t *testing.T) {
 						"P1476":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"text":"The Matrix","language":"en"}}}}],
 						"P577":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"time":"+1999-03-31T00:00:00Z","precision":11}}}}],
 						"P4947":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":"603"}}}],
-						"P345":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":"tt0133093"}}}]}},
+						"P345":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":"tt0133093"}}}],
+						"P31":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q11424"}}}}],
+						"P136":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q188473"}}}}],
+						"P495":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q30"}}}}]}},
 					"Q155653":{"id":"Q155653","labels":{"en":{"value":"Spirited Away"}},"claims":{
 						"P1476":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"text":"千と千尋の神隠し","language":"ja"}}}}],
 						"P577":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"time":"+2001-07-20T00:00:00Z","precision":11}}}}],
@@ -106,6 +130,17 @@ func TestRefreshTitles(t *testing.T) {
 	}
 	if len(fetches) != 2 {
 		t.Errorf("one fetch per kind, got %v", fetches)
+	}
+	if fmt.Sprint(classFetches) != "[Q11424|Q188473|Q30 Q1762165 Q7725634]" {
+		t.Errorf("classes should be fetched once each, parents after children: %v", classFetches)
+	}
+	var genres, countries []string
+	var version *string
+	if err := db.QueryRow(ctx, "SELECT genres, countries, facts_version FROM titles WHERE tmdb_id = 603").Scan(&genres, &countries, &version); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(genres, countries) != "[action] [US]" || version == nil {
+		t.Errorf("the matrix's facts = %v %v, version %v", genres, countries, version)
 	}
 	if len(queries) != 3 {
 		t.Errorf("one query per kind and ID type, got %d", len(queries))
