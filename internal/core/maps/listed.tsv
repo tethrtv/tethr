@@ -1,0 +1,12 @@
+# Wikidata class	listed	label
+# Items with no TMDB ID are only looked for in these classes, the ones the seed used; kinds.tsv still decides film or show.
+Q11424	listed	film
+Q24862	listed	short film
+Q506240	listed	television film
+Q202866	listed	animated film
+Q93204	listed	documentary film
+Q5398426	listed	television series
+Q1259759	listed	miniseries
+Q117467246	listed	animated television series
+Q15416	listed	television program
+Q1261214	listed	television special

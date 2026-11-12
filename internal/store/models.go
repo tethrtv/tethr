@@ -174,6 +174,11 @@ type Invite struct {
 	CreatedByAccountID *int64
 }
 
+type JobRun struct {
+	Name  string
+	RanAt time.Time
+}
+
 type List struct {
 	ID          int64
 	ProfileID   int64
@@ -440,5 +445,11 @@ type WikidataClass struct {
 	Country   string
 	Language  string
 	Parents   []string
+	CheckedAt time.Time
+}
+
+type WikidataLeftOut struct {
+	Qid       string
+	Reason    string
 	CheckedAt time.Time
 }

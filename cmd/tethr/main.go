@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -49,6 +50,8 @@ func main() {
 			run = report
 		case "official":
 			run = official
+		case "seed":
+			run = seed
 		}
 	}
 	if err := run(log); err != nil {
@@ -67,6 +70,32 @@ func migrate(log *slog.Logger) error {
 	}
 	log.Info("database is up to date")
 	return nil
+}
+
+func seed(log *slog.Logger) error {
+	flags := flag.NewFlagSet("seed", flag.ContinueOnError)
+	classes := flags.String("classes", "", "comma-separated gzipped class files")
+	labels := flags.String("labels", "", "gzipped labels for items with no English or mul label")
+	names := flags.String("names", "", "names a week before the snapshot, for items edited that week")
+	taken := flags.String("taken", "", "when the snapshot was taken, RFC 3339")
+	if err := flags.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+	at, err := time.Parse(time.RFC3339, *taken)
+	if err != nil || flags.NArg() == 0 {
+		return errors.New("usage: tethr seed -taken <time> [-classes a.gz,b.gz] [-labels l.gz] [-names n.jsonl] <items.gz> [more.gz]")
+	}
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	s := jobs.Seed{DB: db, Log: log, Items: flags.Args(), Labels: *labels, Names: *names, Taken: at}
+	if *classes != "" {
+		s.Classes = strings.Split(*classes, ",")
+	}
+	return s.Run(ctx)
 }
 
 func invite(*slog.Logger) error {
@@ -259,7 +288,9 @@ func serve(log *slog.Logger) error {
 	go jobs.Imports{DB: db, Log: log}.Run(ctx)
 	go jobs.Cleanup{DB: db, Log: log}.Run(ctx)
 	go jobs.Reports{DB: db, Mail: v1.Mail, To: v1.ReportsTo, AppURL: appURL, Zone: london, Log: log}.Run(ctx)
-	go jobs.Titles{DB: db, Wikidata: &wikidata.Client{UserAgent: "Tethr/" + version + " (https://github.com/tethrtv/tethr)"}, Log: log}.Run(ctx)
+	wd := &wikidata.Client{UserAgent: "Tethr/" + version + " (https://github.com/tethrtv/tethr)"}
+	go jobs.Titles{DB: db, Wikidata: wd, Log: log}.Run(ctx)
+	go jobs.Sweep{DB: db, Wikidata: wd, Log: log}.Run(ctx)
 	media := &hooks.Server{DB: db, Log: log}
 	var details *meta.Server
 	var client *tmdb.Client

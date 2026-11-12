@@ -28,6 +28,15 @@ func (q *Queries) AddExternalID(ctx context.Context, arg AddExternalIDParams) er
 	return err
 }
 
+const addMissingClass = `-- name: AddMissingClass :exec
+INSERT INTO wikidata_classes (qid) VALUES ($1) ON CONFLICT (qid) DO NOTHING
+`
+
+func (q *Queries) AddMissingClass(ctx context.Context, qid string) error {
+	_, err := q.db.Exec(ctx, addMissingClass, qid)
+	return err
+}
+
 const addOutlineEpisode = `-- name: AddOutlineEpisode :exec
 INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id, first_aired)
 VALUES ($1, $2, $3, $4, $5)
@@ -592,7 +601,10 @@ SELECT t.id, t.kind, t.tmdb_id, t.wikidata_id, t.wikidata_deleted_at,
 FROM titles t
 WHERE t.merged_into_id IS NULL
   AND (t.wikidata_checked_at IS NULL
-   OR t.wikidata_checked_at < now() - CASE WHEN t.wikidata_id IS NULL OR t.slug = 't-' || t.id THEN interval '7 days' ELSE interval '90 days' END)
+   OR t.wikidata_checked_at < now() - CASE
+        WHEN t.wikidata_id IS NULL THEN interval '30 days'
+        WHEN t.slug = 't-' || t.id THEN interval '7 days'
+        ELSE interval '90 days' END)
 ORDER BY t.wikidata_checked_at NULLS FIRST, t.id
 LIMIT $1
 `
@@ -730,6 +742,73 @@ func (q *Queries) ExternalIDOwner(ctx context.Context, arg ExternalIDOwnerParams
 		&i.WikidataID,
 	)
 	return i, err
+}
+
+const jobRanSince = `-- name: JobRanSince :one
+SELECT EXISTS (SELECT 1 FROM job_runs WHERE name = $1 AND ran_at > $2)
+`
+
+type JobRanSinceParams struct {
+	Name  string
+	RanAt time.Time
+}
+
+func (q *Queries) JobRanSince(ctx context.Context, arg JobRanSinceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, jobRanSince, arg.Name, arg.RanAt)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const knownWikidataItems = `-- name: KnownWikidataItems :many
+SELECT wikidata_id::text FROM titles WHERE wikidata_id IS NOT NULL
+UNION
+SELECT qid FROM wikidata_left_out WHERE checked_at > now() - interval '90 days'
+`
+
+func (q *Queries) KnownWikidataItems(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, knownWikidataItems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var wikidata_id string
+		if err := rows.Scan(&wikidata_id); err != nil {
+			return nil, err
+		}
+		items = append(items, wikidata_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const leaveOutWikidata = `-- name: LeaveOutWikidata :exec
+INSERT INTO wikidata_left_out (qid, reason, checked_at) VALUES ($1, $2, now())
+ON CONFLICT (qid) DO UPDATE SET reason = excluded.reason, checked_at = now()
+`
+
+type LeaveOutWikidataParams struct {
+	Qid    string
+	Reason string
+}
+
+func (q *Queries) LeaveOutWikidata(ctx context.Context, arg LeaveOutWikidataParams) error {
+	_, err := q.db.Exec(ctx, leaveOutWikidata, arg.Qid, arg.Reason)
+	return err
+}
+
+const markJobRun = `-- name: MarkJobRun :exec
+INSERT INTO job_runs (name, ran_at) VALUES ($1, now())
+ON CONFLICT (name) DO UPDATE SET ran_at = now()
+`
+
+func (q *Queries) MarkJobRun(ctx context.Context, name string) error {
+	_, err := q.db.Exec(ctx, markJobRun, name)
+	return err
 }
 
 const markMergedActivity = `-- name: MarkMergedActivity :exec
@@ -1546,6 +1625,56 @@ type TitleByTMDBParams struct {
 
 func (q *Queries) TitleByTMDB(ctx context.Context, arg TitleByTMDBParams) (Title, error) {
 	row := q.db.QueryRow(ctx, titleByTMDB, arg.TmdbID, arg.Kind)
+	var i Title
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Slug,
+		&i.Name,
+		&i.Year,
+		&i.TmdbID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OutlineRefreshedAt,
+		&i.TmdbMissingAt,
+		&i.OriginalName,
+		&i.RuntimeMinutes,
+		&i.WikidataID,
+		&i.WikidataCheckedAt,
+		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
+		&i.WikidataInstanceOf,
+		&i.WikidataGenres,
+		&i.WikidataCountries,
+		&i.WikidataLanguages,
+		&i.Sitelinks,
+		&i.Started,
+		&i.Ended,
+		&i.Genres,
+		&i.TypeFlags,
+		&i.Adult,
+		&i.Countries,
+		&i.Languages,
+		&i.FactsVersion,
+		&i.SexualContent,
+	)
+	return i, err
+}
+
+const titleByWikidata = `-- name: TitleByWikidata :one
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content FROM titles
+WHERE kind = $1 AND wikidata_id = $2 AND merged_into_id IS NULL
+ORDER BY id
+LIMIT 1
+`
+
+type TitleByWikidataParams struct {
+	Kind       string
+	WikidataID *string
+}
+
+func (q *Queries) TitleByWikidata(ctx context.Context, arg TitleByWikidataParams) (Title, error) {
+	row := q.db.QueryRow(ctx, titleByWikidata, arg.Kind, arg.WikidataID)
 	var i Title
 	err := row.Scan(
 		&i.ID,
