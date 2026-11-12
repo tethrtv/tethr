@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +24,14 @@ type WikidataTitle struct {
 	Released time.Time
 	Runtime  int
 	TMDB     int32
-	IMDB     string
-	TVDB     string
+	IDs      map[string][]string
+}
+
+type IDConflict struct {
+	Provider string
+	Value    string
+	Other    int64
+	Outcome  string
 }
 
 func DueWikidata(ctx context.Context, db *pgxpool.Pool, limit int32) ([]store.DueWikidataRow, error) {
@@ -39,8 +46,10 @@ func WikidataDeleted(ctx context.Context, db *pgxpool.Pool, titleID int64) error
 	return store.New(db).WikidataDeleted(ctx, titleID)
 }
 
-func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind string, w WikidataTitle) error {
-	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind string, w WikidataTitle) ([]IDConflict, error) {
+	var conflicts []IDConflict
+	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		conflicts = nil
 		q := store.New(tx)
 		before, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
 		if err != nil {
@@ -70,13 +79,23 @@ func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 		if err := learnIDs(ctx, q, t, IDs{TMDB: int64(w.TMDB)}); err != nil {
 			return err
 		}
-		for provider, value := range map[string]string{"imdb": w.IMDB, "tvdb": w.TVDB} {
-			if value == "" {
-				continue
-			}
-			if err := q.AddMissingExternalID(ctx, store.AddMissingExternalIDParams{TitleID: titleID, Provider: provider, Value: value}); err != nil {
+		tmdb := strconv.Itoa(int(w.TMDB))
+		switch {
+		case w.TMDB == 0:
+		case t.TmdbID != nil && *t.TmdbID != w.TMDB:
+			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Outcome: "kept the title's own"})
+		case t.TmdbID == nil:
+			holder, err := q.TitleByTMDB(ctx, store.TitleByTMDBParams{TmdbID: &w.TMDB, Kind: kind})
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+			case err != nil:
 				return err
+			case holder.ID != t.ID && holder.MergedIntoID == nil && (holder.WikidataID == nil || *holder.WikidataID != w.QID):
+				conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Other: holder.ID, Outcome: "left with another title"})
 			}
+		}
+		if conflicts, err = syncIDs(ctx, q, t, w, conflicts); err != nil {
+			return err
 		}
 
 		t, err = q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
@@ -90,12 +109,67 @@ func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 		if err != nil {
 			return err
 		}
-		from, into := t, other
-		if (from.TmdbID != nil && into.TmdbID == nil) || ((from.TmdbID == nil) == (into.TmdbID == nil) && from.ID < into.ID) {
-			from, into = into, from
+		if t.TmdbID != nil && other.TmdbID != nil && *t.TmdbID != *other.TmdbID {
+			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: strconv.Itoa(int(*other.TmdbID)), Other: other.ID, Outcome: "merged two of one item's"})
 		}
-		return mergeTitle(ctx, q, kind, from.ID, into.ID)
+		return mergeTitle(ctx, q, kind, max(t.ID, other.ID), min(t.ID, other.ID))
 	})
+	if err != nil {
+		return nil, err
+	}
+	return conflicts, nil
+}
+
+func syncIDs(ctx context.Context, q *store.Queries, t store.Title, w WikidataTitle, conflicts []IDConflict) ([]IDConflict, error) {
+	want := map[[2]string]bool{}
+	var claims [][2]string
+	for provider, values := range w.IDs {
+		for _, v := range values {
+			want[[2]string{provider, v}] = true
+			claims = append(claims, [2]string{provider, v})
+		}
+	}
+	slices.SortFunc(claims, func(a, b [2]string) int { return strings.Compare(a[0]+" "+a[1], b[0]+" "+b[1]) })
+
+	claimed := map[string]bool{}
+	for _, c := range claims {
+		owner, err := q.ExternalIDOwner(ctx, store.ExternalIDOwnerParams{Provider: c[0], Value: c[1]})
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			return nil, err
+		case owner.TitleID == t.ID && owner.Source == "wikidata":
+			claimed[c[0]] = true
+			continue
+		case owner.TitleID == t.ID, owner.Kind == t.Kind && owner.WikidataID != nil && *owner.WikidataID == w.QID:
+		case owner.Source == "wikidata":
+			conflicts = append(conflicts, IDConflict{Provider: c[0], Value: c[1], Other: owner.TitleID, Outcome: "left with another item's title"})
+			continue
+		default:
+			conflicts = append(conflicts, IDConflict{Provider: c[0], Value: c[1], Other: owner.TitleID, Outcome: "took from an app's pairing"})
+		}
+		if err := q.ClaimExternalID(ctx, store.ClaimExternalIDParams{TitleID: t.ID, Provider: c[0], Value: c[1]}); err != nil {
+			return nil, err
+		}
+		claimed[c[0]] = true
+	}
+
+	have, err := q.TitleExternalIDs(ctx, t.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range have {
+		if want[[2]string{id.Provider, id.Value}] || (id.Source == "app" && !claimed[id.Provider]) {
+			continue
+		}
+		if err := q.DropExternalID(ctx, store.DropExternalIDParams{TitleID: t.ID, Provider: id.Provider, Value: id.Value}); err != nil {
+			return nil, err
+		}
+		if id.Source == "app" {
+			conflicts = append(conflicts, IDConflict{Provider: id.Provider, Value: id.Value, Outcome: "dropped an app's"})
+		}
+	}
+	return conflicts, nil
 }
 
 func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into int64) error {
@@ -174,6 +248,15 @@ func mergeTitle(ctx context.Context, q *store.Queries, kind string, from, into i
 		}
 	}
 
+	tmdb, err := q.TakeTitleTMDB(ctx, store.TakeTitleTMDBParams{FromID: from, IntoID: into})
+	switch {
+	case err == nil:
+		if err := q.SetTitleTMDB(ctx, store.SetTitleTMDBParams{ID: into, TmdbID: tmdb}); err != nil {
+			return err
+		}
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
+	}
 	if err := q.MergeTitleExternalIDs(ctx, store.MergeTitleExternalIDsParams{FromID: from, IntoID: into}); err != nil {
 		return err
 	}

@@ -415,7 +415,7 @@ func TestNativeTracking(t *testing.T) {
 		t.Errorf("add history = %s", rec.Body)
 	}
 	for range 2 {
-		if err := core.SaveWikidata(ctx, s.DB, *paused.Item.Title.Ids.Tethr, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Original: "Breaking Bad", Year: 2008, Released: time.Date(2008, 1, 20, 0, 0, 0, 0, time.UTC)}); err != nil {
+		if _, err := core.SaveWikidata(ctx, s.DB, *paused.Item.Title.Ids.Tethr, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Original: "Breaking Bad", Year: 2008, Released: time.Date(2008, 1, 20, 0, 0, 0, 0, time.UTC)}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.DB.Exec(ctx, "UPDATE titles SET wikidata_checked_at = wikidata_checked_at - interval '8 days'"); err != nil {
