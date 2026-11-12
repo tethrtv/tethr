@@ -100,7 +100,7 @@ func TestRewatch(t *testing.T) {
 	if _, err := QueueImport(ctx, db, profile, imported.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ApplyNextImport(ctx, db); err != nil {
+	if _, _, err := ApplyNextImport(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	if applied, err := ImportByID(ctx, db, profile, imported.ID); err != nil || applied.Summary.Hidden.Added != 1 || applied.Summary.Hidden.Skipped != 1 {

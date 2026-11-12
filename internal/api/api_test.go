@@ -670,7 +670,7 @@ func traktZip(t *testing.T) string {
 	w, _ := z.Create("watched-history.json")
 	_, _ = w.Write([]byte(`[
 		{"id":1,"watched_at":"2024-01-01T20:00:00.000Z","action":"watch","type":"movie","movie":{"title":"Inception","year":2010,"ids":{"trakt":16662,"imdb":"tt1375666","tmdb":27205}}},
-		{"id":2,"watched_at":"2024-01-02T20:00:00.000Z","action":"watch","type":"movie","movie":{"title":"Lost tape","year":1990,"ids":{"trakt":5}}}
+		{"id":2,"watched_at":"2024-01-02T20:00:00.000Z","action":"watch","type":"movie","movie":{"title":"Lost tape","year":1990,"ids":{}}}
 	]`))
 	w, _ = z.Create("ratings-movies.json")
 	_, _ = w.Write([]byte(`[{"rated_at":"2024-01-03T10:00:00.000Z","rating":9,"type":"movie","movie":{"title":"Inception","year":2010,"ids":{"tmdb":27205}}}]`))
@@ -722,7 +722,7 @@ func TestImports(t *testing.T) {
 	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply?profile_id="+samID, "", cookie); rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"status":"queued"`) {
 		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
 	}
-	if _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+	if _, _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id+"?profile_id="+samID, "", cookie).Body.Bytes(), &imp)
@@ -773,7 +773,7 @@ func TestSimklImport(t *testing.T) {
 	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", "", cookie); rec.Code != http.StatusAccepted {
 		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
 	}
-	if _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+	if _, _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
@@ -815,7 +815,7 @@ func TestMatchedImport(t *testing.T) {
 	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", "", cookie); rec.Code != http.StatusAccepted {
 		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
 	}
-	if _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+	if _, _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)

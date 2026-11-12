@@ -163,6 +163,9 @@ func showRef(id string) core.Ref {
 	ref := core.Ref{Kind: "show"}
 	if n, err := strconv.ParseInt(id, 10, 64); err == nil {
 		ref.IDs.Tethr = tethrID(n, catalogueOffset)
+		if ref.IDs.Tethr == 0 {
+			ref.IDs.Trakt = n
+		}
 	} else {
 		ref.IDs.Slug = id
 	}

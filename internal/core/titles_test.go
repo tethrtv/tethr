@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tethrtv/tethr/internal/dbtest"
+	"github.com/tethrtv/tethr/internal/store"
 )
 
 func TestTitleState(t *testing.T) {
@@ -168,5 +169,39 @@ func TestSearchLibrary(t *testing.T) {
 	}
 	if got := search("in", ""); len(got) < 2 || got[0] != "Inception" {
 		t.Errorf("names starting with the words should come first: %v", got)
+	}
+}
+
+func TestClientIDPairings(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	look := func(kind string, ids IDs, create bool) *store.CatalogueTitlesRow {
+		t.Helper()
+		items, err := LookUp(ctx, db, kind, ids, create)
+		if err != nil || len(items) > 1 {
+			t.Fatalf("look up %+v = %v, %v", ids, items, err)
+		}
+		if len(items) == 0 {
+			return nil
+		}
+		return &items[0].Title
+	}
+
+	matrix := look("movie", IDs{TMDB: 603, IMDB: "tt1375666"}, true)
+	inception := look("movie", IDs{TMDB: 27205, IMDB: "tt1375666"}, true)
+	if inception == nil || inception.ID == matrix.ID || *inception.TmdbID != 27205 {
+		t.Errorf("an IMDb ID paired with another TMDB ID shouldn't send this one there: %+v", inception)
+	}
+
+	if junk := look("movie", IDs{TMDB: 3_000_000_000, IMDB: "<b>not an id</b>"}, true); junk != nil {
+		t.Errorf("IDs that can't be real shouldn't make a title: %+v", junk)
+	}
+	if again := look("movie", IDs{TMDB: 603, IMDB: "tt0133093"}, true); again.ID != matrix.ID || again.Imdb != "tt1375666" {
+		t.Errorf("an app's ID should only fill a gap: %+v", again)
+	}
+
+	webhook := look("show", IDs{IMDB: "tt0903747"}, true)
+	if got := look("show", IDs{TMDB: 1396, IMDB: "tt0903747"}, true); got.ID != webhook.ID || got.TmdbID != nil {
+		t.Errorf("an app shouldn't set the TMDB ID of a title that already exists: %+v", got)
 	}
 }

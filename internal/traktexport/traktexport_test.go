@@ -61,8 +61,8 @@ func TestRead(t *testing.T) {
 	if ep.Ref.Kind != "episode" || *ep.Ref.Season != 1 || *ep.Ref.Number != 2 || ep.Ref.IDs != (core.IDs{TMDB: 62086}) || ep.Action != "scrobble" || ep.At == nil {
 		t.Errorf("episode = %+v", ep)
 	}
-	if ep.Ref.Show != (core.IDs{IMDB: "tt0903747", TMDB: 1396, TVDB: 81189}) {
-		t.Errorf("show IDs should keep TMDB, IMDb and TVDB and drop Trakt's own: %+v", ep.Ref.Show)
+	if ep.Ref.Show != (core.IDs{Trakt: 1388, IMDB: "tt0903747", TMDB: 1396, TVDB: 81189}) {
+		t.Errorf("show IDs should keep Trakt's own along with TMDB, IMDb and TVDB: %+v", ep.Ref.Show)
 	}
 	if ep.Label != "Breaking Bad (2008) 1x02" || f.History[1].Label != "Inception (2010)" {
 		t.Errorf("labels = %q, %q", ep.Label, f.History[1].Label)

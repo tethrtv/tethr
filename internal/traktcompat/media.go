@@ -62,6 +62,9 @@ type episode struct {
 func titleJSON(i core.Item) title {
 	t := i.Title
 	out := title{Year: t.Year, IDs: ids{Trakt: traktID(t.ID, catalogueOffset), Slug: &t.Slug, TMDB: t.TmdbID}}
+	if t.Trakt > 0 && t.Trakt <= catalogueOffset {
+		out.IDs.Trakt = t.Trakt
+	}
 	if t.Name != nil {
 		out.Title = *t.Name
 	}

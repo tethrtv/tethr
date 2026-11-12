@@ -34,7 +34,10 @@ func (im Imports) Apply(ctx context.Context) error {
 		return err
 	}
 	for {
-		found, err := core.ApplyNextImport(ctx, im.DB)
+		found, conflicts, err := core.ApplyNextImport(ctx, im.DB)
+		for _, c := range conflicts {
+			im.Log.Warn("import disagrees with an outside id", "import", c.Import, "title", c.Title, "provider", c.Provider, "value", c.Value, "other", c.Other, "outcome", c.Outcome)
+		}
 		if err != nil || !found {
 			return err
 		}

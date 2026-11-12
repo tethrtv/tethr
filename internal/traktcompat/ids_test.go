@@ -194,3 +194,61 @@ func TestSeasonIDs(t *testing.T) {
 		t.Errorf("rated seasons = %v", ratings)
 	}
 }
+
+func TestRealTraktIDs(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	c, app := signIn(t, db)
+	anonymous := newClient(t, db, app.ClientID)
+
+	if found := anonymous.list("GET", "/search/tmdb/603?type=movie", nil); len(found) != 0 {
+		t.Errorf("a lookup with no token shouldn't create a title: %v", found)
+	}
+	paused := c.valid("POST", "/scrobble/pause", map[string]any{"progress": 30.0, "movie": map[string]any{"ids": map[string]any{"tmdb": 603}}}, http.StatusCreated)
+	offset := traktOf(paused, "movie")
+	items, err := core.LookUp(ctx, db, "movie", core.IDs{TMDB: 603}, false)
+	if err != nil || len(items) != 1 {
+		t.Fatal(items, err)
+	}
+	if _, err := core.SaveWikidata(ctx, db, items[0].Title.ID, "movie", core.WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999, TMDB: 603, IDs: map[string][]string{"trakt_film": {"481"}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	paused = c.valid("POST", "/scrobble/pause", map[string]any{"progress": 40.0, "movie": map[string]any{"ids": map[string]any{"trakt": offset}}}, http.StatusCreated)
+	if traktOf(paused, "movie") != 481 {
+		t.Errorf("a title with a known Trakt number should go out with it: %v", paused)
+	}
+	for _, n := range []int64{481, offset} {
+		if found := anonymous.list("GET", "/search/trakt/"+idString(n)+"?type=movie", nil); len(found) != 1 || traktOf(found[0], "movie") != 481 {
+			t.Errorf("search by %d = %v", n, found)
+		}
+	}
+	if found := c.list("GET", "/search/trakt/481?type=show", nil); len(found) != 0 {
+		t.Errorf("a film's Trakt number shouldn't find a show: %v", found)
+	}
+
+	added := c.valid("POST", "/sync/history", map[string]any{
+		"movies": []any{map[string]any{"watched_at": "2024-01-01T20:00:00.000Z", "ids": map[string]any{"trakt": 481}}},
+	}, http.StatusCreated)
+	if added["added"].(map[string]any)["movies"] != 1.0 {
+		t.Errorf("history by the real Trakt number = %v", added)
+	}
+	if got := c.list("GET", "/sync/history/movies/481", nil); len(got) != 1 {
+		t.Errorf("history for the real Trakt number = %v", got)
+	}
+
+	c.valid("POST", "/scrobble/stop", map[string]any{"progress": 100.0, "show": map[string]any{"ids": map[string]any{"tmdb": 1396}}, "episode": map[string]any{"season": 1, "number": 1}}, http.StatusCreated)
+	if _, err := db.Exec(ctx, "INSERT INTO external_ids (title_id, provider, value) SELECT id, 'trakt_show', '1388' FROM titles WHERE kind = 'show' AND tmdb_id = 1396"); err != nil {
+		t.Fatal(err)
+	}
+	if rec := c.do("GET", "/shows/1388/progress/watched", nil); rec.Code != http.StatusOK {
+		t.Errorf("progress by a show's real Trakt number = %d", rec.Code)
+	}
+	if found := c.list("GET", "/search/trakt/1388?type=show", nil); len(found) != 1 || traktOf(found[0], "show") != 1388 {
+		t.Errorf("search by a show's real Trakt number = %v", found)
+	}
+	stopped := c.valid("POST", "/scrobble/stop", map[string]any{"progress": 100.0, "show": map[string]any{"ids": map[string]any{"trakt": 1388}}, "episode": map[string]any{"season": 1, "number": 2}}, http.StatusCreated)
+	if traktOf(stopped, "show") != 1388 {
+		t.Errorf("an episode of a show named only by its real Trakt number = %v", stopped)
+	}
+}

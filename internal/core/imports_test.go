@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -74,10 +75,10 @@ func TestImport(t *testing.T) {
 	if _, err := CreateImport(ctx, db, profile, "trakt", "again.zip", traktFile()); !errors.Is(err, ErrImportBusy) {
 		t.Errorf("second import while one is queued: %v", err)
 	}
-	if found, err := ApplyNextImport(ctx, db); !found || err != nil {
+	if found, _, err := ApplyNextImport(ctx, db); !found || err != nil {
 		t.Fatalf("apply = %v, %v", found, err)
 	}
-	if found, err := ApplyNextImport(ctx, db); found || err != nil {
+	if found, _, err := ApplyNextImport(ctx, db); found || err != nil {
 		t.Fatalf("nothing left to apply = %v, %v", found, err)
 	}
 
@@ -177,7 +178,7 @@ func TestImportPlaysWithoutTimes(t *testing.T) {
 	if _, err := QueueImport(ctx, db, profile, parsed.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ApplyNextImport(ctx, db); err != nil {
+	if _, _, err := ApplyNextImport(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	applied, _ := ImportByID(ctx, db, profile, parsed.ID)
@@ -201,5 +202,82 @@ func TestImportPlaysWithoutTimes(t *testing.T) {
 	}
 	if !entries[2].At.Equal(UnknownDate) {
 		t.Errorf("undated play at %v", entries[2].At)
+	}
+}
+
+func TestImportTraktIDs(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+
+	if _, err := LookUp(ctx, db, "movie", IDs{TMDB: 27205, IMDB: "tt1375666"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, "INSERT INTO external_ids (title_id, provider, value) SELECT id, 'imdb', 'tt0000002' FROM titles WHERE tmdb_id = 27205"); err != nil {
+		t.Fatal(err)
+	}
+	when := at("2024-01-01T20:00:00Z")
+	watched := func(kind string, ids IDs) ImportItem {
+		return ImportItem{Ref: Ref{Kind: kind, IDs: ids}, Label: "x", At: when, Action: "watch"}
+	}
+	f := ImportFile{
+		History: []ImportItem{
+			watched("movie", IDs{Trakt: 481, TMDB: 603}),
+			watched("movie", IDs{Trakt: 16662, TMDB: 27205, IMDB: "tt0000001"}),
+			watched("movie", IDs{Trakt: 481, TMDB: 155}),
+			watched("movie", IDs{Trakt: 16663, TMDB: 27205, IMDB: "tt0000002"}),
+			{Ref: Ref{Kind: "episode", Show: IDs{Trakt: 1388, TMDB: 1396}, Season: ptr(int32(1)), Number: ptr(int32(1))}, Label: "x", At: when, Action: "watch"},
+		},
+		Ratings: []ImportItem{{Ref: Ref{Kind: "movie", IDs: IDs{Trakt: 999, TMDB: 603}}, Label: "x", At: when, Rating: 8}},
+	}
+	parsed, err := CreateImport(ctx, db, caller.ProfileID, "trakt", "trakt.zip", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := QueueImport(ctx, db, caller.ProfileID, parsed.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, conflicts, err := ApplyNextImport(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	byTrakt := func(kind string, n int64) int64 {
+		t.Helper()
+		items, err := LookUp(ctx, db, kind, IDs{Trakt: n}, false)
+		if err != nil || len(items) > 1 {
+			t.Fatalf("look up %s %d = %v, %v", kind, n, items, err)
+		}
+		if len(items) == 0 {
+			return 0
+		}
+		return items[0].Title.ID
+	}
+	matrix, _ := LookUp(ctx, db, "movie", IDs{TMDB: 603}, false)
+	if byTrakt("movie", 481) != matrix[0].Title.ID || byTrakt("show", 481) != 0 {
+		t.Error("a film's Trakt number should find it, and only as a film")
+	}
+	breaking, _ := LookUp(ctx, db, "show", IDs{TMDB: 1396}, false)
+	if byTrakt("show", 1388) != breaking[0].Title.ID {
+		t.Error("an episode's show should learn its Trakt number")
+	}
+	inception, _ := LookUp(ctx, db, "movie", IDs{TMDB: 27205}, false)
+	if byTrakt("movie", 16663) != inception[0].Title.ID {
+		t.Error("an import matching any of a title's IMDb IDs agrees with it")
+	}
+	if byTrakt("movie", 16662) != 0 || byTrakt("movie", 999) != 0 {
+		t.Error("a Trakt number should only fill a gap, and only when the import's other IDs agree")
+	}
+	var outcomes []string
+	for _, c := range conflicts {
+		outcomes = append(outcomes, c.Value+" "+c.Outcome)
+	}
+	want := []string{
+		"16662 ignored an import's, its other ids disagree",
+		"481 ignored an import's, another title has it",
+		"999 ignored an import's, the title has one",
+	}
+	if fmt.Sprint(outcomes) != fmt.Sprint(want) {
+		t.Errorf("conflicts = %v, want %v", outcomes, want)
 	}
 }
