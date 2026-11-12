@@ -40,7 +40,7 @@ services:
   tethr-staging:
     <<: *tethr
     image: ghcr.io/tethrtv/tethr:${STAGING_TAG:-main}
-    mem_limit: 256m
+    mem_limit: 2g
     cpus: 0.5
     environment:
       <<: *mail
