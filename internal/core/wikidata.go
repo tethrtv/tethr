@@ -25,6 +25,15 @@ type WikidataTitle struct {
 	Runtime  int
 	TMDB     int32
 	IDs      map[string][]string
+
+	InstanceOf []string
+	Genres     []string
+	Countries  []string
+	Languages  []string
+	Started    string
+	Ended      string
+	Sitelinks  int
+	OtherNames map[string]string
 }
 
 type IDConflict struct {
@@ -57,6 +66,28 @@ func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 		if err != nil {
 			return err
 		}
+		raw := rawFacts{Kind: kind, Runtime: w.Runtime, InstanceOf: orEmpty(w.InstanceOf), Genres: orEmpty(w.Genres), Countries: orEmpty(w.Countries), Languages: orEmpty(w.Languages)}
+		cs, err := loadClasses(ctx, q, raw)
+		if err != nil {
+			return err
+		}
+		facts := deriveFacts(cs, raw)
+		slugName := w.Name
+		if name := ownLanguageName(w.OtherNames, facts.Languages); name != "" {
+			w.Name = name
+			if slugFor(name, w.Year) != "" {
+				slugName = name
+			}
+		}
+		err = q.SaveTitleFacts(ctx, store.SaveTitleFactsParams{
+			ID: titleID, InstanceOf: raw.InstanceOf, RawGenres: raw.Genres, RawCountries: raw.Countries, RawLanguages: raw.Languages,
+			Sitelinks: int32(w.Sitelinks), Started: text(w.Started), Ended: text(w.Ended),
+			Genres: orEmpty(facts.Genres), TypeFlags: orEmpty(facts.TypeFlags), Adult: facts.Adult, SexualContent: facts.SexualContent,
+			Countries: orEmpty(facts.Countries), Languages: orEmpty(facts.Languages), FactsVersion: version(facts),
+		})
+		if err != nil {
+			return err
+		}
 		params := store.SaveWikidataParams{ID: titleID, WikidataID: &w.QID, Name: text(w.Name), OriginalName: text(w.Original)}
 		if w.Year > 0 {
 			year := int16(w.Year)
@@ -74,7 +105,7 @@ func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 			return err
 		}
 		if settled(before, w) {
-			if err := nameSlug(ctx, q, t, w.Name, w.Year); err != nil {
+			if err := nameSlug(ctx, q, t, slugName, w.Year); err != nil {
 				return err
 			}
 		}
@@ -279,7 +310,14 @@ func settled(before store.Title, w WikidataTitle) bool {
 	if before.WikidataID == nil || *before.WikidataID != w.QID || before.Name == nil || before.Year == nil {
 		return false
 	}
-	return slugFor(*before.Name, int(*before.Year)) == slugFor(w.Name, w.Year)
+	return int(*before.Year) == w.Year && nameKey(*before.Name) == nameKey(w.Name)
+}
+
+func nameKey(name string) string {
+	if s := slugify(name); s != "" {
+		return s
+	}
+	return name
 }
 
 func nameSlug(ctx context.Context, q *store.Queries, t store.Title, name string, year int) error {

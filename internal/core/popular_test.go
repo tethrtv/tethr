@@ -92,4 +92,11 @@ func TestPopular(t *testing.T) {
 	if got, err := Popular(ctx, db, first, now); err != nil || len(got) != 1 || got[0].Households != popularFloor {
 		t.Errorf("popular with 14 households = %+v, %v", got, err)
 	}
+
+	if _, err := db.Exec(ctx, "UPDATE titles SET adult = true WHERE tmdb_id = 27205"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Popular(ctx, db, first, now); err != nil || len(got) != 0 {
+		t.Errorf("an adult title shouldn't be popular: %+v, %v", got, err)
+	}
 }

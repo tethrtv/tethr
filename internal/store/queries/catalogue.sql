@@ -325,3 +325,51 @@ WHERE id IN (SELECT list_id FROM list_items WHERE title_id = ANY(sqlc.arg(ids)::
 -- name: TouchListsWithEpisodes :exec
 UPDATE lists SET updated_at = greatest(updated_at, clock_timestamp())
 WHERE id IN (SELECT list_id FROM list_items WHERE episode_id = ANY(sqlc.arg(ids)::bigint[]));
+
+-- name: MissingClasses :many
+WITH RECURSIVE up (qid, depth) AS (
+    SELECT q, 0 FROM unnest(@qids::text[]) AS q
+    UNION
+    SELECT p, up.depth + 1 FROM up JOIN wikidata_classes c ON c.qid = up.qid, unnest(c.parents) AS p
+    WHERE up.depth < 12
+)
+SELECT DISTINCT up.qid::text FROM up
+WHERE NOT EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = up.qid)
+ORDER BY 1;
+
+-- name: ClassAncestry :many
+WITH RECURSIVE up (qid, depth) AS (
+    SELECT q, 0 FROM unnest(@qids::text[]) AS q
+    UNION
+    SELECT p, up.depth + 1 FROM up JOIN wikidata_classes c ON c.qid = up.qid, unnest(c.parents) AS p
+    WHERE up.depth < 12
+)
+SELECT c.qid, c.country, c.language, c.parents FROM wikidata_classes c
+WHERE c.qid IN (SELECT qid FROM up);
+
+-- name: SaveClass :exec
+INSERT INTO wikidata_classes (qid, label, country, language, parents, checked_at)
+VALUES ($1, $2, $3, $4, $5, now())
+ON CONFLICT (qid) DO UPDATE
+SET label = excluded.label, country = excluded.country, language = excluded.language, parents = excluded.parents, checked_at = now();
+
+-- name: SaveTitleFacts :exec
+UPDATE titles
+SET wikidata_instance_of = @instance_of::text[], wikidata_genres = @raw_genres::text[], wikidata_countries = @raw_countries::text[],
+    wikidata_languages = @raw_languages::text[], sitelinks = @sitelinks, started = sqlc.narg(started), ended = sqlc.narg(ended),
+    genres = @genres::text[], type_flags = @type_flags::text[], adult = @adult, sexual_content = @sexual_content, countries = @countries::text[], languages = @languages::text[],
+    facts_version = sqlc.narg(facts_version)
+WHERE id = @id;
+
+-- name: OutdatedFacts :many
+SELECT id, kind, runtime_minutes, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages
+FROM titles
+WHERE wikidata_id IS NOT NULL AND wikidata_checked_at IS NOT NULL AND merged_into_id IS NULL AND facts_version IS DISTINCT FROM @version
+ORDER BY id
+LIMIT @max_titles;
+
+-- name: DeriveTitleFacts :exec
+UPDATE titles
+SET genres = @genres::text[], type_flags = @type_flags::text[], adult = @adult, sexual_content = @sexual_content, countries = @countries::text[], languages = @languages::text[],
+    facts_version = sqlc.narg(facts_version)
+WHERE id = @id;

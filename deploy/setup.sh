@@ -77,7 +77,7 @@ admin=${SUDO_USER:-root}
 home=$(getent passwd "$admin" | cut -d: -f6)
 if [ -s "$home/.ssh/authorized_keys" ]; then
   printf 'PasswordAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/10-tethr.conf
-  systemctl reload ssh
+  systemctl try-reload-or-restart ssh
   echo "Password logins are off. Use your SSH key from now on."
 else
   echo "No SSH key found for $admin, so password logins are still on. Add your key, then rerun this script." >&2
