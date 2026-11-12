@@ -421,7 +421,7 @@ func (s *Server) lookUp(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, []any{})
 		return
 	}
-	items, err := core.LookUp(r.Context(), s.DB, kind, ids, true)
+	items, err := core.LookUp(r.Context(), s.DB, kind, ids, caller(r).ProfileID != 0)
 	if err != nil {
 		s.fail(w, r, err)
 		return

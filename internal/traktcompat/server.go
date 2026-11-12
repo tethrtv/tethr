@@ -89,7 +89,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	app("GET /users/{id}/lists/collaborations", empty)
 	app("GET /users/{id}/likes", empty)
 	app("GET /users/{id}/likes/{type}", empty)
-	app("GET /search/{id_type}/{id}", s.lookUp)
+	anyone("GET /search/{id_type}/{id}", s.lookUp)
 }
 
 func (s *Server) cors(next http.Handler) http.Handler {
