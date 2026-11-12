@@ -57,8 +57,8 @@ func TestMergeSharedWikidata(t *testing.T) {
 		}
 		return items[0].Title.ID
 	}
-	loser, winner := lookUp(byTVDB), lookUp(byTMDB)
-	if loser == winner {
+	winner, loser := lookUp(byTVDB), lookUp(byTMDB)
+	if loser == winner || winner > loser {
 		t.Fatal("expected two rows before the merge")
 	}
 	before, err := LastActivities(ctx, db, caller.ProfileID)
@@ -67,15 +67,15 @@ func TestMergeSharedWikidata(t *testing.T) {
 	}
 
 	got := WikidataTitle{QID: "Q23572", Name: "Game of Thrones", Year: 2011, Runtime: 50, TMDB: 1399}
-	if err := SaveWikidata(ctx, db, winner, "show", got); err != nil {
+	if _, err := SaveWikidata(ctx, db, winner, "show", got); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveWikidata(ctx, db, loser, "show", got); err != nil {
+	if _, err := SaveWikidata(ctx, db, loser, "show", got); err != nil {
 		t.Fatal(err)
 	}
 
-	if lookUp(byTVDB) != winner || lookUp(IDs{Tethr: loser}) != winner {
-		t.Error("the merged row's IDs should lead to the one it was merged into")
+	if lookUp(byTVDB) != winner || lookUp(byTMDB) != winner || lookUp(IDs{Tethr: loser}) != winner {
+		t.Error("the newer row should be merged into the older one, and its IDs lead there")
 	}
 	history, total, err := History(ctx, db, caller.ProfileID, HistoryFilter{}, Page{Page: 1, Limit: 10})
 	if err != nil || total != 3 {
@@ -94,7 +94,7 @@ func TestMergeSharedWikidata(t *testing.T) {
 	if paused, err := Playback(ctx, db, caller.ProfileID, "", Range{}, Page{Page: 1, Limit: 10}); err != nil || len(paused) != 1 || paused[0].Item.Title.ID != winner {
 		t.Errorf("playback = %+v, %v", paused, err)
 	}
-	if rated, err := Ratings(ctx, db, caller.ProfileID, "", nil); err != nil || len(rated) != 1 || rated[0].Rating != 9 {
+	if rated, err := Ratings(ctx, db, caller.ProfileID, "", nil); err != nil || len(rated) != 1 || rated[0].Rating != 6 {
 		t.Errorf("the surviving row's rating should win: %+v, %v", rated, err)
 	}
 	listed, err := Watchlist(ctx, db, caller.ProfileID, "")
@@ -105,8 +105,8 @@ func TestMergeSharedWikidata(t *testing.T) {
 	if err := db.QueryRow(ctx, "SELECT id FROM seasons WHERE show_id = $1 AND season_number = 2", winner).Scan(&season); err != nil || listed[0].Item.Season.ID != season {
 		t.Errorf("the listed season should move to the surviving row's season 2 (%d): %+v, %v", season, listed[0].Item.Season, err)
 	}
-	if items, _ := LookUp(ctx, db, "show", byTMDB, false); items[0].Title.Tvdb != "121361" || *items[0].Title.Name != "Game of Thrones" {
-		t.Errorf("the merged row's TVDB ID should move across: %+v", items[0].Title)
+	if items, _ := LookUp(ctx, db, "show", byTVDB, false); items[0].Title.TmdbID == nil || *items[0].Title.TmdbID != 1399 || *items[0].Title.Name != "Game of Thrones" {
+		t.Errorf("the merged row's TMDB ID should move across, since outlines come from it: %+v", items[0].Title)
 	}
 	if merged, err := GetList(ctx, db, caller.ProfileID, shelf.ID); err != nil || !merged.UpdatedAt.After(shelf.UpdatedAt) {
 		t.Errorf("a list holding the merged row should count as changed: %v", err)
@@ -133,7 +133,7 @@ func aWeekPasses(t *testing.T, db *pgxpool.Pool) {
 func settle(t *testing.T, db *pgxpool.Pool, id int64, kind string, w WikidataTitle) {
 	t.Helper()
 	for range 2 {
-		if err := SaveWikidata(context.Background(), db, id, kind, w); err != nil {
+		if _, err := SaveWikidata(context.Background(), db, id, kind, w); err != nil {
 			t.Fatal(err)
 		}
 		aWeekPasses(t, db)
@@ -200,7 +200,7 @@ func TestNameSlugs(t *testing.T) {
 		t.Errorf("no year should keep the ID slug: %q", got)
 	}
 
-	if err := SaveWikidata(ctx, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Le Fabuleux Destin d'Amélie Poulain", Year: 2001, Released: released}); err != nil {
+	if _, err := SaveWikidata(ctx, db, first, "movie", WikidataTitle{QID: "Q484048", Name: "Le Fabuleux Destin d'Amélie Poulain", Year: 2001, Released: released}); err != nil {
 		t.Fatal(err)
 	}
 	if got := slug(first); got != "amelie-2001" {
@@ -250,7 +250,7 @@ func TestSlugWaitsForAWeek(t *testing.T) {
 	id := items[0].Title.ID
 	save := func(name string, released time.Time) string {
 		t.Helper()
-		if err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q3", Name: name, Year: released.Year(), Released: released}); err != nil {
+		if _, err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q3", Name: name, Year: released.Year(), Released: released}); err != nil {
 			t.Fatal(err)
 		}
 		items, err := LookUp(ctx, db, "movie", IDs{Tethr: id}, false)
@@ -305,13 +305,117 @@ func TestWikidataDeleted(t *testing.T) {
 		}
 		return f
 	}
-	if err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999}); err != nil {
+	if _, err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999}); err != nil {
 		t.Fatal(err)
 	}
 	if err := WikidataDeleted(ctx, db, id); err != nil || !flagged() {
 		t.Errorf("a deleted item should be flagged: %v", err)
 	}
-	if err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999}); err != nil || flagged() {
+	if _, err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999}); err != nil || flagged() {
 		t.Errorf("an item that comes back should lose the flag: %v", err)
+	}
+}
+
+func TestWikidataOutsideIDs(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	create := func(ids IDs) int64 {
+		t.Helper()
+		items, err := LookUp(ctx, db, "movie", ids, true)
+		if err != nil || len(items) != 1 {
+			t.Fatalf("look up %+v = %+v, %v", ids, items, err)
+		}
+		return items[0].Title.ID
+	}
+	held := func(id int64) map[string]string {
+		t.Helper()
+		rows, err := db.Query(ctx, "SELECT provider || ' ' || value, source FROM external_ids WHERE title_id = $1", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for rows.Next() {
+			var key, source string
+			if err := rows.Scan(&key, &source); err != nil {
+				t.Fatal(err)
+			}
+			out[key] = source
+		}
+		return out
+	}
+
+	matrix := create(IDs{TMDB: 603, IMDB: "tt0000001", TVDB: 5})
+	other := create(IDs{TMDB: 604, IMDB: "tt0133093"})
+	sharing := create(IDs{TMDB: 605})
+	if _, err := SaveWikidata(ctx, db, sharing, "movie", WikidataTitle{QID: "Q9", Name: "Sharing", IDs: map[string][]string{"letterboxd": {"shared"}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999, TMDB: 999, IDs: map[string][]string{
+		"imdb":       {"tt0133093"},
+		"letterboxd": {"shared", "the-matrix"},
+		"plex":       {"5d776825880197001ec967c5"},
+	}}
+	conflicts, err := SaveWikidata(ctx, db, matrix, "movie", w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []IDConflict{
+		{Provider: "tmdb", Value: "999", Outcome: "kept the title's own"},
+		{Provider: "imdb", Value: "tt0133093", Other: other, Outcome: "took from an app's pairing"},
+		{Provider: "letterboxd", Value: "shared", Other: sharing, Outcome: "left with another item's title"},
+		{Provider: "imdb", Value: "tt0000001", Outcome: "dropped an app's"},
+	}
+	if fmt.Sprint(conflicts) != fmt.Sprint(want) {
+		t.Errorf("conflicts = %v, want %v", conflicts, want)
+	}
+	if got := held(matrix); fmt.Sprint(got) != fmt.Sprint(map[string]string{
+		"imdb tt0133093":                "wikidata",
+		"letterboxd the-matrix":         "wikidata",
+		"plex 5d776825880197001ec967c5": "wikidata",
+		"tvdb 5":                        "app",
+	}) {
+		t.Errorf("wikidata's IDs should replace an app's for the same provider and leave the rest: %v", got)
+	}
+	if got := held(other); len(got) != 0 {
+		t.Errorf("an ID wikidata gives to another title should leave this one: %v", got)
+	}
+	if got := held(sharing); got["letterboxd shared"] != "wikidata" {
+		t.Errorf("an ID another item also claims should stay where it was: %v", got)
+	}
+
+	if create(IDs{TMDB: 603, IMDB: "tt0000002"}) != matrix || len(held(matrix)) != 4 {
+		t.Errorf("an app's ID shouldn't be added where wikidata already has one: %v", held(matrix))
+	}
+
+	w.IDs = map[string][]string{"imdb": {"tt0133093"}}
+	w.TMDB = 603
+	if conflicts, err := SaveWikidata(ctx, db, matrix, "movie", w); err != nil || len(conflicts) != 0 {
+		t.Errorf("wikidata dropping its own IDs isn't a conflict: %v, %v", conflicts, err)
+	}
+	if got := held(matrix); len(got) != 2 || got["imdb tt0133093"] != "wikidata" || got["tvdb 5"] != "app" {
+		t.Errorf("IDs wikidata no longer has should go: %v", got)
+	}
+
+	stuck := create(IDs{IMDB: "tt0000003"})
+	conflicts, err = SaveWikidata(ctx, db, stuck, "movie", WikidataTitle{QID: "Q10", Name: "Stuck", TMDB: 604, IDs: map[string][]string{"imdb": {"tt0133093"}}})
+	want = []IDConflict{
+		{Provider: "tmdb", Value: "604", Other: other, Outcome: "left with another title"},
+		{Provider: "imdb", Value: "tt0133093", Other: matrix, Outcome: "left with another item's title"},
+	}
+	if err != nil || fmt.Sprint(conflicts) != fmt.Sprint(want) {
+		t.Errorf("conflicts = %v, %v, want %v", conflicts, err, want)
+	}
+	if got := held(stuck); fmt.Sprint(got) != fmt.Sprint(map[string]string{"imdb tt0000003": "app"}) {
+		t.Errorf("an app's ID should stay while wikidata's can't be claimed: %v", got)
+	}
+
+	items, err := LookUp(ctx, db, "show", IDs{TMDB: 603}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicts, err = SaveWikidata(ctx, db, items[0].Title.ID, "show", WikidataTitle{QID: "Q83495", Name: "The Matrix", IDs: map[string][]string{"imdb": {"tt0133093"}}})
+	if err != nil || len(conflicts) != 1 || conflicts[0].Other != matrix || held(matrix)["imdb tt0133093"] != "wikidata" {
+		t.Errorf("a show sharing a film's item shouldn't take the film's IDs: %v, %v", conflicts, err)
 	}
 }

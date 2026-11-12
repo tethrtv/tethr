@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -69,11 +70,19 @@ func entities(t *testing.T) []byte {
 			"P4983": []any{claim("normal", "57243")},
 			"P4835": []any{claim("normal", "78804")},
 			"P345":  []any{claim("normal", "not an id")},
+			"P9751": []any{claim("normal", "umc.cmc.4iygvvnqsxa8knd287saief60")},
+			"P9586": []any{claim("normal", "umc.cmc.1zcw5qvtqaplltm533oeemyd7")},
 		}},
 		"Q83495": map[string]any{"id": "Q83495", "labels": labels("mul", "The Matrix", "de", "Matrix"), "claims": map[string]any{
-			"P577":  []any{claim("normal", date("+1999-03-31T00:00:00Z", 11)), claim("normal", date("+1999-06-17T00:00:00Z", 11))},
-			"P4947": []any{claim("normal", "999"), claim("preferred", "603")},
-			"P345":  []any{claim("normal", "tt0133093")},
+			"P577":   []any{claim("normal", date("+1999-03-31T00:00:00Z", 11)), claim("normal", date("+1999-06-17T00:00:00Z", 11))},
+			"P4947":  []any{claim("normal", "999"), claim("preferred", "603")},
+			"P345":   []any{claim("normal", "tt0133093")},
+			"P6127":  []any{claim("normal", "the-matrix")},
+			"P8013":  []any{claim("normal", "movies/the-matrix-1999")},
+			"P11460": []any{claim("normal", "5d776825880197001ec967c6"), claim("normal", "5d776825880197001ec967c5"), claim("normal", "5d776825880197001ec967c5")},
+			"P2704":  []any{claim("normal", "10.5240/0000-0000-0000-0000-0000-X"), claim("preferred", "10.5240/B1D4-4D0E-9E3B-6D12-1B4C-Q")},
+			"P1712":  []any{claim("normal", "movie/the-matrix"), claim("normal", "tv/the-matrix/season-1/episode-1")},
+			"P8600":  []any{claim("normal", "123")},
 		}},
 		"Q1": map[string]any{"id": "Q2", "redirects": map[string]string{"from": "Q1", "to": "Q2"}, "labels": labels("fr", "Pride"), "claims": map[string]any{
 			"P577": []any{claim("normal", date("+2014-00-00T00:00:00Z", 9))},
@@ -125,7 +134,7 @@ func TestFetch(t *testing.T) {
 	if _, ok := found["Q5"]; ok {
 		t.Error("an item whose claims can't be read should be left out, not saved empty")
 	}
-	if w := found["Q39243484"]; w.Name != "Doctor Who" || w.Original != "Doctor Who" || w.Year != 2005 || !w.Released.Equal(time.Date(2005, 3, 26, 0, 0, 0, 0, time.UTC)) || w.Runtime != 45 || w.TMDB != 57243 || w.TVDB != "78804" || w.IMDB != "" {
+	if w := found["Q39243484"]; w.Name != "Doctor Who" || w.Original != "Doctor Who" || w.Year != 2005 || !w.Released.Equal(time.Date(2005, 3, 26, 0, 0, 0, 0, time.UTC)) || w.Runtime != 45 || w.TMDB != 57243 || !reflect.DeepEqual(w.IDs, map[string][]string{"tvdb": {"78804"}, "appletv": {"umc.cmc.4iygvvnqsxa8knd287saief60"}}) {
 		t.Errorf("doctor who = %+v", w)
 	}
 	if w := found["Q1"]; w.QID != "Q2" || w.Name != "Pride" || w.Year != 2014 || !w.Released.Equal(time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC)) {
@@ -140,8 +149,18 @@ func TestFetch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := found["Q83495"]; w.Name != "The Matrix" || w.Year != 1999 || !w.Released.Equal(time.Date(1999, 3, 31, 0, 0, 0, 0, time.UTC)) || w.TMDB != 603 || w.IMDB != "tt0133093" || w.TVDB != "" {
+	if w := found["Q83495"]; w.Name != "The Matrix" || w.Year != 1999 || !w.Released.Equal(time.Date(1999, 3, 31, 0, 0, 0, 0, time.UTC)) || w.TMDB != 603 {
 		t.Errorf("the matrix = %+v", w)
+	}
+	if ids := found["Q83495"].IDs; !reflect.DeepEqual(ids, map[string][]string{
+		"imdb":       {"tt0133093"},
+		"letterboxd": {"the-matrix"},
+		"trakt_slug": {"movies/the-matrix-1999"},
+		"plex":       {"5d776825880197001ec967c5", "5d776825880197001ec967c6"},
+		"eidr":       {"10.5240/B1D4-4D0E-9E3B-6D12-1B4C-Q"},
+		"metacritic": {"movie/the-matrix"},
+	}) {
+		t.Errorf("every outside ID, best rank only, no episode pages and no show IDs on a film: %v", ids)
 	}
 
 	found, deleted, err = c.Fetch(ctx, "movie", []string{"Q404"})

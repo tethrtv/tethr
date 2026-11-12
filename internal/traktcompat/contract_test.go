@@ -291,7 +291,7 @@ func TestSyncEndpoints(t *testing.T) {
 	if err != nil || len(shows) != 1 {
 		t.Fatal(shows, err)
 	}
-	if err := core.SaveWikidata(context.Background(), db, shows[0].Title.ID, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Year: 2008}); err != nil {
+	if _, err := core.SaveWikidata(context.Background(), db, shows[0].Title.ID, "show", core.WikidataTitle{QID: "Q1079", Name: "Breaking Bad", Year: 2008}); err != nil {
 		t.Fatal(err)
 	}
 	entries := c.list("GET", "/sync/history/episodes", nil)

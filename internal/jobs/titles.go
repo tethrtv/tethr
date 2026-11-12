@@ -142,7 +142,11 @@ func (j Titles) fetch(ctx context.Context, kind string, titles []store.DueWikida
 		w, ok := found[*t.WikidataID]
 		switch {
 		case ok:
-			err = core.SaveWikidata(ctx, j.DB, t.ID, t.Kind, core.WikidataTitle(w))
+			var conflicts []core.IDConflict
+			conflicts, err = core.SaveWikidata(ctx, j.DB, t.ID, t.Kind, core.WikidataTitle(w))
+			for _, c := range conflicts {
+				j.Log.Warn("wikidata disagrees with an outside id", "title", t.ID, "provider", c.Provider, "value", c.Value, "other", c.Other, "outcome", c.Outcome)
+			}
 		case slices.Contains(deleted, *t.WikidataID) && fresh[t.ID]:
 			err = core.WikidataMissing(ctx, j.DB, t.ID)
 		case slices.Contains(deleted, *t.WikidataID):

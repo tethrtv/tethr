@@ -132,8 +132,8 @@ func TestRefreshTitles(t *testing.T) {
 	if err != nil || len(items) != 1 {
 		t.Fatal(items, err)
 	}
-	if b := items[0].Title; *b.Name != "Breaking Bad" || b.OriginalName != nil || b.Imdb != "tt0903747" || b.Tvdb != "81189" {
-		t.Errorf("an ID the app sent should win over Wikidata's: %+v", b)
+	if b := items[0].Title; *b.Name != "Breaking Bad" || b.OriginalName != nil || b.Imdb != "tt9999999" || b.Tvdb != "81189" {
+		t.Errorf("Wikidata's ID should win over one an app sent: %+v", b)
 	}
 
 	items, err = core.LookUp(ctx, db, "show", core.IDs{TMDB: 404}, false)

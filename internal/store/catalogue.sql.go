@@ -11,7 +11,11 @@ import (
 )
 
 const addExternalID = `-- name: AddExternalID :exec
-INSERT INTO external_ids (title_id, provider, value) VALUES ($1, $2, $3)
+INSERT INTO external_ids (title_id, provider, value)
+SELECT $1::bigint, $2::text, $3::text
+WHERE NOT EXISTS (
+    SELECT 1 FROM external_ids WHERE title_id = $1 AND provider = $2 AND source = 'wikidata'
+)
 ON CONFLICT DO NOTHING
 `
 
@@ -23,24 +27,6 @@ type AddExternalIDParams struct {
 
 func (q *Queries) AddExternalID(ctx context.Context, arg AddExternalIDParams) error {
 	_, err := q.db.Exec(ctx, addExternalID, arg.TitleID, arg.Provider, arg.Value)
-	return err
-}
-
-const addMissingExternalID = `-- name: AddMissingExternalID :exec
-INSERT INTO external_ids (title_id, provider, value)
-SELECT $1::bigint, $2::text, $3::text
-WHERE NOT EXISTS (SELECT 1 FROM external_ids WHERE title_id = $1 AND provider = $2)
-ON CONFLICT DO NOTHING
-`
-
-type AddMissingExternalIDParams struct {
-	TitleID  int64
-	Provider string
-	Value    string
-}
-
-func (q *Queries) AddMissingExternalID(ctx context.Context, arg AddMissingExternalIDParams) error {
-	_, err := q.db.Exec(ctx, addMissingExternalID, arg.TitleID, arg.Provider, arg.Value)
 	return err
 }
 
@@ -190,6 +176,22 @@ func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]Catalogue
 		return nil, err
 	}
 	return items, nil
+}
+
+const claimExternalID = `-- name: ClaimExternalID :exec
+INSERT INTO external_ids (title_id, provider, value, source) VALUES ($1, $2, $3, 'wikidata')
+ON CONFLICT (provider, value) DO UPDATE SET title_id = excluded.title_id, source = 'wikidata'
+`
+
+type ClaimExternalIDParams struct {
+	TitleID  int64
+	Provider string
+	Value    string
+}
+
+func (q *Queries) ClaimExternalID(ctx context.Context, arg ClaimExternalIDParams) error {
+	_, err := q.db.Exec(ctx, claimExternalID, arg.TitleID, arg.Provider, arg.Value)
+	return err
 }
 
 const copyTitleSeasons = `-- name: CopyTitleSeasons :exec
@@ -433,6 +435,21 @@ func (q *Queries) DropClashingTitleRatings(ctx context.Context, arg DropClashing
 	return err
 }
 
+const dropExternalID = `-- name: DropExternalID :exec
+DELETE FROM external_ids WHERE title_id = $1 AND provider = $2 AND value = $3
+`
+
+type DropExternalIDParams struct {
+	TitleID  int64
+	Provider string
+	Value    string
+}
+
+func (q *Queries) DropExternalID(ctx context.Context, arg DropExternalIDParams) error {
+	_, err := q.db.Exec(ctx, dropExternalID, arg.TitleID, arg.Provider, arg.Value)
+	return err
+}
+
 const dueOutlines = `-- name: DueOutlines :many
 SELECT t.id, t.tmdb_id
 FROM titles t
@@ -589,6 +606,37 @@ func (q *Queries) EpisodeByTMDB(ctx context.Context, tmdbEpisodeID *int32) (Epis
 		&i.CreatedAt,
 		&i.FirstAired,
 		&i.RemovedAt,
+	)
+	return i, err
+}
+
+const externalIDOwner = `-- name: ExternalIDOwner :one
+SELECT e.title_id, e.source, t.kind, t.wikidata_id
+FROM external_ids e
+JOIN titles t ON t.id = e.title_id
+WHERE e.provider = $1 AND e.value = $2
+`
+
+type ExternalIDOwnerParams struct {
+	Provider string
+	Value    string
+}
+
+type ExternalIDOwnerRow struct {
+	TitleID    int64
+	Source     string
+	Kind       string
+	WikidataID *string
+}
+
+func (q *Queries) ExternalIDOwner(ctx context.Context, arg ExternalIDOwnerParams) (ExternalIDOwnerRow, error) {
+	row := q.db.QueryRow(ctx, externalIDOwner, arg.Provider, arg.Value)
+	var i ExternalIDOwnerRow
+	err := row.Scan(
+		&i.TitleID,
+		&i.Source,
+		&i.Kind,
+		&i.WikidataID,
 	)
 	return i, err
 }
@@ -1074,6 +1122,26 @@ func (q *Queries) ShowSeasons(ctx context.Context, showID int64) ([]Season, erro
 	return items, nil
 }
 
+const takeTitleTMDB = `-- name: TakeTitleTMDB :one
+UPDATE titles t SET tmdb_id = NULL, updated_at = now()
+FROM titles old
+WHERE t.id = old.id AND t.id = $1 AND t.tmdb_id IS NOT NULL
+    AND (SELECT i.tmdb_id FROM titles i WHERE i.id = $2) IS NULL
+RETURNING old.tmdb_id
+`
+
+type TakeTitleTMDBParams struct {
+	FromID int64
+	IntoID int64
+}
+
+func (q *Queries) TakeTitleTMDB(ctx context.Context, arg TakeTitleTMDBParams) (*int32, error) {
+	row := q.db.QueryRow(ctx, takeTitleTMDB, arg.FromID, arg.IntoID)
+	var tmdb_id *int32
+	err := row.Scan(&tmdb_id)
+	return tmdb_id, err
+}
+
 const titleByExternalID = `-- name: TitleByExternalID :one
 SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id, t.created_at, t.updated_at, t.outline_refreshed_at, t.tmdb_missing_at, t.original_name, t.runtime_minutes, t.wikidata_id, t.wikidata_checked_at, t.merged_into_id, t.wikidata_deleted_at
 FROM titles t
@@ -1208,6 +1276,36 @@ func (q *Queries) TitleByTMDB(ctx context.Context, arg TitleByTMDBParams) (Title
 		&i.WikidataDeletedAt,
 	)
 	return i, err
+}
+
+const titleExternalIDs = `-- name: TitleExternalIDs :many
+SELECT provider, value, source FROM external_ids WHERE title_id = $1
+`
+
+type TitleExternalIDsRow struct {
+	Provider string
+	Value    string
+	Source   string
+}
+
+func (q *Queries) TitleExternalIDs(ctx context.Context, titleID int64) ([]TitleExternalIDsRow, error) {
+	rows, err := q.db.Query(ctx, titleExternalIDs, titleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TitleExternalIDsRow
+	for rows.Next() {
+		var i TitleExternalIDsRow
+		if err := rows.Scan(&i.Provider, &i.Value, &i.Source); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const titleSharingWikidata = `-- name: TitleSharingWikidata :one

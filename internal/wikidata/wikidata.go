@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,15 +33,47 @@ type Title struct {
 	Released time.Time
 	Runtime  int
 	TMDB     int32
-	IMDB     string
-	TVDB     string
+	IDs      map[string][]string
 }
 
 var (
 	digits = regexp.MustCompile(`^[0-9]+$`)
-	imdbID = regexp.MustCompile(`^tt[0-9]+$`)
+	number = regexp.MustCompile(`^[1-9][0-9]{0,8}$`)
 	qid    = regexp.MustCompile(`^Q[1-9][0-9]*$`)
 )
+
+type outsideID struct {
+	movie, show string
+	valid       *regexp.Regexp
+}
+
+var outsideIDs = map[string]outsideID{
+	"imdb":           {"P345", "P345", regexp.MustCompile(`^tt[0-9]{7,9}$`)},
+	"tvdb":           {"", "P4835", number},
+	"tvmaze":         {"", "P8600", number},
+	"letterboxd":     {"P6127", "", regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)},
+	"plex":           {"P11460", "P11460", regexp.MustCompile(`^[0-9a-f]{24}$`)},
+	"trakt_film":     {"P12492", "", regexp.MustCompile(`^[1-9][0-9]{0,9}$`)},
+	"trakt_slug":     {"P8013", "P8013", regexp.MustCompile(`^(movies|shows)/[a-z0-9]+(-[a-z0-9]+)*$`)},
+	"eidr":           {"P2704", "P2704", regexp.MustCompile(`^10\.5240/([0-9A-F]{4}-){5}[0-9A-Z]$`)},
+	"isan":           {"P3212", "P3212", regexp.MustCompile(`^([0-9A-F]{4}-){2}[0-9A-F]{4}(-[0-9A-F]{4}-[0-9A-Z](-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-Z])?)?$`)},
+	"mal":            {"P4086", "P4086", number},
+	"anidb":          {"P5646", "P5646", number},
+	"anilist":        {"P8729", "P8729", number},
+	"rottentomatoes": {"P1258", "P1258", regexp.MustCompile(`^(m|tv)/[a-z0-9_-]+$`)},
+	"metacritic":     {"P1712", "P1712", regexp.MustCompile(`^(movie|tv)/[^/\s]+$`)},
+	"appletv":        {"P9586", "P9751", regexp.MustCompile(`^umc\.cmc\.[a-z0-9]{20,30}$`)},
+	"netflix":        {"P1874", "P1874", regexp.MustCompile(`^[1-9][0-9]{3,9}$`)},
+	"primevideo":     {"P8055", "P8055", regexp.MustCompile(`^([A-Z0-9]{10}|[A-Z0-9]{26}|amzn1\.dv\.gti\.[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$`)},
+	"disneyplus":     {"P7595", "P7596", regexp.MustCompile(`^([A-Za-z0-9]{12,13}|(entity-)?[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$`)},
+}
+
+func (id outsideID) property(kind string) string {
+	if kind == "show" {
+		return id.show
+	}
+	return id.movie
+}
 
 func property(kind, provider string) (string, *regexp.Regexp) {
 	switch {
@@ -48,10 +81,9 @@ func property(kind, provider string) (string, *regexp.Regexp) {
 		return "P4947", digits
 	case provider == "tmdb" && kind == "show":
 		return "P4983", digits
-	case provider == "imdb":
-		return "P345", imdbID
-	case provider == "tvdb" && kind == "show":
-		return "P4835", digits
+	}
+	if id, ok := outsideIDs[provider]; ok && id.property(kind) != "" {
+		return id.property(kind), id.valid
 	}
 	return "", nil
 }
@@ -154,9 +186,11 @@ type snak struct {
 	} `json:"datavalue"`
 }
 
-var used = []string{"P345", "P577", "P580", "P1476", "P2047", "P4835", "P4947", "P4983"}
-
 func (e entity) readable() bool {
+	used := []string{"P577", "P580", "P1476", "P2047", "P4947", "P4983"}
+	for _, id := range outsideIDs {
+		used = append(used, id.movie, id.show)
+	}
 	for _, p := range used {
 		var all []struct {
 			MainSnak snak   `json:"mainsnak"`
@@ -208,7 +242,7 @@ func (e entity) strings(p string, valid *regexp.Regexp) []string {
 		}
 	}
 	sort.Strings(out)
-	return out
+	return slices.Compact(out)
 }
 
 func (e entity) title(kind string) Title {
@@ -248,20 +282,20 @@ func (e entity) title(kind string) Title {
 	t.Name = trimDisambiguator(e.name(t.Original), t.Year)
 	t.Runtime = e.runtime()
 
-	tmdbProp := "P4947"
-	if kind == "show" {
-		tmdbProp = "P4983"
-		if ids := e.strings("P4835", digits); len(ids) > 0 {
-			t.TVDB = ids[0]
-		}
-	}
+	tmdbProp, _ := property(kind, "tmdb")
 	for _, v := range e.strings(tmdbProp, digits) {
 		if id, err := strconv.ParseInt(v, 10, 32); err == nil && id > 0 && (t.TMDB == 0 || int32(id) < t.TMDB) {
 			t.TMDB = int32(id)
 		}
 	}
-	if ids := e.strings("P345", imdbID); len(ids) > 0 {
-		t.IMDB = ids[0]
+	t.IDs = map[string][]string{}
+	for provider, id := range outsideIDs {
+		if id.property(kind) == "" {
+			continue
+		}
+		if values := e.strings(id.property(kind), id.valid); len(values) > 0 {
+			t.IDs[provider] = values
+		}
 	}
 	return t
 }

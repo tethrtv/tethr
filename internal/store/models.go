@@ -119,6 +119,7 @@ type ExternalID struct {
 	TitleID  int64
 	Provider string
 	Value    string
+	Source   string
 }
 
 type HeldPlay struct {

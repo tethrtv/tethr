@@ -130,7 +130,7 @@ func TestSearchLibrary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := SaveWikidata(ctx, db, items[0].Title.ID, kind, w); err != nil {
+		if _, err := SaveWikidata(ctx, db, items[0].Title.ID, kind, w); err != nil {
 			t.Fatal(err)
 		}
 	}

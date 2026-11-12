@@ -20,7 +20,11 @@ ON CONFLICT (kind, tmdb_id) DO UPDATE SET updated_at = titles.updated_at
 RETURNING *;
 
 -- name: AddExternalID :exec
-INSERT INTO external_ids (title_id, provider, value) VALUES ($1, $2, $3)
+INSERT INTO external_ids (title_id, provider, value)
+SELECT sqlc.arg(title_id)::bigint, sqlc.arg(provider)::text, sqlc.arg(value)::text
+WHERE NOT EXISTS (
+    SELECT 1 FROM external_ids WHERE title_id = sqlc.arg(title_id) AND provider = sqlc.arg(provider) AND source = 'wikidata'
+)
 ON CONFLICT DO NOTHING;
 
 -- name: SetTitleTMDB :exec
@@ -175,11 +179,21 @@ UPDATE titles SET wikidata_checked_at = now() WHERE id = $1;
 -- name: WikidataDeleted :exec
 UPDATE titles SET wikidata_checked_at = now(), wikidata_deleted_at = coalesce(wikidata_deleted_at, now()) WHERE id = $1;
 
--- name: AddMissingExternalID :exec
-INSERT INTO external_ids (title_id, provider, value)
-SELECT sqlc.arg(title_id)::bigint, sqlc.arg(provider)::text, sqlc.arg(value)::text
-WHERE NOT EXISTS (SELECT 1 FROM external_ids WHERE title_id = sqlc.arg(title_id) AND provider = sqlc.arg(provider))
-ON CONFLICT DO NOTHING;
+-- name: TitleExternalIDs :many
+SELECT provider, value, source FROM external_ids WHERE title_id = $1;
+
+-- name: ExternalIDOwner :one
+SELECT e.title_id, e.source, t.kind, t.wikidata_id
+FROM external_ids e
+JOIN titles t ON t.id = e.title_id
+WHERE e.provider = $1 AND e.value = $2;
+
+-- name: ClaimExternalID :exec
+INSERT INTO external_ids (title_id, provider, value, source) VALUES ($1, $2, $3, 'wikidata')
+ON CONFLICT (provider, value) DO UPDATE SET title_id = excluded.title_id, source = 'wikidata';
+
+-- name: DropExternalID :exec
+DELETE FROM external_ids WHERE title_id = $1 AND provider = $2 AND value = $3;
 
 -- name: TitleSharingWikidata :one
 SELECT * FROM titles
@@ -271,6 +285,13 @@ UPDATE hidden_items SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(f
 
 -- name: MergeTitleHeldPlays :exec
 UPDATE held_plays SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
+
+-- name: TakeTitleTMDB :one
+UPDATE titles t SET tmdb_id = NULL, updated_at = now()
+FROM titles old
+WHERE t.id = old.id AND t.id = sqlc.arg(from_id) AND t.tmdb_id IS NOT NULL
+    AND (SELECT i.tmdb_id FROM titles i WHERE i.id = sqlc.arg(into_id)) IS NULL
+RETURNING old.tmdb_id;
 
 -- name: MergeTitleExternalIDs :exec
 UPDATE external_ids SET title_id = sqlc.arg(into_id) WHERE title_id = sqlc.arg(from_id);
