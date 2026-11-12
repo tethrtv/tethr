@@ -20,6 +20,7 @@ import (
 
 type Client struct {
 	BaseURL   string
+	QLeverURL string
 	APIURL    string
 	UserAgent string
 	HTTP      *http.Client
@@ -147,6 +148,52 @@ func (c *Client) Find(ctx context.Context, kind, provider string, values []strin
 	return found, nil
 }
 
+func (c *Client) entities(ctx context.Context, ids []string) (map[string]entity, error) {
+	var res struct {
+		Entities map[string]entity `json:"entities"`
+	}
+	if err := c.get(ctx, url.Values{"action": {"wbgetentities"}, "ids": {strings.Join(ids, "|")}, "props": {"labels|claims|sitelinks"}}, &res); err != nil {
+		return nil, err
+	}
+	if len(res.Entities) == 0 {
+		return nil, errors.New("wikidata api: no items in answer")
+	}
+	return res.Entities, nil
+}
+
+func (c *Client) FetchItems(ctx context.Context, qids []string) (map[string]Item, []string, []string, error) {
+	var ids []string
+	for _, q := range qids {
+		if IsQID(q) && !slices.Contains(ids, q) {
+			ids = append(ids, q)
+		}
+	}
+	if len(ids) > 50 {
+		return nil, nil, nil, fmt.Errorf("wikidata takes 50 items at a time, not %d", len(ids))
+	}
+	found := map[string]Item{}
+	if len(ids) == 0 {
+		return found, nil, nil, nil
+	}
+	entities, err := c.entities(ctx, ids)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var deleted, unreadable []string
+	for _, q := range ids {
+		e, ok := entities[q]
+		switch {
+		case ok && e.Missing != nil:
+			deleted = append(deleted, q)
+		case !ok, !e.readable():
+			unreadable = append(unreadable, q)
+		default:
+			found[q] = Item{e: e}
+		}
+	}
+	return found, deleted, unreadable, nil
+}
+
 func (c *Client) Fetch(ctx context.Context, kind string, qids []string) (map[string]Title, []string, error) {
 	var ids []string
 	seen := map[string]bool{}
@@ -163,19 +210,14 @@ func (c *Client) Fetch(ctx context.Context, kind string, qids []string) (map[str
 		return nil, nil, fmt.Errorf("wikidata takes 50 items at a time, not %d", len(ids))
 	}
 
-	var res struct {
-		Entities map[string]entity `json:"entities"`
-	}
-	if err := c.get(ctx, url.Values{"action": {"wbgetentities"}, "ids": {strings.Join(ids, "|")}, "props": {"labels|claims|sitelinks"}}, &res); err != nil {
+	entities, err := c.entities(ctx, ids)
+	if err != nil {
 		return nil, nil, err
-	}
-	if len(res.Entities) == 0 {
-		return nil, nil, errors.New("wikidata api: no items in answer")
 	}
 	found := map[string]Title{}
 	var deleted []string
 	for _, q := range ids {
-		e, ok := res.Entities[q]
+		e, ok := entities[q]
 		switch {
 		case !ok || (e.Missing == nil && !e.readable()):
 		case e.Missing != nil:
@@ -195,6 +237,8 @@ type entity struct {
 	} `json:"labels"`
 	Claims    map[string]json.RawMessage `json:"claims"`
 	Sitelinks map[string]json.RawMessage `json:"sitelinks"`
+
+	sitelinkCount int
 }
 
 type snak struct {
@@ -311,7 +355,7 @@ func (e entity) title(kind string) Title {
 	t.Genres = e.items("P136")
 	t.Countries = e.items("P495")
 	t.Languages = e.items("P364")
-	t.Sitelinks = len(e.Sitelinks)
+	t.Sitelinks = max(len(e.Sitelinks), e.sitelinkCount)
 	if kind == "show" {
 		for _, raw := range e.statements("P580", false) {
 			if d, ok := partialDate(raw); ok && (t.Started == "" || d < t.Started) {
@@ -595,7 +639,15 @@ func (c *Client) post(ctx context.Context, query string, v any) error {
 	if base == "" {
 		base = "https://query.wikidata.org/sparql"
 	}
-	raw, err := c.send(ctx, func() (*http.Request, error) {
+	return c.postTo(ctx, base, query, v)
+}
+
+func (c *Client) postTo(ctx context.Context, base, query string, v any) error {
+	return c.postWith(ctx, c.client(), base, query, v)
+}
+
+func (c *Client) postWith(ctx context.Context, hc *http.Client, base, query string, v any) error {
+	raw, err := c.sendWith(ctx, hc, func() (*http.Request, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base, strings.NewReader(url.Values{"query": {query}}.Encode()))
 		if err != nil {
 			return nil, err
@@ -614,13 +666,17 @@ func (c *Client) post(ctx context.Context, query string, v any) error {
 }
 
 func (c *Client) send(ctx context.Context, build func() (*http.Request, error)) ([]byte, error) {
+	return c.sendWith(ctx, c.client(), build)
+}
+
+func (c *Client) sendWith(ctx context.Context, hc *http.Client, build func() (*http.Request, error)) ([]byte, error) {
 	for attempt := 1; ; attempt++ {
 		req, err := build()
 		if err != nil {
 			return nil, err
 		}
 		req.Header.Set("User-Agent", c.UserAgent)
-		resp, err := c.client().Do(req)
+		resp, err := hc.Do(req)
 		if err != nil {
 			return nil, err
 		}

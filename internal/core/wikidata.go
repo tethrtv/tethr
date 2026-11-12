@@ -58,99 +58,108 @@ func WikidataDeleted(ctx context.Context, db *pgxpool.Pool, titleID int64) error
 }
 
 func SaveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind string, w WikidataTitle) ([]IDConflict, error) {
+	return saveWikidata(ctx, db, titleID, kind, w, false)
+}
+
+func saveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind string, w WikidataTitle, nameHeld bool) ([]IDConflict, error) {
 	var conflicts []IDConflict
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		conflicts = nil
-		q := store.New(tx)
-		before, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
-		if err != nil {
-			return err
-		}
-		raw := rawFacts{Kind: kind, Runtime: w.Runtime, InstanceOf: orEmpty(w.InstanceOf), Genres: orEmpty(w.Genres), Countries: orEmpty(w.Countries), Languages: orEmpty(w.Languages)}
-		cs, err := loadClasses(ctx, q, raw)
-		if err != nil {
-			return err
-		}
-		facts := deriveFacts(cs, raw)
-		slugName := w.Name
-		if name := ownLanguageName(w.OtherNames, facts.Languages); name != "" {
-			w.Name = name
-			if slugFor(name, w.Year) != "" {
-				slugName = name
-			}
-		}
-		err = q.SaveTitleFacts(ctx, store.SaveTitleFactsParams{
-			ID: titleID, InstanceOf: raw.InstanceOf, RawGenres: raw.Genres, RawCountries: raw.Countries, RawLanguages: raw.Languages,
-			Sitelinks: int32(w.Sitelinks), Started: text(w.Started), Ended: text(w.Ended),
-			Genres: orEmpty(facts.Genres), TypeFlags: orEmpty(facts.TypeFlags), Adult: facts.Adult, SexualContent: facts.SexualContent,
-			Countries: orEmpty(facts.Countries), Languages: orEmpty(facts.Languages), FactsVersion: version(facts),
-		})
-		if err != nil {
-			return err
-		}
-		params := store.SaveWikidataParams{ID: titleID, WikidataID: &w.QID, Name: text(w.Name), OriginalName: text(w.Original)}
-		if w.Year > 0 {
-			year := int16(w.Year)
-			params.Year = &year
-		}
-		if w.Runtime > 0 {
-			runtime := int16(w.Runtime)
-			params.RuntimeMinutes = &runtime
-		}
-		if err := q.SaveWikidata(ctx, params); err != nil {
-			return err
-		}
-		t, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
-		if err != nil {
-			return err
-		}
-		if settled(before, w) {
-			if err := nameSlug(ctx, q, t, slugName, w.Year); err != nil {
-				return err
-			}
-		}
-		if err := fillTMDB(ctx, q, t, w.TMDB); err != nil {
-			return err
-		}
-		tmdb := strconv.Itoa(int(w.TMDB))
-		switch {
-		case w.TMDB == 0:
-		case t.TmdbID != nil && *t.TmdbID != w.TMDB:
-			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Outcome: "kept the title's own"})
-		case t.TmdbID == nil:
-			holder, err := q.TitleByTMDB(ctx, store.TitleByTMDBParams{TmdbID: &w.TMDB, Kind: kind})
-			switch {
-			case errors.Is(err, pgx.ErrNoRows):
-			case err != nil:
-				return err
-			case holder.ID != t.ID && holder.MergedIntoID == nil && (holder.WikidataID == nil || *holder.WikidataID != w.QID):
-				conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Other: holder.ID, Outcome: "left with another title"})
-			}
-		}
-		if conflicts, err = syncIDs(ctx, q, t, w, conflicts); err != nil {
-			return err
-		}
-
-		t, err = q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
-		if err != nil || t.MergedIntoID != nil {
-			return err
-		}
-		other, err := q.TitleSharingWikidata(ctx, store.TitleSharingWikidataParams{Kind: kind, WikidataID: &w.QID, ID: titleID})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if t.TmdbID != nil && other.TmdbID != nil && *t.TmdbID != *other.TmdbID {
-			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: strconv.Itoa(int(*other.TmdbID)), Other: other.ID, Outcome: "merged two of one item's"})
-		}
-		return mergeTitle(ctx, q, kind, max(t.ID, other.ID), min(t.ID, other.ID))
+		var err error
+		conflicts, err = saveWikidataIn(ctx, store.New(tx), titleID, kind, w, nameHeld)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 	return conflicts, nil
+}
+
+func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind string, w WikidataTitle, nameHeld bool) ([]IDConflict, error) {
+	var conflicts []IDConflict
+	before, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
+	if err != nil {
+		return conflicts, err
+	}
+	raw := rawFacts{Kind: kind, Runtime: w.Runtime, InstanceOf: orEmpty(w.InstanceOf), Genres: orEmpty(w.Genres), Countries: orEmpty(w.Countries), Languages: orEmpty(w.Languages)}
+	cs, err := loadClasses(ctx, q, raw)
+	if err != nil {
+		return conflicts, err
+	}
+	facts := deriveFacts(cs, raw)
+	slugName := w.Name
+	if name := ownLanguageName(w.OtherNames, facts.Languages); name != "" {
+		w.Name = name
+		if slugFor(name, w.Year) != "" {
+			slugName = name
+		}
+	}
+	err = q.SaveTitleFacts(ctx, store.SaveTitleFactsParams{
+		ID: titleID, InstanceOf: raw.InstanceOf, RawGenres: raw.Genres, RawCountries: raw.Countries, RawLanguages: raw.Languages,
+		Sitelinks: int32(w.Sitelinks), Started: text(w.Started), Ended: text(w.Ended),
+		Genres: orEmpty(facts.Genres), TypeFlags: orEmpty(facts.TypeFlags), Adult: facts.Adult, SexualContent: facts.SexualContent,
+		Countries: orEmpty(facts.Countries), Languages: orEmpty(facts.Languages), FactsVersion: version(facts),
+	})
+	if err != nil {
+		return conflicts, err
+	}
+	params := store.SaveWikidataParams{ID: titleID, WikidataID: &w.QID, Name: text(w.Name), OriginalName: text(w.Original)}
+	if w.Year > 0 {
+		year := int16(w.Year)
+		params.Year = &year
+	}
+	if w.Runtime > 0 {
+		runtime := int16(w.Runtime)
+		params.RuntimeMinutes = &runtime
+	}
+	if err := q.SaveWikidata(ctx, params); err != nil {
+		return conflicts, err
+	}
+	t, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
+	if err != nil {
+		return conflicts, err
+	}
+	if settled(before, w) || nameHeld && !w.Released.IsZero() && !w.Released.After(time.Now()) {
+		if err := nameSlug(ctx, q, t, slugName, w.Year); err != nil {
+			return conflicts, err
+		}
+	}
+	if err := fillTMDB(ctx, q, t, w.TMDB); err != nil {
+		return conflicts, err
+	}
+	tmdb := strconv.Itoa(int(w.TMDB))
+	switch {
+	case w.TMDB == 0:
+	case t.TmdbID != nil && *t.TmdbID != w.TMDB:
+		conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Outcome: "kept the title's own"})
+	case t.TmdbID == nil:
+		holder, err := q.TitleByTMDB(ctx, store.TitleByTMDBParams{TmdbID: &w.TMDB, Kind: kind})
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			return conflicts, err
+		case holder.ID != t.ID && holder.MergedIntoID == nil && (holder.WikidataID == nil || *holder.WikidataID != w.QID):
+			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Other: holder.ID, Outcome: "left with another title"})
+		}
+	}
+	if conflicts, err = syncIDs(ctx, q, t, w, conflicts); err != nil {
+		return conflicts, err
+	}
+
+	t, err = q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
+	if err != nil || t.MergedIntoID != nil {
+		return conflicts, err
+	}
+	other, err := q.TitleSharingWikidata(ctx, store.TitleSharingWikidataParams{Kind: kind, WikidataID: &w.QID, ID: titleID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return conflicts, nil
+	}
+	if err != nil {
+		return conflicts, err
+	}
+	if t.TmdbID != nil && other.TmdbID != nil && *t.TmdbID != *other.TmdbID {
+		conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: strconv.Itoa(int(*other.TmdbID)), Other: other.ID, Outcome: "merged two of one item's"})
+	}
+	return conflicts, mergeTitle(ctx, q, kind, max(t.ID, other.ID), min(t.ID, other.ID))
 }
 
 func syncIDs(ctx context.Context, q *store.Queries, t store.Title, w WikidataTitle, conflicts []IDConflict) ([]IDConflict, error) {

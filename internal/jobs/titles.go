@@ -183,25 +183,29 @@ func key(t store.DueWikidataRow, provider string) string {
 }
 
 func (j Titles) fillClasses(ctx context.Context, qids []string) error {
+	return fillClasses(ctx, j.DB, j.Wikidata, j.Log, qids)
+}
+
+func fillClasses(ctx context.Context, db *pgxpool.Pool, wd *wikidata.Client, log *slog.Logger, qids []string) error {
 	for range 13 {
-		missing, err := core.ClassesNeeded(ctx, j.DB, qids)
+		missing, err := core.ClassesNeeded(ctx, db, qids)
 		if err != nil || len(missing) == 0 {
 			return err
 		}
 		for len(missing) > 0 {
 			n := min(len(missing), 50)
-			found, unreadable, err := j.Wikidata.FetchClasses(ctx, missing[:n])
+			found, unreadable, err := wd.FetchClasses(ctx, missing[:n])
 			if err != nil {
 				return err
 			}
 			for _, q := range unreadable {
-				j.Log.Warn("wikidata class unreadable, its facts are left out", "class", q)
+				log.Warn("wikidata class unreadable, its facts are left out", "class", q)
 			}
 			batch := make([]core.WikidataClass, 0, len(found))
 			for _, c := range found {
 				batch = append(batch, core.WikidataClass(c))
 			}
-			if err := core.SaveClasses(ctx, j.DB, batch); err != nil {
+			if err := core.SaveClasses(ctx, db, batch); err != nil {
 				return err
 			}
 			missing = missing[n:]

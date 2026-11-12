@@ -160,7 +160,10 @@ SELECT t.id, t.kind, t.tmdb_id, t.wikidata_id, t.wikidata_deleted_at,
 FROM titles t
 WHERE t.merged_into_id IS NULL
   AND (t.wikidata_checked_at IS NULL
-   OR t.wikidata_checked_at < now() - CASE WHEN t.wikidata_id IS NULL OR t.slug = 't-' || t.id THEN interval '7 days' ELSE interval '90 days' END)
+   OR t.wikidata_checked_at < now() - CASE
+        WHEN t.wikidata_id IS NULL THEN interval '30 days'
+        WHEN t.slug = 't-' || t.id THEN interval '7 days'
+        ELSE interval '90 days' END)
 ORDER BY t.wikidata_checked_at NULLS FIRST, t.id
 LIMIT $1;
 
@@ -373,3 +376,28 @@ UPDATE titles
 SET genres = @genres::text[], type_flags = @type_flags::text[], adult = @adult, sexual_content = @sexual_content, countries = @countries::text[], languages = @languages::text[],
     facts_version = sqlc.narg(facts_version)
 WHERE id = @id;
+
+-- name: TitleByWikidata :one
+SELECT * FROM titles
+WHERE kind = $1 AND wikidata_id = $2 AND merged_into_id IS NULL
+ORDER BY id
+LIMIT 1;
+
+-- name: AddMissingClass :exec
+INSERT INTO wikidata_classes (qid) VALUES ($1) ON CONFLICT (qid) DO NOTHING;
+
+-- name: KnownWikidataItems :many
+SELECT wikidata_id::text FROM titles WHERE wikidata_id IS NOT NULL
+UNION
+SELECT qid FROM wikidata_left_out WHERE checked_at > now() - interval '90 days';
+
+-- name: LeaveOutWikidata :exec
+INSERT INTO wikidata_left_out (qid, reason, checked_at) VALUES ($1, $2, now())
+ON CONFLICT (qid) DO UPDATE SET reason = excluded.reason, checked_at = now();
+
+-- name: JobRanSince :one
+SELECT EXISTS (SELECT 1 FROM job_runs WHERE name = $1 AND ran_at > $2);
+
+-- name: MarkJobRun :exec
+INSERT INTO job_runs (name, ran_at) VALUES ($1, now())
+ON CONFLICT (name) DO UPDATE SET ran_at = now();
