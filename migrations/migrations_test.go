@@ -3,6 +3,7 @@ package migrations_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -213,5 +214,40 @@ func TestSlugsPerKindDown(t *testing.T) {
 	}
 	if movie != "batman-1966" || show != "t-2" {
 		t.Errorf("after down, film %q and show %q", movie, show)
+	}
+}
+
+func TestFeedStartsAtTheSnapshot(t *testing.T) {
+	for _, seeded := range []bool{true, false} {
+		pool := dbtest.New(t)
+		db := stdlib.OpenDBFromPool(pool)
+		p, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := context.Background()
+		if _, err := p.DownTo(ctx, 32); err != nil {
+			t.Fatalf("down: %v", err)
+		}
+		if seeded {
+			if _, err := pool.Exec(ctx, `INSERT INTO titles (id, kind, slug, wikidata_id) SELECT n, 'movie', 't-' || n, 'Q83495' FROM nextval('catalogue_id') AS n`); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := p.Up(ctx); err != nil {
+			t.Fatalf("up: %v", err)
+		}
+		var cursor time.Time
+		if err := pool.QueryRow(ctx, `SELECT cursor FROM wikidata_feed`).Scan(&cursor); err != nil {
+			t.Fatal(err)
+		}
+		snapshot := time.Date(2026, 11, 10, 16, 50, 45, 0, time.UTC)
+		if seeded && !cursor.Equal(snapshot) {
+			t.Errorf("seeded catalogue starts the feed at %v, want the snapshot time", cursor)
+		}
+		if !seeded && time.Since(cursor) > time.Minute {
+			t.Errorf("empty catalogue starts the feed at %v, want now", cursor)
+		}
+		_ = db.Close()
 	}
 }

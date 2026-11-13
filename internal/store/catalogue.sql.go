@@ -248,6 +248,15 @@ func (q *Queries) ClassAncestry(ctx context.Context, qids []string) ([]ClassAnce
 	return items, nil
 }
 
+const classChecked = `-- name: ClassChecked :exec
+UPDATE wikidata_classes SET checked_at = now() WHERE qid = $1
+`
+
+func (q *Queries) ClassChecked(ctx context.Context, qid string) error {
+	_, err := q.db.Exec(ctx, classChecked, qid)
+	return err
+}
+
 const copyTitleSeasons = `-- name: CopyTitleSeasons :exec
 INSERT INTO seasons (show_id, season_number)
 SELECT $1, o.season_number FROM seasons o
@@ -409,6 +418,20 @@ func (q *Queries) DeriveTitleFacts(ctx context.Context, arg DeriveTitleFactsPara
 		arg.FactsVersion,
 		arg.ID,
 	)
+	return err
+}
+
+const doneWikidata = `-- name: DoneWikidata :exec
+DELETE FROM wikidata_pending WHERE qid = $1 AND (last_edited_at IS NULL OR last_edited_at < $2)
+`
+
+type DoneWikidataParams struct {
+	Qid       string
+	FetchedAt *time.Time
+}
+
+func (q *Queries) DoneWikidata(ctx context.Context, arg DoneWikidataParams) error {
+	_, err := q.db.Exec(ctx, doneWikidata, arg.Qid, arg.FetchedAt)
 	return err
 }
 
@@ -594,6 +617,36 @@ func (q *Queries) DueOutlines(ctx context.Context, limit int32) ([]DueOutlinesRo
 	return items, nil
 }
 
+const duePendingWikidata = `-- name: DuePendingWikidata :many
+SELECT qid, held, logged_out FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1
+`
+
+type DuePendingWikidataRow struct {
+	Qid       string
+	Held      []byte
+	LoggedOut bool
+}
+
+func (q *Queries) DuePendingWikidata(ctx context.Context, limit int32) ([]DuePendingWikidataRow, error) {
+	rows, err := q.db.Query(ctx, duePendingWikidata, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DuePendingWikidataRow
+	for rows.Next() {
+		var i DuePendingWikidataRow
+		if err := rows.Scan(&i.Qid, &i.Held, &i.LoggedOut); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const dueWikidata = `-- name: DueWikidata :many
 SELECT t.id, t.kind, t.tmdb_id, t.wikidata_id, t.wikidata_deleted_at,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
@@ -601,10 +654,7 @@ SELECT t.id, t.kind, t.tmdb_id, t.wikidata_id, t.wikidata_deleted_at,
 FROM titles t
 WHERE t.merged_into_id IS NULL
   AND (t.wikidata_checked_at IS NULL
-   OR t.wikidata_checked_at < now() - CASE
-        WHEN t.wikidata_id IS NULL THEN interval '30 days'
-        WHEN t.slug = 't-' || t.id THEN interval '7 days'
-        ELSE interval '90 days' END)
+   OR (t.wikidata_id IS NULL OR t.wikidata_deleted_at IS NOT NULL) AND t.wikidata_checked_at < now() - interval '30 days')
 ORDER BY t.wikidata_checked_at NULLS FIRST, t.id
 LIMIT $1
 `
@@ -742,6 +792,52 @@ func (q *Queries) ExternalIDOwner(ctx context.Context, arg ExternalIDOwnerParams
 		&i.WikidataID,
 	)
 	return i, err
+}
+
+const feedCursor = `-- name: FeedCursor :one
+SELECT cursor FROM wikidata_feed
+`
+
+func (q *Queries) FeedCursor(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRow(ctx, feedCursor)
+	var cursor time.Time
+	err := row.Scan(&cursor)
+	return cursor, err
+}
+
+const forgetFactsUnder = `-- name: ForgetFactsUnder :execrows
+WITH RECURSIVE down (qid, depth) AS (
+    SELECT $1::text, 0
+    UNION
+    SELECT c.qid, down.depth + 1 FROM wikidata_classes c JOIN down ON down.qid = ANY(c.parents)
+    WHERE down.depth < 12
+)
+UPDATE titles
+SET facts_version = NULL
+WHERE merged_into_id IS NULL AND facts_version IS NOT NULL
+  AND (SELECT array_agg(DISTINCT qid) FROM down) && (wikidata_instance_of || wikidata_genres || wikidata_countries || wikidata_languages)
+`
+
+func (q *Queries) ForgetFactsUnder(ctx context.Context, qid string) (int64, error) {
+	result, err := q.db.Exec(ctx, forgetFactsUnder, qid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const holdWikidata = `-- name: HoldWikidata :exec
+UPDATE wikidata_pending SET not_before = now() + interval '7 days', held = $2 WHERE qid = $1
+`
+
+type HoldWikidataParams struct {
+	Qid  string
+	Held []byte
+}
+
+func (q *Queries) HoldWikidata(ctx context.Context, arg HoldWikidataParams) error {
+	_, err := q.db.Exec(ctx, holdWikidata, arg.Qid, arg.Held)
+	return err
 }
 
 const jobRanSince = `-- name: JobRanSince :one
@@ -1116,6 +1212,15 @@ func (q *Queries) MoveEpisode(ctx context.Context, arg MoveEpisodeParams) error 
 	return err
 }
 
+const moveFeedCursor = `-- name: MoveFeedCursor :exec
+UPDATE wikidata_feed SET cursor = $1
+`
+
+func (q *Queries) MoveFeedCursor(ctx context.Context, cursor time.Time) error {
+	_, err := q.db.Exec(ctx, moveFeedCursor, cursor)
+	return err
+}
+
 const nameSlug = `-- name: NameSlug :execrows
 UPDATE titles t SET slug = $1, updated_at = now()
 WHERE t.id = $2 AND t.slug = 't-' || t.id AND NOT EXISTS (SELECT 1 FROM titles o WHERE o.kind = t.kind AND o.slug = $1)
@@ -1199,12 +1304,213 @@ func (q *Queries) OutlineDone(ctx context.Context, arg OutlineDoneParams) error 
 	return err
 }
 
+const pendingClasses = `-- name: PendingClasses :many
+SELECT qid, label, country, language, parents, checked_at FROM wikidata_classes WHERE qid = ANY($1::text[])
+`
+
+func (q *Queries) PendingClasses(ctx context.Context, qids []string) ([]WikidataClass, error) {
+	rows, err := q.db.Query(ctx, pendingClasses, qids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WikidataClass
+	for rows.Next() {
+		var i WikidataClass
+		if err := rows.Scan(
+			&i.Qid,
+			&i.Label,
+			&i.Country,
+			&i.Language,
+			&i.Parents,
+			&i.CheckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pendingTitles = `-- name: PendingTitles :many
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content FROM titles WHERE wikidata_id = ANY($1::text[]) AND merged_into_id IS NULL ORDER BY id
+`
+
+func (q *Queries) PendingTitles(ctx context.Context, qids []string) ([]Title, error) {
+	rows, err := q.db.Query(ctx, pendingTitles, qids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Title
+	for rows.Next() {
+		var i Title
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Slug,
+			&i.Name,
+			&i.Year,
+			&i.TmdbID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OutlineRefreshedAt,
+			&i.TmdbMissingAt,
+			&i.OriginalName,
+			&i.RuntimeMinutes,
+			&i.WikidataID,
+			&i.WikidataCheckedAt,
+			&i.MergedIntoID,
+			&i.WikidataDeletedAt,
+			&i.WikidataInstanceOf,
+			&i.WikidataGenres,
+			&i.WikidataCountries,
+			&i.WikidataLanguages,
+			&i.Sitelinks,
+			&i.Started,
+			&i.Ended,
+			&i.Genres,
+			&i.TypeFlags,
+			&i.Adult,
+			&i.Countries,
+			&i.Languages,
+			&i.FactsVersion,
+			&i.SexualContent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queueAllWikidata = `-- name: QueueAllWikidata :execrows
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before)
+SELECT qid, now(), NULL, now() FROM (
+    SELECT wikidata_id AS qid FROM titles WHERE wikidata_id IS NOT NULL AND merged_into_id IS NULL
+    UNION
+    SELECT qid FROM wikidata_classes
+) q
+ON CONFLICT (qid) DO UPDATE SET not_before = least(wikidata_pending.not_before, now()) WHERE wikidata_pending.held IS NULL
+`
+
+func (q *Queries) QueueAllWikidata(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, queueAllWikidata)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const queueWikidataEdits = `-- name: QueueWikidataEdits :execrows
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before, logged_out)
+SELECT e.qid, e.edited_at, e.last_edited_at, e.edited_at + interval '1 day', e.logged_out
+FROM (SELECT unnest($1::text[]) AS qid, unnest($2::timestamptz[]) AS edited_at, unnest($3::timestamptz[]) AS last_edited_at,
+        unnest($4::boolean[]) AS logged_out) e
+WHERE EXISTS (SELECT 1 FROM titles t WHERE t.wikidata_id = e.qid AND t.merged_into_id IS NULL)
+   OR EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = e.qid)
+ON CONFLICT (qid) DO UPDATE SET last_edited_at = greatest(wikidata_pending.last_edited_at, excluded.last_edited_at),
+    logged_out = wikidata_pending.logged_out OR excluded.logged_out
+`
+
+type QueueWikidataEditsParams struct {
+	Qids         []string
+	EditedAt     []time.Time
+	LastEditedAt []time.Time
+	LoggedOut    []bool
+}
+
+func (q *Queries) QueueWikidataEdits(ctx context.Context, arg QueueWikidataEditsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, queueWikidataEdits,
+		arg.Qids,
+		arg.EditedAt,
+		arg.LastEditedAt,
+		arg.LoggedOut,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const queueWikidataNow = `-- name: QueueWikidataNow :exec
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before)
+SELECT unnest($1::text[]), now(), NULL::timestamptz, now()
+ON CONFLICT (qid) DO UPDATE SET not_before = least(wikidata_pending.not_before, now()) WHERE wikidata_pending.held IS NULL
+`
+
+func (q *Queries) QueueWikidataNow(ctx context.Context, qids []string) error {
+	_, err := q.db.Exec(ctx, queueWikidataNow, qids)
+	return err
+}
+
+const queueWikidataRefreshes = `-- name: QueueWikidataRefreshes :execrows
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before)
+SELECT DISTINCT q.qid, now(), NULL::timestamptz, now() FROM (
+    (SELECT t.wikidata_id AS qid FROM titles t
+     WHERE t.wikidata_id IS NOT NULL AND t.merged_into_id IS NULL AND t.wikidata_deleted_at IS NULL AND t.wikidata_checked_at IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM wikidata_pending p WHERE p.qid = t.wikidata_id)
+     ORDER BY t.wikidata_checked_at, t.id
+     LIMIT $1)
+    UNION
+    (SELECT c.qid FROM wikidata_classes c
+     WHERE NOT EXISTS (SELECT 1 FROM wikidata_pending p WHERE p.qid = c.qid)
+     ORDER BY c.checked_at, c.qid
+     LIMIT $2)
+    UNION
+    SELECT t.wikidata_id FROM titles t
+    WHERE t.slug = 't-' || t.id AND t.year IS NOT NULL AND t.wikidata_id IS NOT NULL AND t.merged_into_id IS NULL
+      AND t.wikidata_deleted_at IS NULL AND t.wikidata_checked_at < now() - interval '7 days'
+) q
+WHERE q.qid IS NOT NULL
+ON CONFLICT (qid) DO NOTHING
+`
+
+type QueueWikidataRefreshesParams struct {
+	Titles  int32
+	Classes int32
+}
+
+func (q *Queries) QueueWikidataRefreshes(ctx context.Context, arg QueueWikidataRefreshesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, queueWikidataRefreshes, arg.Titles, arg.Classes)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const removeEpisode = `-- name: RemoveEpisode :exec
 UPDATE episodes SET removed_at = now() WHERE id = $1
 `
 
 func (q *Queries) RemoveEpisode(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, removeEpisode, id)
+	return err
+}
+
+const requeueWikidata = `-- name: RequeueWikidata :exec
+UPDATE wikidata_pending
+SET edited_at = last_edited_at, not_before = last_edited_at + interval '1 day', held = NULL
+WHERE qid = $1
+`
+
+func (q *Queries) RequeueWikidata(ctx context.Context, qid string) error {
+	_, err := q.db.Exec(ctx, requeueWikidata, qid)
+	return err
+}
+
+const retryWikidataLater = `-- name: RetryWikidataLater :exec
+UPDATE wikidata_pending SET not_before = now() + interval '1 hour' WHERE qid = $1
+`
+
+func (q *Queries) RetryWikidataLater(ctx context.Context, qid string) error {
+	_, err := q.db.Exec(ctx, retryWikidataLater, qid)
 	return err
 }
 
@@ -1846,6 +2152,30 @@ func (q *Queries) WikidataDeleted(ctx context.Context, id int64) error {
 	return err
 }
 
+const wikidataItemsOf = `-- name: WikidataItemsOf :many
+SELECT DISTINCT wikidata_id::text FROM titles WHERE id = ANY($1::bigint[]) AND wikidata_id IS NOT NULL
+`
+
+func (q *Queries) WikidataItemsOf(ctx context.Context, ids []int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, wikidataItemsOf, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var wikidata_id string
+		if err := rows.Scan(&wikidata_id); err != nil {
+			return nil, err
+		}
+		items = append(items, wikidata_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const wikidataMissing = `-- name: WikidataMissing :exec
 UPDATE titles SET wikidata_checked_at = now() WHERE id = $1
 `
@@ -1853,4 +2183,21 @@ UPDATE titles SET wikidata_checked_at = now() WHERE id = $1
 func (q *Queries) WikidataMissing(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, wikidataMissing, id)
 	return err
+}
+
+const wikidataRefreshSizes = `-- name: WikidataRefreshSizes :one
+SELECT (SELECT count(*) FROM titles WHERE wikidata_id IS NOT NULL AND merged_into_id IS NULL AND wikidata_deleted_at IS NULL)::bigint AS titles,
+    (SELECT count(*) FROM wikidata_classes)::bigint AS classes
+`
+
+type WikidataRefreshSizesRow struct {
+	Titles  int64
+	Classes int64
+}
+
+func (q *Queries) WikidataRefreshSizes(ctx context.Context) (WikidataRefreshSizesRow, error) {
+	row := q.db.QueryRow(ctx, wikidataRefreshSizes)
+	var i WikidataRefreshSizesRow
+	err := row.Scan(&i.Titles, &i.Classes)
+	return i, err
 }

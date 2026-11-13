@@ -87,7 +87,7 @@ func SeedTitle(ctx context.Context, db *pgxpool.Pool, kind string, w WikidataTit
 			return err
 		}
 		res.Title = t.ID
-		res.Conflicts, err = saveWikidataIn(ctx, q, t.ID, kind, w, nameHeld)
+		res.Conflicts, _, err = saveWikidataIn(ctx, q, t.ID, kind, w, nameHeld, nil)
 		return err
 	})
 	if err != nil {

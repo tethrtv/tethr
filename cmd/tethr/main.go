@@ -291,6 +291,7 @@ func serve(log *slog.Logger) error {
 	wd := &wikidata.Client{UserAgent: "Tethr/" + version + " (https://github.com/tethrtv/tethr)"}
 	go jobs.Titles{DB: db, Wikidata: wd, Log: log}.Run(ctx)
 	go jobs.Sweep{DB: db, Wikidata: wd, Log: log}.Run(ctx)
+	go jobs.Feed{DB: db, Wikidata: wd, Log: log}.Run(ctx)
 	media := &hooks.Server{DB: db, Log: log}
 	var details *meta.Server
 	var client *tmdb.Client

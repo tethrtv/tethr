@@ -270,8 +270,12 @@ func TestSlugWaitsForAWeek(t *testing.T) {
 		t.Errorf("an unreleased title should keep its ID slug: %q", got)
 	}
 	aWeekPasses(t, db)
-	if due, err := DueWikidata(ctx, db, 10); err != nil || len(due) != 1 {
-		t.Errorf("a title waiting for its slug should be looked at again within a week: %+v, %v", due, err)
+	if _, err := QueueWikidataRefreshes(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var queued bool
+	if err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM wikidata_pending WHERE qid = 'Q3' AND not_before <= now())`).Scan(&queued); err != nil || !queued {
+		t.Errorf("a title waiting for its slug should be looked at again within a week: %v", err)
 	}
 	if got := save("Supermen", yesterday); got != placeholder {
 		t.Errorf("a name seen once shouldn't become a slug: %q", got)
