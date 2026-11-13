@@ -448,8 +448,22 @@ type WikidataClass struct {
 	CheckedAt time.Time
 }
 
+type WikidataFeed struct {
+	One    bool
+	Cursor time.Time
+}
+
 type WikidataLeftOut struct {
 	Qid       string
 	Reason    string
 	CheckedAt time.Time
+}
+
+type WikidataPending struct {
+	Qid          string
+	EditedAt     time.Time
+	LastEditedAt *time.Time
+	NotBefore    time.Time
+	LoggedOut    bool
+	Held         []byte
 }

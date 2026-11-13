@@ -270,6 +270,22 @@ func SaveClasses(ctx context.Context, db *pgxpool.Pool, cs []WikidataClass) erro
 	return nil
 }
 
+func ClassMeaning(ctx context.Context, db *pgxpool.Pool, qid string) (string, error) {
+	q := []string{qid}
+	cs, err := loadClasses(ctx, store.New(db), rawFacts{InstanceOf: q})
+	if err != nil {
+		return "", err
+	}
+	var parts []any
+	for _, m := range []classMap{genreMap, typeMap, adultMap, sexualMap} {
+		tags, complete := cs.tags(m, q)
+		parts = append(parts, tags, complete)
+	}
+	country, _ := cs.code(countryMap, qid, func(c store.ClassAncestryRow) string { return c.Country })
+	language, _ := cs.code(languageMap, qid, func(c store.ClassAncestryRow) string { return c.Language })
+	return fmt.Sprint(append(parts, country, language)...), nil
+}
+
 func OutdatedFacts(ctx context.Context, db *pgxpool.Pool, limit int32) ([]store.OutdatedFactsRow, error) {
 	return store.New(db).OutdatedFacts(ctx, store.OutdatedFactsParams{Version: &factsVersion, MaxTitles: limit})
 }

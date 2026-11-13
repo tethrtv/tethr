@@ -95,14 +95,13 @@ func TestDueWikidataUnmatchedMonthly(t *testing.T) {
 	if _, err := db.Exec(ctx, "UPDATE titles SET wikidata_checked_at = now() - interval '8 days'"); err != nil {
 		t.Fatal(err)
 	}
-	due, err := DueWikidata(ctx, db, 10)
-	if err != nil || len(due) != 1 || due[0].ID != waiting[0].Title.ID {
-		t.Errorf("after a week only the title waiting for its slug should be due: %+v, %v", due, err)
+	if due, err := DueWikidata(ctx, db, 10); err != nil || len(due) != 0 {
+		t.Errorf("after a week nothing should be due here, matched titles follow the edit feed: %+v, %v", due, err)
 	}
 	if _, err := db.Exec(ctx, "UPDATE titles SET wikidata_checked_at = now() - interval '31 days' WHERE id = $1", unmatched[0].Title.ID); err != nil {
 		t.Fatal(err)
 	}
-	if due, err := DueWikidata(ctx, db, 10); err != nil || len(due) != 2 {
+	if due, err := DueWikidata(ctx, db, 10); err != nil || len(due) != 1 || due[0].ID != unmatched[0].Title.ID {
 		t.Errorf("a title Wikidata didn't know should be asked again after a month: %+v, %v", due, err)
 	}
 }

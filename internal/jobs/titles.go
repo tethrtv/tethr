@@ -97,6 +97,14 @@ func (j Titles) Refresh(ctx context.Context) error {
 			all = all[n:]
 		}
 	}
+	if err := j.queue(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	if err := j.edits(ctx); errors.Is(err, wikidata.ErrBusy) {
+		return errors.Join(append(errs, err)...)
+	} else if err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(append(errs, j.rederive(ctx))...)
 }
 

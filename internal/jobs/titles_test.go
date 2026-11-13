@@ -121,6 +121,9 @@ func TestRefreshTitles(t *testing.T) {
 	defer fake.Close()
 
 	job := Titles{DB: db, Wikidata: &wikidata.Client{BaseURL: fake.URL, APIURL: fake.URL}, Log: slog.New(slog.DiscardHandler)}
+	if err := core.MarkJobRun(ctx, db, refreshJob); err != nil {
+		t.Fatal(err)
+	}
 	if err := job.Refresh(ctx); !errors.Is(err, wikidata.ErrBusy) || len(queries) != 1 {
 		t.Errorf("a busy Wikidata should stop the run after one request: %v, %v", queries, err)
 	}
@@ -181,14 +184,14 @@ func TestRefreshTitles(t *testing.T) {
 		t.Errorf("titles just checked shouldn't be asked for again: %d queries, %d fetches, %v", len(queries), len(fetches), err)
 	}
 
-	if _, err := db.Exec(ctx, `UPDATE titles SET wikidata_checked_at = now() - interval '91 days' WHERE wikidata_id = 'Q83495'`); err != nil {
+	if _, err := db.Exec(ctx, `INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before) VALUES ('Q83495', now() - interval '1 day', now() - interval '1 day', now())`); err != nil {
 		t.Fatal(err)
 	}
 	if err := job.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if len(queries) != 0 || len(fetches) != 1 || fetches[0] != "Q83495" {
-		t.Errorf("a title with an item should be fetched by it, not looked up again: %v, %v", queries, fetches)
+		t.Errorf("an edited item should be fetched by it, not looked up again: %v, %v", queries, fetches)
 	}
 	items, err = core.LookUp(ctx, db, "movie", core.IDs{TMDB: 603}, false)
 	if err != nil || len(items) != 1 {
@@ -204,7 +207,7 @@ func TestRefreshTitles(t *testing.T) {
 
 	matrix = "Q999"
 	queries, fetches = nil, nil
-	if _, err := db.Exec(ctx, `UPDATE titles SET wikidata_checked_at = now() - interval '91 days' WHERE wikidata_id = 'Q83495'`); err != nil {
+	if _, err := db.Exec(ctx, `UPDATE titles SET wikidata_checked_at = now() - interval '31 days' WHERE wikidata_id = 'Q83495'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := job.Refresh(ctx); err != nil {

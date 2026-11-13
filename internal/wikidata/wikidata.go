@@ -248,12 +248,16 @@ type snak struct {
 	} `json:"datavalue"`
 }
 
-func (e entity) readable() bool {
-	used := []string{"P31", "P136", "P279", "P297", "P218", "P305", "P364", "P495", "P577", "P580", "P582", "P1476", "P2047", "P4947", "P4983"}
+func readProperties() []string {
+	read := []string{"P31", "P136", "P279", "P297", "P218", "P305", "P364", "P495", "P577", "P580", "P582", "P1476", "P2047", "P4947", "P4983"}
 	for _, id := range outsideIDs {
-		used = append(used, id.movie, id.show)
+		read = append(read, id.movie, id.show)
 	}
-	for _, p := range used {
+	return read
+}
+
+func (e entity) readable() bool {
+	for _, p := range readProperties() {
 		var all []struct {
 			MainSnak snak   `json:"mainsnak"`
 			Rank     string `json:"rank"`

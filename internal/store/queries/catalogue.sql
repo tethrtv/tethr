@@ -160,10 +160,7 @@ SELECT t.id, t.kind, t.tmdb_id, t.wikidata_id, t.wikidata_deleted_at,
 FROM titles t
 WHERE t.merged_into_id IS NULL
   AND (t.wikidata_checked_at IS NULL
-   OR t.wikidata_checked_at < now() - CASE
-        WHEN t.wikidata_id IS NULL THEN interval '30 days'
-        WHEN t.slug = 't-' || t.id THEN interval '7 days'
-        ELSE interval '90 days' END)
+   OR (t.wikidata_id IS NULL OR t.wikidata_deleted_at IS NOT NULL) AND t.wikidata_checked_at < now() - interval '30 days')
 ORDER BY t.wikidata_checked_at NULLS FIRST, t.id
 LIMIT $1;
 
@@ -401,3 +398,99 @@ SELECT EXISTS (SELECT 1 FROM job_runs WHERE name = $1 AND ran_at > $2);
 -- name: MarkJobRun :exec
 INSERT INTO job_runs (name, ran_at) VALUES ($1, now())
 ON CONFLICT (name) DO UPDATE SET ran_at = now();
+
+-- name: FeedCursor :one
+SELECT cursor FROM wikidata_feed;
+
+-- name: MoveFeedCursor :exec
+UPDATE wikidata_feed SET cursor = $1;
+
+-- name: QueueWikidataEdits :execrows
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before, logged_out)
+SELECT e.qid, e.edited_at, e.last_edited_at, e.edited_at + interval '1 day', e.logged_out
+FROM (SELECT unnest(@qids::text[]) AS qid, unnest(@edited_at::timestamptz[]) AS edited_at, unnest(@last_edited_at::timestamptz[]) AS last_edited_at,
+        unnest(@logged_out::boolean[]) AS logged_out) e
+WHERE EXISTS (SELECT 1 FROM titles t WHERE t.wikidata_id = e.qid AND t.merged_into_id IS NULL)
+   OR EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = e.qid)
+ON CONFLICT (qid) DO UPDATE SET last_edited_at = greatest(wikidata_pending.last_edited_at, excluded.last_edited_at),
+    logged_out = wikidata_pending.logged_out OR excluded.logged_out;
+
+-- name: QueueAllWikidata :execrows
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before)
+SELECT qid, now(), NULL, now() FROM (
+    SELECT wikidata_id AS qid FROM titles WHERE wikidata_id IS NOT NULL AND merged_into_id IS NULL
+    UNION
+    SELECT qid FROM wikidata_classes
+) q
+ON CONFLICT (qid) DO UPDATE SET not_before = least(wikidata_pending.not_before, now()) WHERE wikidata_pending.held IS NULL;
+
+-- name: QueueWikidataRefreshes :execrows
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before)
+SELECT DISTINCT q.qid, now(), NULL::timestamptz, now() FROM (
+    (SELECT t.wikidata_id AS qid FROM titles t
+     WHERE t.wikidata_id IS NOT NULL AND t.merged_into_id IS NULL AND t.wikidata_deleted_at IS NULL AND t.wikidata_checked_at IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM wikidata_pending p WHERE p.qid = t.wikidata_id)
+     ORDER BY t.wikidata_checked_at, t.id
+     LIMIT @titles)
+    UNION
+    (SELECT c.qid FROM wikidata_classes c
+     WHERE NOT EXISTS (SELECT 1 FROM wikidata_pending p WHERE p.qid = c.qid)
+     ORDER BY c.checked_at, c.qid
+     LIMIT @classes)
+    UNION
+    SELECT t.wikidata_id FROM titles t
+    WHERE t.slug = 't-' || t.id AND t.year IS NOT NULL AND t.wikidata_id IS NOT NULL AND t.merged_into_id IS NULL
+      AND t.wikidata_deleted_at IS NULL AND t.wikidata_checked_at < now() - interval '7 days'
+) q
+WHERE q.qid IS NOT NULL
+ON CONFLICT (qid) DO NOTHING;
+
+-- name: WikidataRefreshSizes :one
+SELECT (SELECT count(*) FROM titles WHERE wikidata_id IS NOT NULL AND merged_into_id IS NULL AND wikidata_deleted_at IS NULL)::bigint AS titles,
+    (SELECT count(*) FROM wikidata_classes)::bigint AS classes;
+
+-- name: DuePendingWikidata :many
+SELECT qid, held, logged_out FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1;
+
+-- name: PendingTitles :many
+SELECT * FROM titles WHERE wikidata_id = ANY(@qids::text[]) AND merged_into_id IS NULL ORDER BY id;
+
+-- name: PendingClasses :many
+SELECT * FROM wikidata_classes WHERE qid = ANY(@qids::text[]);
+
+-- name: HoldWikidata :exec
+UPDATE wikidata_pending SET not_before = now() + interval '7 days', held = $2 WHERE qid = $1;
+
+-- name: QueueWikidataNow :exec
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before)
+SELECT unnest(@qids::text[]), now(), NULL::timestamptz, now()
+ON CONFLICT (qid) DO UPDATE SET not_before = least(wikidata_pending.not_before, now()) WHERE wikidata_pending.held IS NULL;
+
+-- name: DoneWikidata :exec
+DELETE FROM wikidata_pending WHERE qid = @qid AND (last_edited_at IS NULL OR last_edited_at < @fetched_at);
+
+-- name: ClassChecked :exec
+UPDATE wikidata_classes SET checked_at = now() WHERE qid = $1;
+
+-- name: RetryWikidataLater :exec
+UPDATE wikidata_pending SET not_before = now() + interval '1 hour' WHERE qid = $1;
+
+-- name: RequeueWikidata :exec
+UPDATE wikidata_pending
+SET edited_at = last_edited_at, not_before = last_edited_at + interval '1 day', held = NULL
+WHERE qid = $1;
+
+-- name: ForgetFactsUnder :execrows
+WITH RECURSIVE down (qid, depth) AS (
+    SELECT @qid::text, 0
+    UNION
+    SELECT c.qid, down.depth + 1 FROM wikidata_classes c JOIN down ON down.qid = ANY(c.parents)
+    WHERE down.depth < 12
+)
+UPDATE titles
+SET facts_version = NULL
+WHERE merged_into_id IS NULL AND facts_version IS NOT NULL
+  AND (SELECT array_agg(DISTINCT qid) FROM down) && (wikidata_instance_of || wikidata_genres || wikidata_countries || wikidata_languages);
+
+-- name: WikidataItemsOf :many
+SELECT DISTINCT wikidata_id::text FROM titles WHERE id = ANY(@ids::bigint[]) AND wikidata_id IS NOT NULL;

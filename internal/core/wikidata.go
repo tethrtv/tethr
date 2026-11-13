@@ -36,6 +36,8 @@ type WikidataTitle struct {
 	OtherNames map[string]string
 }
 
+const LeftWithAnotherItem = "left with another item's title"
+
 type IDConflict struct {
 	Import   int64
 	Title    int64
@@ -65,7 +67,7 @@ func saveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 	var conflicts []IDConflict
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		var err error
-		conflicts, err = saveWikidataIn(ctx, store.New(tx), titleID, kind, w, nameHeld)
+		conflicts, _, err = saveWikidataIn(ctx, store.New(tx), titleID, kind, w, nameHeld, nil)
 		return err
 	})
 	if err != nil {
@@ -74,16 +76,17 @@ func saveWikidata(ctx context.Context, db *pgxpool.Pool, titleID int64, kind str
 	return conflicts, nil
 }
 
-func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind string, w WikidataTitle, nameHeld bool) ([]IDConflict, error) {
+func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind string, w WikidataTitle, nameHeld bool, keepName func(old, new string) bool) ([]IDConflict, string, error) {
 	var conflicts []IDConflict
+	kept := ""
 	before, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
 	if err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	raw := rawFacts{Kind: kind, Runtime: w.Runtime, InstanceOf: orEmpty(w.InstanceOf), Genres: orEmpty(w.Genres), Countries: orEmpty(w.Countries), Languages: orEmpty(w.Languages)}
 	cs, err := loadClasses(ctx, q, raw)
 	if err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	facts := deriveFacts(cs, raw)
 	slugName := w.Name
@@ -93,6 +96,9 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 			slugName = name
 		}
 	}
+	if keepName != nil && before.Name != nil && w.Name != "" && w.Name != *before.Name && keepName(*before.Name, w.Name) {
+		kept, w.Name, slugName = w.Name, *before.Name, *before.Name
+	}
 	err = q.SaveTitleFacts(ctx, store.SaveTitleFactsParams{
 		ID: titleID, InstanceOf: raw.InstanceOf, RawGenres: raw.Genres, RawCountries: raw.Countries, RawLanguages: raw.Languages,
 		Sitelinks: int32(w.Sitelinks), Started: text(w.Started), Ended: text(w.Ended),
@@ -100,7 +106,7 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 		Countries: orEmpty(facts.Countries), Languages: orEmpty(facts.Languages), FactsVersion: version(facts),
 	})
 	if err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	params := store.SaveWikidataParams{ID: titleID, WikidataID: &w.QID, Name: text(w.Name), OriginalName: text(w.Original)}
 	if w.Year > 0 {
@@ -112,19 +118,19 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 		params.RuntimeMinutes = &runtime
 	}
 	if err := q.SaveWikidata(ctx, params); err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	t, err := q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
 	if err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	if settled(before, w) || nameHeld && !w.Released.IsZero() && !w.Released.After(time.Now()) {
 		if err := nameSlug(ctx, q, t, slugName, w.Year); err != nil {
-			return conflicts, err
+			return conflicts, kept, err
 		}
 	}
 	if err := fillTMDB(ctx, q, t, w.TMDB); err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	tmdb := strconv.Itoa(int(w.TMDB))
 	switch {
@@ -136,30 +142,30 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 		case err != nil:
-			return conflicts, err
+			return conflicts, kept, err
 		case holder.ID != t.ID && holder.MergedIntoID == nil && (holder.WikidataID == nil || *holder.WikidataID != w.QID):
 			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Other: holder.ID, Outcome: "left with another title"})
 		}
 	}
 	if conflicts, err = syncIDs(ctx, q, t, w, conflicts); err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 
 	t, err = q.TitleByID(ctx, store.TitleByIDParams{ID: titleID, Kind: kind})
 	if err != nil || t.MergedIntoID != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	other, err := q.TitleSharingWikidata(ctx, store.TitleSharingWikidataParams{Kind: kind, WikidataID: &w.QID, ID: titleID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return conflicts, nil
+		return conflicts, kept, nil
 	}
 	if err != nil {
-		return conflicts, err
+		return conflicts, kept, err
 	}
 	if t.TmdbID != nil && other.TmdbID != nil && *t.TmdbID != *other.TmdbID {
 		conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: strconv.Itoa(int(*other.TmdbID)), Other: other.ID, Outcome: "merged two of one item's"})
 	}
-	return conflicts, mergeTitle(ctx, q, kind, max(t.ID, other.ID), min(t.ID, other.ID))
+	return conflicts, kept, mergeTitle(ctx, q, kind, max(t.ID, other.ID), min(t.ID, other.ID))
 }
 
 func syncIDs(ctx context.Context, q *store.Queries, t store.Title, w WikidataTitle, conflicts []IDConflict) ([]IDConflict, error) {
@@ -185,7 +191,7 @@ func syncIDs(ctx context.Context, q *store.Queries, t store.Title, w WikidataTit
 			continue
 		case owner.TitleID == t.ID, owner.Kind == t.Kind && owner.WikidataID != nil && *owner.WikidataID == w.QID:
 		case owner.Source == "wikidata":
-			conflicts = append(conflicts, IDConflict{Provider: c[0], Value: c[1], Other: owner.TitleID, Outcome: "left with another item's title"})
+			conflicts = append(conflicts, IDConflict{Provider: c[0], Value: c[1], Other: owner.TitleID, Outcome: LeftWithAnotherItem})
 			continue
 		default:
 			conflicts = append(conflicts, IDConflict{Provider: c[0], Value: c[1], Other: owner.TitleID, Outcome: "took from an app's pairing"})
