@@ -346,11 +346,11 @@ func (e entity) title(kind string) Title {
 	}
 
 	t.Name = trimDisambiguator(e.name(t.Original), t.Year)
-	if e.Labels["en"].Value == "" && e.Labels["mul"].Value == "" && t.Original == "" {
+	if e.label("en") == "" && e.label("mul") == "" && t.Original == "" {
 		t.OtherNames = map[string]string{}
-		for lang, l := range e.Labels {
-			if l.Value != "" {
-				t.OtherNames[lang] = trimDisambiguator(l.Value, t.Year)
+		for lang := range e.Labels {
+			if v := e.label(lang); v != "" {
+				t.OtherNames[lang] = trimDisambiguator(v, t.Year)
 			}
 		}
 	}
@@ -393,24 +393,32 @@ func (e entity) title(kind string) Title {
 
 var fallbackLanguages = []string{"en-gb", "en-ca", "en-us", "fr", "de", "es", "it", "nl", "pt", "sv", "da", "nb", "pl", "cs", "ca", "ga", "cy"}
 
-func (e entity) name(original string) string {
-	if v := e.Labels["en"].Value; v != "" {
+// Some batch edits set an item's label to its own ID.
+func (e entity) label(lang string) string {
+	if v := e.Labels[lang].Value; v != e.ID {
 		return v
 	}
-	if v := e.Labels["mul"].Value; v != "" {
+	return ""
+}
+
+func (e entity) name(original string) string {
+	if v := e.label("en"); v != "" {
+		return v
+	}
+	if v := e.label("mul"); v != "" {
 		return v
 	}
 	if original != "" {
 		return original
 	}
 	for _, l := range fallbackLanguages {
-		if v := e.Labels[l].Value; v != "" {
+		if v := e.label(l); v != "" {
 			return v
 		}
 	}
 	langs := make([]string, 0, len(e.Labels))
-	for l, v := range e.Labels {
-		if v.Value != "" {
+	for l := range e.Labels {
+		if e.label(l) != "" {
 			langs = append(langs, l)
 		}
 	}
@@ -418,7 +426,7 @@ func (e entity) name(original string) string {
 		return ""
 	}
 	sort.Strings(langs)
-	return e.Labels[langs[0]].Value
+	return e.label(langs[0])
 }
 
 func trimDisambiguator(name string, year int) string {

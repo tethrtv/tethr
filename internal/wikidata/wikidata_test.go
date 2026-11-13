@@ -275,3 +275,22 @@ func TestFetchClasses(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnIDIsNoName(t *testing.T) {
+	read := func(raw string) Title {
+		var e entity
+		if err := json.Unmarshal([]byte(raw), &e); err != nil {
+			t.Fatal(err)
+		}
+		return e.title("movie")
+	}
+	if w := read(`{"id":"Q167726","labels":{"en":{"value":"Q167726"},"mul":{"value":"Jurassic Park"}}}`); w.Name != "Jurassic Park" {
+		t.Errorf("an English label set to the item's own ID should be passed over: %q", w.Name)
+	}
+	if w := read(`{"id":"Q591320","labels":{"en":{"value":"Q591320"},"de":{"value":"Firelight"}}}`); w.Name != "Firelight" || len(w.OtherNames) != 1 {
+		t.Errorf("with only its own ID in English, any other language will do: %q %v", w.Name, w.OtherNames)
+	}
+	if w := read(`{"id":"Q1054634","labels":{"en":{"value":"Q10"}}}`); w.Name != "Q10" {
+		t.Errorf("another item's ID can still be a real name: %q", w.Name)
+	}
+}
