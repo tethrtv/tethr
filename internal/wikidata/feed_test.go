@@ -21,7 +21,7 @@ func TestRecentChanges(t *testing.T) {
 		}
 		if q.Get("rccontinue") == "" {
 			_, _ = w.Write([]byte(`{"continue":{"rccontinue":"20261110165200|123"},"query":{"recentchanges":[
-				{"type":"edit","title":"Q83495","timestamp":"2026-11-10T16:51:00Z","user":"Someone","comment":"/* wbsetlabel-set:1|en */ The Matrix"},
+				{"type":"edit","title":"Q83495","timestamp":"2026-11-10T16:51:00Z","user":"Someone","comment":"/* wbsetlabel-set:1|en */ The Matrix, #quickstatements; #temporary_batch_1794099579519"},
 				{"type":"edit","title":"Q83495","timestamp":"2026-11-10T16:51:30Z","user":"~2026-59816-69","temp":"","comment":"/* wbsetdescription-add:1|fr */ film"}
 			]}}`))
 			return
@@ -40,7 +40,7 @@ func TestRecentChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Change{
-		{QID: "Q83495", At: time.Date(2026, 11, 10, 16, 51, 0, 0, time.UTC), Relevant: true},
+		{QID: "Q83495", At: time.Date(2026, 11, 10, 16, 51, 0, 0, time.UTC), Relevant: true, Batch: "QSv2T/1794099579519"},
 		{QID: "Q83495", At: time.Date(2026, 11, 10, 16, 51, 30, 0, time.UTC), LoggedOut: true},
 	}
 	if len(changes) != len(want) || changes[0] != want[0] || changes[1] != want[1] || next != "20261110165200|123" {
@@ -85,5 +85,22 @@ func TestRelevantEdit(t *testing.T) {
 		if got := relevantEdit(tc.comment); got != tc.want {
 			t.Errorf("relevantEdit(%q) = %v, want %v", tc.comment, got, tc.want)
 		}
+	}
+}
+
+func TestEditBatch(t *testing.T) {
+	for comment, want := range map[string]string{
+		"/* wbsetclaim-update:2||1 */ [[Property:P31]]: [[Q21191270]], #quickstatements; [[:toollabs:quickstatements/#/batch/294922|batch #294922]] by [[User:Someone|]]": "QSv2/294922",
+		"/* wbsetlabel-set:1|en */ Q1234, #quickstatements; #temporary_batch_1794099579519":                                                                               "QSv2T/1794099579519",
+		"/* wbsetclaim-create:2||1 */ [[Property:P31]]: [[Q5]], ([[:toollabs:editgroups/b/OR/7d3c2e1f0a|details]])":                                                       "OR/7d3c2e1f0a",
+		"/* wbsetlabel-set:1|en */ The Matrix": "",
+		"":                                     "",
+	} {
+		if got := editBatch(comment); got != want {
+			t.Errorf("editBatch(%q) = %q, want %q", comment, got, want)
+		}
+	}
+	if got := BatchURL("QSv2/294922"); got != "https://editgroups.toolforge.org/b/QSv2/294922/" {
+		t.Errorf("BatchURL = %q", got)
 	}
 }

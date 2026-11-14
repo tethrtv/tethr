@@ -16,6 +16,7 @@ type Change struct {
 	At        time.Time
 	Relevant  bool
 	LoggedOut bool
+	Batch     string
 }
 
 func (c *Client) RecentChanges(ctx context.Context, from, to time.Time, cont string) ([]Change, string, error) {
@@ -56,7 +57,7 @@ func (c *Client) RecentChanges(ctx context.Context, from, to time.Time, cont str
 			return nil, "", fmt.Errorf("wikidata api: change to %s: %w", rc.Title, err)
 		}
 		loggedOut := rc.Anon != nil || rc.Temp != nil || strings.HasPrefix(rc.User, "~") || net.ParseIP(rc.User) != nil
-		changes = append(changes, Change{QID: rc.Title, At: at, Relevant: rc.Type == "log" || relevantEdit(rc.Comment), LoggedOut: loggedOut})
+		changes = append(changes, Change{QID: rc.Title, At: at, Relevant: rc.Type == "log" || relevantEdit(rc.Comment), LoggedOut: loggedOut, Batch: editBatch(rc.Comment)})
 	}
 	return changes, res.Continue.RC, nil
 }
@@ -64,7 +65,28 @@ func (c *Client) RecentChanges(ctx context.Context, from, to time.Time, cont str
 var (
 	editAction   = regexp.MustCompile(`^/\* *([a-z-]+)`)
 	editProperty = regexp.MustCompile(`\[\[Property:(P[0-9]+)\]\]`)
+	editBatches  = []struct {
+		pattern *regexp.Regexp
+		tool    string
+	}{
+		{regexp.MustCompile(`quickstatements/#/batch/([0-9]+)`), "QSv2/"},
+		{regexp.MustCompile(`#temporary_batch_([0-9]+)`), "QSv2T/"},
+		{regexp.MustCompile(`editgroups/b/([A-Za-z0-9]+/[A-Za-z0-9]+)`), ""},
+	}
 )
+
+func editBatch(comment string) string {
+	for _, b := range editBatches {
+		if m := b.pattern.FindStringSubmatch(comment); m != nil {
+			return b.tool + m[1]
+		}
+	}
+	return ""
+}
+
+func BatchURL(batch string) string {
+	return "https://editgroups.toolforge.org/b/" + batch + "/"
+}
 
 func relevantEdit(comment string) bool {
 	m := editAction.FindStringSubmatch(comment)

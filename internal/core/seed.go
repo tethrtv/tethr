@@ -152,3 +152,15 @@ func JobRanSince(ctx context.Context, db *pgxpool.Pool, name string, since time.
 func MarkJobRun(ctx context.Context, db *pgxpool.Pool, name string) error {
 	return store.New(db).MarkJobRun(ctx, name)
 }
+
+func JobLastRun(ctx context.Context, db *pgxpool.Pool, name string) (time.Time, error) {
+	at, err := store.New(db).JobLastRun(ctx, name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	return at, err
+}
+
+func MarkJobRanAt(ctx context.Context, db *pgxpool.Pool, name string, at time.Time) error {
+	return store.New(db).MarkJobRanAt(ctx, store.MarkJobRanAtParams{Name: name, RanAt: at})
+}

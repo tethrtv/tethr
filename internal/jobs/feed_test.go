@@ -41,7 +41,7 @@ INSERT INTO wikidata_classes (qid, label) VALUES ('Q11424', 'film')`); err != ni
 			return
 		}
 		_, _ = fmt.Fprintf(w, `{"query":{"recentchanges":[
-			{"type":"edit","title":"Q83495","timestamp":%q,"comment":"/* wbsetclaim-update:2||1 */ [[Property:P577]]: 1999"},
+			{"type":"edit","title":"Q83495","timestamp":%q,"comment":"/* wbsetclaim-update:2||1 */ [[Property:P577]]: 1999, [[:toollabs:quickstatements/#/batch/294922|batch #294922]]"},
 			{"type":"edit","title":"Q11424","timestamp":%q,"comment":"/* wbsetclaim-create:2||1 */ [[Property:P279]]: [[Q2431196]]"},
 			{"type":"edit","title":"Q1079","timestamp":%q,"comment":"/* wbsetaliases-add:1|en */ BB"}
 		]}}`, at(4*time.Minute), at(5*time.Minute), at(6*time.Minute))
@@ -64,6 +64,10 @@ INSERT INTO wikidata_classes (qid, label) VALUES ('Q11424', 'film')`); err != ni
 			t.Fatal(err)
 		}
 		pending[q] = nb
+	}
+	var batch *string
+	if err := db.QueryRow(ctx, `SELECT batch FROM wikidata_pending WHERE qid = 'Q83495'`).Scan(&batch); err != nil || batch == nil || *batch != "QSv2/294922" {
+		t.Errorf("batch = %v, %v, want the batch named in the edit summary kept", batch, err)
 	}
 	loggedOut := map[string]bool{}
 	lrows, err := db.Query(ctx, `SELECT qid, logged_out FROM wikidata_pending`)

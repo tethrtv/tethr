@@ -36,7 +36,11 @@ type WikidataTitle struct {
 	OtherNames map[string]string
 }
 
-const LeftWithAnotherItem = "left with another item's title"
+const (
+	LeftWithAnotherItem  = "left with another item's title"
+	LeftWithAnotherTitle = "left with another title"
+	KeptTitlesOwn        = "kept the title's own"
+)
 
 type IDConflict struct {
 	Import   int64
@@ -136,7 +140,7 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 	switch {
 	case w.TMDB == 0:
 	case t.TmdbID != nil && *t.TmdbID != w.TMDB:
-		conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Outcome: "kept the title's own"})
+		conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Outcome: KeptTitlesOwn})
 	case t.TmdbID == nil:
 		holder, err := q.TitleByTMDB(ctx, store.TitleByTMDBParams{TmdbID: &w.TMDB, Kind: kind})
 		switch {
@@ -144,7 +148,7 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 		case err != nil:
 			return conflicts, kept, err
 		case holder.ID != t.ID && holder.MergedIntoID == nil && (holder.WikidataID == nil || *holder.WikidataID != w.QID):
-			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Other: holder.ID, Outcome: "left with another title"})
+			conflicts = append(conflicts, IDConflict{Provider: "tmdb", Value: tmdb, Other: holder.ID, Outcome: LeftWithAnotherTitle})
 		}
 	}
 	if conflicts, err = syncIDs(ctx, q, t, w, conflicts); err != nil {

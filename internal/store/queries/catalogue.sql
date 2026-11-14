@@ -399,6 +399,13 @@ SELECT EXISTS (SELECT 1 FROM job_runs WHERE name = $1 AND ran_at > $2);
 INSERT INTO job_runs (name, ran_at) VALUES ($1, now())
 ON CONFLICT (name) DO UPDATE SET ran_at = now();
 
+-- name: JobLastRun :one
+SELECT ran_at FROM job_runs WHERE name = $1;
+
+-- name: MarkJobRanAt :exec
+INSERT INTO job_runs (name, ran_at) VALUES ($1, $2)
+ON CONFLICT (name) DO UPDATE SET ran_at = excluded.ran_at;
+
 -- name: FeedCursor :one
 SELECT cursor FROM wikidata_feed;
 
@@ -406,14 +413,14 @@ SELECT cursor FROM wikidata_feed;
 UPDATE wikidata_feed SET cursor = $1;
 
 -- name: QueueWikidataEdits :execrows
-INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before, logged_out)
-SELECT e.qid, e.edited_at, e.last_edited_at, e.edited_at + interval '1 day', e.logged_out
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before, logged_out, batch)
+SELECT e.qid, e.edited_at, e.last_edited_at, e.edited_at + interval '1 day', e.logged_out, nullif(e.batch, '')
 FROM (SELECT unnest(@qids::text[]) AS qid, unnest(@edited_at::timestamptz[]) AS edited_at, unnest(@last_edited_at::timestamptz[]) AS last_edited_at,
-        unnest(@logged_out::boolean[]) AS logged_out) e
+        unnest(@logged_out::boolean[]) AS logged_out, unnest(@batch::text[]) AS batch) e
 WHERE EXISTS (SELECT 1 FROM titles t WHERE t.wikidata_id = e.qid AND t.merged_into_id IS NULL)
    OR EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = e.qid)
 ON CONFLICT (qid) DO UPDATE SET last_edited_at = greatest(wikidata_pending.last_edited_at, excluded.last_edited_at),
-    logged_out = wikidata_pending.logged_out OR excluded.logged_out;
+    logged_out = wikidata_pending.logged_out OR excluded.logged_out, batch = coalesce(wikidata_pending.batch, excluded.batch);
 
 -- name: QueueAllWikidata :execrows
 INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before)
@@ -450,7 +457,7 @@ SELECT (SELECT count(*) FROM titles WHERE wikidata_id IS NOT NULL AND merged_int
     (SELECT count(*) FROM wikidata_classes)::bigint AS classes;
 
 -- name: DuePendingWikidata :many
-SELECT qid, held, logged_out FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1;
+SELECT qid, held, logged_out, batch FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1;
 
 -- name: PendingTitles :many
 SELECT * FROM titles WHERE wikidata_id = ANY(@qids::text[]) AND merged_into_id IS NULL ORDER BY id;
