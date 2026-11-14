@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,6 +49,8 @@ func main() {
 			run = app
 		case "report":
 			run = report
+		case "review":
+			run = review
 		case "official":
 			run = official
 		case "seed":
@@ -70,6 +73,91 @@ func migrate(log *slog.Logger) error {
 	}
 	log.Info("database is up to date")
 	return nil
+}
+
+func review(*slog.Logger) error {
+	usage := errors.New("usage: tethr review [batch <batch> | accept <id or batch> | dismiss <id or batch> <reason>]")
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	args := os.Args[2:]
+	if len(args) == 0 || args[0] == "batch" {
+		entries, err := core.OpenReview(ctx, db)
+		if err != nil {
+			return err
+		}
+		if len(args) > 1 {
+			entries = slices.DeleteFunc(entries, func(e core.ReviewEntry) bool { return e.Batch != args[1] })
+		}
+		printReview(entries, len(args) == 0)
+		return nil
+	}
+	if len(args) < 2 {
+		return usage
+	}
+	switch {
+	case args[0] == "accept":
+		n, err := core.AcceptReview(ctx, db, args[1])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Took Wikidata's name for %d %s.\n", n, plural(n, "title", "titles"))
+	case args[0] == "dismiss" && len(args) > 2:
+		n, err := core.DismissReview(ctx, db, args[1], strings.Join(args[2:], " "))
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Dismissed %d %s.\n", n, plural(n, "entry", "entries"))
+	default:
+		return usage
+	}
+	return nil
+}
+
+func printReview(entries []core.ReviewEntry, collapse bool) {
+	if len(entries) == 0 {
+		fmt.Println("Nothing to review.")
+		return
+	}
+	batches := map[[2]string][]core.ReviewEntry{}
+	for _, e := range entries {
+		if e.Batch != "" {
+			k := [2]string{e.Kind, e.Batch}
+			batches[k] = append(batches[k], e)
+		}
+	}
+	kind := ""
+	for _, e := range entries {
+		if e.Kind != kind {
+			kind = e.Kind
+			n := 0
+			for _, o := range entries {
+				if o.Kind == kind {
+					n++
+				}
+			}
+			fmt.Printf("\n%s\n", core.ReviewCount(kind, n))
+		}
+		if collapse && e.Batch != "" {
+			k := [2]string{e.Kind, e.Batch}
+			if b, ok := batches[k]; ok {
+				fmt.Printf("  %s: %s  %s\n", e.Batch, core.BatchSummary(e.Kind, b), wikidata.BatchURL(e.Batch))
+				delete(batches, k)
+			}
+			continue
+		}
+		fmt.Printf("  %d  %s  %s\n", e.ID, e.Describe(), core.WikidataURL(e.QID))
+	}
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func seed(log *slog.Logger) error {

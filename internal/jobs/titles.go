@@ -159,16 +159,15 @@ func (j Titles) fetch(ctx context.Context, kind string, titles []store.DueWikida
 		w, ok := found[*t.WikidataID]
 		switch {
 		case ok:
-			var conflicts []core.IDConflict
-			conflicts, err = core.SaveWikidata(ctx, j.DB, t.ID, t.Kind, core.WikidataTitle(w))
-			for _, c := range conflicts {
-				j.Log.Warn("wikidata disagrees with an outside id", "title", t.ID, "provider", c.Provider, "value", c.Value, "other", c.Other, "outcome", c.Outcome)
-			}
+			err = j.save(ctx, t, w)
 		case slices.Contains(deleted, *t.WikidataID) && fresh[t.ID]:
 			err = core.WikidataMissing(ctx, j.DB, t.ID)
 		case slices.Contains(deleted, *t.WikidataID):
 			j.Log.Warn("wikidata item deleted", "title", t.ID, "item", *t.WikidataID)
 			err = core.WikidataDeleted(ctx, j.DB, t.ID)
+			if err == nil {
+				err = j.flagged(ctx, t.ID, core.FlagForReview(ctx, j.DB, []core.ReviewFlag{{Kind: core.DeletedItem, QID: *t.WikidataID, Title: t.ID}}))
+			}
 		default:
 			j.Log.Warn("wikidata item unreadable", "title", t.ID, "item", *t.WikidataID)
 			err = core.WikidataMissing(ctx, j.DB, t.ID)
@@ -178,6 +177,28 @@ func (j Titles) fetch(ctx context.Context, kind string, titles []store.DueWikida
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (j Titles) save(ctx context.Context, t store.DueWikidataRow, w wikidata.Title) error {
+	conflicts, err := core.SaveWikidata(ctx, j.DB, t.ID, t.Kind, core.WikidataTitle(w))
+	if err != nil {
+		return err
+	}
+	for _, c := range conflicts {
+		j.Log.Warn("wikidata disagrees with an outside id", "title", t.ID, "provider", c.Provider, "value", c.Value, "other", c.Other, "outcome", c.Outcome)
+	}
+	flags, err := core.ConflictFlags(ctx, j.DB, t.ID, w.QID, conflicts)
+	if err == nil {
+		err = core.SettleReview(ctx, j.DB, flags, core.Settle{Titles: []int64{t.ID}, Kinds: []string{core.SharedID, core.TMDBDiffers, core.DeletedItem}})
+	}
+	return j.flagged(ctx, t.ID, err)
+}
+
+func (j Titles) flagged(ctx context.Context, titleID int64, err error) error {
+	if err == nil {
+		return nil
+	}
+	return errors.Join(fmt.Errorf("review list: %w", err), core.RecheckWikidata(ctx, j.DB, titleID))
 }
 
 func key(t store.DueWikidataRow, provider string) string {
@@ -206,14 +227,26 @@ func fillClasses(ctx context.Context, db *pgxpool.Pool, wd *wikidata.Client, log
 			if err != nil {
 				return err
 			}
+			var flags []core.ReviewFlag
 			for _, q := range unreadable {
 				log.Warn("wikidata class unreadable, its facts are left out", "class", q)
+				flags = append(flags, core.ReviewFlag{Kind: core.UnreadableClass, QID: q})
+			}
+			if err := core.FlagForReview(ctx, db, flags); err != nil {
+				return err
 			}
 			batch := make([]core.WikidataClass, 0, len(found))
+			var read []string
 			for _, c := range found {
 				batch = append(batch, core.WikidataClass(c))
+				if !slices.Contains(unreadable, c.QID) {
+					read = append(read, c.QID)
+				}
 			}
 			if err := core.SaveClasses(ctx, db, batch); err != nil {
+				return err
+			}
+			if err := core.ClassesRead(ctx, db, read); err != nil {
 				return err
 			}
 			missing = missing[n:]

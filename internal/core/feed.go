@@ -16,6 +16,7 @@ import (
 type Edits struct {
 	First, Last time.Time
 	LoggedOut   bool
+	Batch       string
 }
 
 func FeedCursor(ctx context.Context, db *pgxpool.Pool) (time.Time, error) {
@@ -29,6 +30,7 @@ func QueueWikidataEdits(ctx context.Context, db *pgxpool.Pool, edits map[string]
 		params.EditedAt = append(params.EditedAt, e.First)
 		params.LastEditedAt = append(params.LastEditedAt, e.Last)
 		params.LoggedOut = append(params.LoggedOut, e.LoggedOut)
+		params.Batch = append(params.Batch, e.Batch)
 	}
 	var queued int64
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
@@ -68,6 +70,7 @@ type Pending struct {
 	QID       string
 	Held      Held
 	LoggedOut bool
+	Batch     string
 }
 
 func DueWikidataEdits(ctx context.Context, db *pgxpool.Pool, limit int32) ([]Pending, error) {
@@ -78,6 +81,9 @@ func DueWikidataEdits(ctx context.Context, db *pgxpool.Pool, limit int32) ([]Pen
 	due := make([]Pending, len(rows))
 	for i, r := range rows {
 		due[i].QID, due[i].LoggedOut = r.Qid, r.LoggedOut
+		if r.Batch != nil {
+			due[i].Batch = *r.Batch
+		}
 		if r.Held != nil {
 			if err := json.Unmarshal(r.Held, &due[i].Held); err != nil {
 				return nil, err

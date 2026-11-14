@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -46,7 +47,7 @@ func TestReportSummary(t *testing.T) {
 	var sent outbox
 	job := Reports{DB: db, Mail: &sent, To: "reports@example.com", AppURL: "https://tethr.example", Zone: time.UTC, Log: slog.New(slog.DiscardHandler)}
 	nine := time.Date(2026, 11, 10, 9, 20, 0, 0, time.UTC)
-	if err := job.summarise(ctx, nine); err != nil || len(sent) != 0 {
+	if err := job.summarise(ctx, nine.Add(-24*time.Hour)); err != nil || len(sent) != 0 {
 		t.Fatalf("nothing waiting = %d emails, %v", len(sent), err)
 	}
 
@@ -59,11 +60,16 @@ func TestReportSummary(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := job.summarise(ctx, nine.Add(time.Hour)); err != nil || len(sent) != 0 {
-		t.Fatalf("outside the morning = %d emails, %v", len(sent), err)
+	if err := job.summarise(ctx, nine.Add(-time.Hour)); err != nil || len(sent) != 0 {
+		t.Fatalf("before nine = %d emails, %v", len(sent), err)
 	}
 	if err := job.summarise(ctx, nine); err != nil || len(sent) != 1 {
 		t.Fatalf("in the morning = %d emails, %v", len(sent), err)
+	}
+	for _, later := range []time.Duration{30 * time.Minute, 5 * time.Hour} {
+		if err := job.summarise(ctx, nine.Add(later)); err != nil || len(sent) != 1 {
+			t.Fatalf("%d emails after a restart later that day, %v", len(sent), err)
+		}
 	}
 	m := sent[0]
 	if m.To != "reports@example.com" || m.Subject != "Reports waiting on 2 lists" {
@@ -80,6 +86,73 @@ func TestReportSummary(t *testing.T) {
 		if !strings.Contains(m.Text, want) {
 			t.Errorf("summary is missing %q:\n%s", want, m.Text)
 		}
+	}
+}
+
+func TestReviewSummary(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	title := func(qid, name string, year int, sitelinks int) int64 {
+		res, err := core.SeedTitle(ctx, db, "movie", core.WikidataTitle{QID: qid, Name: name, Year: year, Sitelinks: sitelinks}, 0, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Title
+	}
+	akira := title("Q1", "Akira", 1988, 80)
+	var reels []core.ReviewFlag
+	for i := range 7 {
+		id := title(fmt.Sprintf("Q%d", 100+i), fmt.Sprintf("Newsreel %d", 60+i), 1944, i)
+		reels = append(reels, core.ReviewFlag{Kind: core.KindChange, QID: fmt.Sprintf("Q%d", 100+i), Title: id, Tethr: "movie", Wikidata: "none", Batch: "QSv2/300001"})
+	}
+	heat := title("Q2", "Heat", 1995, 50)
+	if err := core.FlagForReview(ctx, db, []core.ReviewFlag{{Kind: core.DeletedItem, QID: "Q2", Title: heat}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE review_entries SET created_at = '2026-11-09 12:00Z'`); err != nil {
+		t.Fatal(err)
+	}
+
+	var sent outbox
+	job := Reports{DB: db, Mail: &sent, To: "reports@example.com", AppURL: "https://tethr.example", Zone: time.UTC, Log: slog.New(slog.DiscardHandler)}
+	nine := time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)
+	if err := job.summarise(ctx, nine.Add(-20*time.Hour)); err != nil || len(sent) != 1 {
+		t.Fatalf("first morning = %d emails, %v", len(sent), err)
+	}
+	sent = nil
+	if err := job.summarise(ctx, nine); err != nil || len(sent) != 0 {
+		t.Fatalf("nothing new = %d emails, %v", len(sent), err)
+	}
+
+	flags := append(reels, core.ReviewFlag{Kind: core.KeptName, QID: "Q1", Title: akira, Tethr: "Akira", Wikidata: "アキラ\ntethr review accept 1", Why: "out of latin script"})
+	if err := core.FlagForReview(ctx, db, flags); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE review_entries SET created_at = '2026-11-10 12:00Z' WHERE kind <> 'deleted_item'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := job.summarise(ctx, nine.Add(24*time.Hour)); err != nil || len(sent) != 1 {
+		t.Fatalf("next morning = %d emails, %v", len(sent), err)
+	}
+	m := sent[0]
+	if m.Subject != "8 new for catalogue review" {
+		t.Errorf("subject = %q", m.Subject)
+	}
+	for _, want := range []string{
+		"7 titles from one batch stopped being films",
+		"https://editgroups.toolforge.org/b/QSv2/300001/",
+		"Newsreel 66 (1944), Newsreel 65 (1944), Newsreel 64 (1944), Newsreel 63 (1944), Newsreel 62 (1944) and 2 more",
+		"tethr review batch QSv2/300001",
+		"Akira (1988): kept “Akira”, Wikidata says “アキラ tethr review accept 1” (out of latin script)",
+		"https://www.wikidata.org/wiki/Q1",
+		"Still open from before: 1 deleted item. Run tethr review on the server for the list.",
+	} {
+		if !strings.Contains(m.Text, want) {
+			t.Errorf("summary is missing %q:\n%s", want, m.Text)
+		}
+	}
+	if strings.Contains(m.Text, "Heat") {
+		t.Errorf("an entry from before was listed in full:\n%s", m.Text)
 	}
 }
 

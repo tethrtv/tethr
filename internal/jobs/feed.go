@@ -77,6 +77,9 @@ func (f Feed) Follow(ctx context.Context) error {
 				e.Last = c.At
 			}
 			e.LoggedOut = e.LoggedOut || c.LoggedOut
+			if e.Batch == "" {
+				e.Batch = c.Batch
+			}
 			edits[c.QID] = e
 		}
 		if next == "" {

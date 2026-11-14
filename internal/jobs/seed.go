@@ -261,6 +261,13 @@ func (sd *seeding) item(ctx context.Context, it wikidata.Item, owners map[string
 		for _, c := range res.Conflicts {
 			sd.log.Warn("wikidata item disagrees with an outside id", "item", it.QID(), "title", res.Title, "provider", c.Provider, "value", c.Value, "other", c.Other, "outcome", c.Outcome)
 		}
+		flags, err := core.ConflictFlags(ctx, sd.db, res.Title, it.QID(), res.Conflicts)
+		if err != nil {
+			return err
+		}
+		if err := core.FlagForReview(ctx, sd.db, flags); err != nil {
+			return err
+		}
 	}
 	return nil
 }

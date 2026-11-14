@@ -618,13 +618,14 @@ func (q *Queries) DueOutlines(ctx context.Context, limit int32) ([]DueOutlinesRo
 }
 
 const duePendingWikidata = `-- name: DuePendingWikidata :many
-SELECT qid, held, logged_out FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1
+SELECT qid, held, logged_out, batch FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1
 `
 
 type DuePendingWikidataRow struct {
 	Qid       string
 	Held      []byte
 	LoggedOut bool
+	Batch     *string
 }
 
 func (q *Queries) DuePendingWikidata(ctx context.Context, limit int32) ([]DuePendingWikidataRow, error) {
@@ -636,7 +637,12 @@ func (q *Queries) DuePendingWikidata(ctx context.Context, limit int32) ([]DuePen
 	var items []DuePendingWikidataRow
 	for rows.Next() {
 		var i DuePendingWikidataRow
-		if err := rows.Scan(&i.Qid, &i.Held, &i.LoggedOut); err != nil {
+		if err := rows.Scan(
+			&i.Qid,
+			&i.Held,
+			&i.LoggedOut,
+			&i.Batch,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -840,6 +846,17 @@ func (q *Queries) HoldWikidata(ctx context.Context, arg HoldWikidataParams) erro
 	return err
 }
 
+const jobLastRun = `-- name: JobLastRun :one
+SELECT ran_at FROM job_runs WHERE name = $1
+`
+
+func (q *Queries) JobLastRun(ctx context.Context, name string) (time.Time, error) {
+	row := q.db.QueryRow(ctx, jobLastRun, name)
+	var ran_at time.Time
+	err := row.Scan(&ran_at)
+	return ran_at, err
+}
+
 const jobRanSince = `-- name: JobRanSince :one
 SELECT EXISTS (SELECT 1 FROM job_runs WHERE name = $1 AND ran_at > $2)
 `
@@ -894,6 +911,21 @@ type LeaveOutWikidataParams struct {
 
 func (q *Queries) LeaveOutWikidata(ctx context.Context, arg LeaveOutWikidataParams) error {
 	_, err := q.db.Exec(ctx, leaveOutWikidata, arg.Qid, arg.Reason)
+	return err
+}
+
+const markJobRanAt = `-- name: MarkJobRanAt :exec
+INSERT INTO job_runs (name, ran_at) VALUES ($1, $2)
+ON CONFLICT (name) DO UPDATE SET ran_at = excluded.ran_at
+`
+
+type MarkJobRanAtParams struct {
+	Name  string
+	RanAt time.Time
+}
+
+func (q *Queries) MarkJobRanAt(ctx context.Context, arg MarkJobRanAtParams) error {
+	_, err := q.db.Exec(ctx, markJobRanAt, arg.Name, arg.RanAt)
 	return err
 }
 
@@ -1409,14 +1441,14 @@ func (q *Queries) QueueAllWikidata(ctx context.Context) (int64, error) {
 }
 
 const queueWikidataEdits = `-- name: QueueWikidataEdits :execrows
-INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before, logged_out)
-SELECT e.qid, e.edited_at, e.last_edited_at, e.edited_at + interval '1 day', e.logged_out
+INSERT INTO wikidata_pending (qid, edited_at, last_edited_at, not_before, logged_out, batch)
+SELECT e.qid, e.edited_at, e.last_edited_at, e.edited_at + interval '1 day', e.logged_out, nullif(e.batch, '')
 FROM (SELECT unnest($1::text[]) AS qid, unnest($2::timestamptz[]) AS edited_at, unnest($3::timestamptz[]) AS last_edited_at,
-        unnest($4::boolean[]) AS logged_out) e
+        unnest($4::boolean[]) AS logged_out, unnest($5::text[]) AS batch) e
 WHERE EXISTS (SELECT 1 FROM titles t WHERE t.wikidata_id = e.qid AND t.merged_into_id IS NULL)
    OR EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = e.qid)
 ON CONFLICT (qid) DO UPDATE SET last_edited_at = greatest(wikidata_pending.last_edited_at, excluded.last_edited_at),
-    logged_out = wikidata_pending.logged_out OR excluded.logged_out
+    logged_out = wikidata_pending.logged_out OR excluded.logged_out, batch = coalesce(wikidata_pending.batch, excluded.batch)
 `
 
 type QueueWikidataEditsParams struct {
@@ -1424,6 +1456,7 @@ type QueueWikidataEditsParams struct {
 	EditedAt     []time.Time
 	LastEditedAt []time.Time
 	LoggedOut    []bool
+	Batch        []string
 }
 
 func (q *Queries) QueueWikidataEdits(ctx context.Context, arg QueueWikidataEditsParams) (int64, error) {
@@ -1432,6 +1465,7 @@ func (q *Queries) QueueWikidataEdits(ctx context.Context, arg QueueWikidataEdits
 		arg.EditedAt,
 		arg.LastEditedAt,
 		arg.LoggedOut,
+		arg.Batch,
 	)
 	if err != nil {
 		return 0, err

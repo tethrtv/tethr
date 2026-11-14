@@ -353,6 +353,24 @@ type Rating struct {
 	SeasonID  *int64
 }
 
+type ReviewEntry struct {
+	ID            int64
+	Kind          string
+	Key           string
+	Qid           string
+	TitleID       *int64
+	Subject       string
+	TethrValue    string
+	WikidataValue string
+	Why           string
+	OtherID       *int64
+	Batch         *string
+	CreatedAt     time.Time
+	ClearedAt     *time.Time
+	Outcome       *string
+	Reason        *string
+}
+
 type Season struct {
 	ID           int64
 	ShowID       int64
@@ -466,4 +484,5 @@ type WikidataPending struct {
 	NotBefore    time.Time
 	LoggedOut    bool
 	Held         []byte
+	Batch        *string
 }
