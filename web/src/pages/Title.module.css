@@ -362,3 +362,7 @@
     grid-template-columns: 110px minmax(0, 1fr) auto;
   }
 }
+
+.wrong {
+  margin-top: 48px;
+}

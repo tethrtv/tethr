@@ -14,6 +14,7 @@ import { type Details, type Group, type Season, useDetails, useGroup, useOrders,
 import lists from './Lists.module.css'
 import { ownerName, privacyWords } from './MyLists'
 import styles from './Title.module.css'
+import { SomethingWrong } from './TitleReport'
 
 type Detail = components['schemas']['TitleDetail']
 type EpisodeDetail = components['schemas']['EpisodeDetail']
@@ -347,6 +348,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           />
         </section>
       )}
+      <SomethingWrong id={d.title.ids.tethr} kind="show" name={name} />
     </div>
   )
 }
@@ -727,6 +729,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           </ol>
         </section>
       )}
+      <SomethingWrong id={d.title.ids.tethr} kind="movie" name={name} />
     </div>
   )
 }

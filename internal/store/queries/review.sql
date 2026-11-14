@@ -38,17 +38,19 @@ WHERE cleared_at IS NULL AND key = ANY(@keys::text[]);
 -- name: OpenReview :many
 SELECT e.id, e.kind, e.qid, e.title_id, e.subject, e.tethr_value, e.wikidata_value, e.why, e.other_id, e.batch, e.created_at,
     t.name AS title_name, t.year AS title_year, t.kind AS title_kind, t.slug AS title_slug, t.tmdb_id AS title_tmdb, coalesce(t.sitelinks, 0)::int AS sitelinks,
-    o.name AS other_name, o.wikidata_id AS other_qid
+    o.name AS other_name, o.wikidata_id AS other_qid,
+    (CASE WHEN e.kind = 'title_report' THEN count(*) OVER (PARTITION BY e.kind, e.title_id, e.subject) ELSE 0 END)::int AS reports
 FROM review_entries e
 LEFT JOIN titles t ON t.id = e.title_id
 LEFT JOIN titles o ON o.id = e.other_id
 WHERE e.cleared_at IS NULL
-ORDER BY e.kind, coalesce(t.sitelinks, 0) DESC, e.id;
+ORDER BY e.kind <> 'title_report', reports DESC, e.kind, coalesce(t.sitelinks, 0) DESC, e.title_id, e.subject, e.id;
 
 -- name: ReviewTargets :many
-SELECT id, kind, title_id, wikidata_value FROM review_entries
-WHERE cleared_at IS NULL AND (id = @id OR batch = @batch)
-ORDER BY id
+SELECT e.id, e.kind, e.title_id, e.wikidata_value FROM review_entries e
+WHERE e.cleared_at IS NULL AND (e.id = @id OR e.batch = @batch OR (e.kind = 'title_report' AND e.id <= @id AND (e.title_id, e.subject) IN (
+    SELECT r.title_id, r.subject FROM review_entries r WHERE r.id = @id AND r.kind = 'title_report' AND r.cleared_at IS NULL)))
+ORDER BY e.id
 FOR UPDATE;
 
 -- name: CloseReview :exec
@@ -101,3 +103,34 @@ WHERE e.cleared_at IS NULL AND e.kind = 'shared_id' AND e.other_id = ANY(@title_
 
 -- name: RecheckWikidata :exec
 UPDATE titles SET wikidata_checked_at = NULL WHERE id = $1;
+
+-- name: LockHousehold :one
+SELECT id FROM households WHERE id = $1 FOR UPDATE;
+
+-- name: CountTitleReportsSince :one
+SELECT count(*) FROM review_entries WHERE kind = 'title_report' AND household_id = $1 AND created_at > $2;
+
+-- name: AddTitleReport :execrows
+INSERT INTO review_entries (kind, key, qid, title_id, subject, tethr_value, wikidata_value, why, other_id, household_id, reporter_id)
+VALUES ('title_report', @key, @qid, @title_id, @subject, @tethr_value, @wikidata_value, @why, sqlc.narg(other_id), @household_id, @reporter_id)
+ON CONFLICT (key) WHERE cleared_at IS NULL DO UPDATE
+SET wikidata_value = CASE WHEN excluded.wikidata_value <> '' THEN excluded.wikidata_value ELSE review_entries.wikidata_value END,
+    why = CASE WHEN excluded.why <> '' THEN excluded.why ELSE review_entries.why END,
+    other_id = coalesce(excluded.other_id, review_entries.other_id),
+    reporter_id = excluded.reporter_id
+WHERE (excluded.wikidata_value <> '' AND excluded.wikidata_value <> review_entries.wikidata_value)
+   OR (excluded.why <> '' AND excluded.why <> review_entries.why)
+   OR (excluded.other_id IS NOT NULL AND excluded.other_id IS DISTINCT FROM review_entries.other_id);
+
+-- name: SettleTitleReports :exec
+UPDATE review_entries e SET cleared_at = now(), outcome = 'fixed'
+FROM titles t
+WHERE e.cleared_at IS NULL AND e.kind = 'title_report' AND e.title_id = t.id AND t.id = ANY(@title_ids::bigint[]) AND e.wikidata_value <> ''
+  AND ((e.subject = 'name' AND t.name = e.wikidata_value)
+    OR (e.subject = 'year' AND t.year::text = e.wikidata_value)
+    OR (e.subject = 'kind' AND EXISTS (SELECT 1 FROM titles n WHERE n.wikidata_id = t.wikidata_id AND n.kind = e.wikidata_value AND n.merged_into_id IS NULL))
+    OR (e.subject = 'link tmdb' AND t.tmdb_id::text = e.wikidata_value)
+    OR (e.subject LIKE 'link %' AND EXISTS (SELECT 1 FROM external_ids x WHERE x.title_id = t.id AND 'link ' || x.provider = e.subject AND x.value = e.wikidata_value)
+        AND NOT EXISTS (SELECT 1 FROM external_ids y WHERE y.title_id = t.id AND 'link ' || y.provider = e.subject AND y.value <> e.wikidata_value))
+    OR (e.subject = 'duplicate' AND e.other_id IS NOT NULL AND (t.merged_into_id = e.other_id
+        OR EXISTS (SELECT 1 FROM titles o WHERE o.id = e.other_id AND o.merged_into_id = t.id))));

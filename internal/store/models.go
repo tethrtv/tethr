@@ -369,6 +369,8 @@ type ReviewEntry struct {
 	ClearedAt     *time.Time
 	Outcome       *string
 	Reason        *string
+	HouseholdID   *int64
+	ReporterID    *int64
 }
 
 type Season struct {

@@ -25,6 +25,7 @@ const (
 	FilmAndShow     = "film_and_show"
 	UnreadableClass = "unreadable_class"
 	UnmappedValue   = "unmapped_value"
+	ReportedTitle   = "title_report"
 )
 
 var ItemKinds = []string{KeptName, HeldChange, KindChange, SharedID, TMDBDiffers, DeletedItem}
@@ -71,6 +72,7 @@ type ReviewEntry struct {
 	OtherName string
 	OtherQID  string
 	Batch     string
+	Reports   int
 	CreatedAt time.Time
 }
 
@@ -124,8 +126,9 @@ func SettleReview(ctx context.Context, db *pgxpool.Pool, flags []ReviewFlag, set
 		if err := flagReview(ctx, q, flags); err != nil {
 			return err
 		}
-		var released []int64
+		var released, all []int64
 		for _, s := range settles {
+			all = append(all, s.Titles...)
 			if len(s.Titles) == 0 {
 				continue
 			}
@@ -139,6 +142,11 @@ func SettleReview(ctx context.Context, db *pgxpool.Pool, flags []ReviewFlag, set
 			}
 			if slices.Contains(s.Kinds, SharedID) {
 				released = append(released, s.Titles...)
+			}
+		}
+		if len(all) > 0 {
+			if err := q.SettleTitleReports(ctx, all); err != nil {
+				return err
 			}
 		}
 		if len(released) == 0 {
@@ -223,7 +231,7 @@ func OpenReview(ctx context.Context, db *pgxpool.Pool) ([]ReviewEntry, error) {
 			ID: r.ID, Kind: r.Kind, QID: r.Qid, Title: deref(r.TitleID), TitleName: deref(r.TitleName), TitleYear: int(deref(r.TitleYear)),
 			TitleKind: deref(r.TitleKind), TitleSlug: deref(r.TitleSlug), TitleTMDB: deref(r.TitleTmdb), Sitelinks: int(r.Sitelinks),
 			Subject: r.Subject, Tethr: r.TethrValue, Wikidata: r.WikidataValue, Why: r.Why, Other: deref(r.OtherID),
-			OtherName: deref(r.OtherName), OtherQID: deref(r.OtherQid), Batch: deref(r.Batch), CreatedAt: r.CreatedAt,
+			OtherName: deref(r.OtherName), OtherQID: deref(r.OtherQid), Batch: deref(r.Batch), Reports: int(r.Reports), CreatedAt: r.CreatedAt,
 		}
 	}
 	return out, nil
@@ -395,7 +403,7 @@ func (cs classes) reaches(m classMap, q string) (hit, complete bool) {
 	return hit, complete
 }
 
-var ReviewKinds = []string{KeptName, HeldChange, KindChange, SharedID, TMDBDiffers, DeletedItem, FilmAndShow, UnreadableClass, UnmappedValue}
+var ReviewKinds = []string{ReportedTitle, KeptName, HeldChange, KindChange, SharedID, TMDBDiffers, DeletedItem, FilmAndShow, UnreadableClass, UnmappedValue}
 
 var reviewNames = map[string][2]string{
 	KeptName:        {"kept name", "kept names"},
@@ -407,6 +415,7 @@ var reviewNames = map[string][2]string{
 	FilmAndShow:     {"film-and-show item", "film-and-show items"},
 	UnreadableClass: {"unreadable class", "unreadable classes"},
 	UnmappedValue:   {"value that maps to nothing", "values that map to nothing"},
+	ReportedTitle:   {"title report", "title reports"},
 }
 
 func ReviewCount(kind string, n int) string {
@@ -485,6 +494,8 @@ func (e ReviewEntry) Describe() string {
 		return fmt.Sprintf("Class %s can't be read from Wikidata", e.QID)
 	case UnmappedValue:
 		return fmt.Sprintf("%s “%s” (%s) on %s maps to nothing", e.Subject, tethr, e.QID, why)
+	case ReportedTitle:
+		return e.Name() + ": " + e.Problem()
 	}
 	return e.Name()
 }
@@ -518,4 +529,65 @@ func BatchSummary(kind string, entries []ReviewEntry) string {
 		n = fmt.Sprintf("%d titles", len(entries))
 	}
 	return fmt.Sprintf("%s from one batch %s", n, phrase)
+}
+
+func (e ReviewEntry) Problem() string {
+	tethr := oneLine(e.Tethr)
+	if tethr == "" {
+		tethr = "nothing"
+	}
+	households := "1 household"
+	if e.Reports != 1 {
+		households = fmt.Sprintf("%d households", e.Reports)
+	}
+	switch e.Subject {
+	case "name":
+		return fmt.Sprintf("name reported by %s, Tethr has “%s”", households, tethr)
+	case "year":
+		return fmt.Sprintf("year reported by %s, Tethr has %s", households, tethr)
+	case "kind":
+		return fmt.Sprintf("reported as not %s by %s", kindWord(e.TitleKind), households)
+	case "duplicate":
+		return "reported as a duplicate by " + households
+	}
+	return fmt.Sprintf("%s link reported by %s, Tethr has %s", strings.TrimPrefix(e.Subject, "link "), households, tethr)
+}
+
+func (e ReviewEntry) Suggestion() string {
+	s := oneLine(e.Wikidata)
+	switch {
+	case s == "":
+	case e.Subject == "kind":
+		s = kindWord(s)
+	case e.Subject == "duplicate" && e.OtherName != "":
+		s = fmt.Sprintf("“%s” (%s)", oneLine(e.OtherName), s)
+	case e.Subject == "name":
+		s = "“" + s + "”"
+	}
+	return s
+}
+
+func (e ReviewEntry) Said() string {
+	var out []string
+	if s := e.Suggestion(); s != "" {
+		out = append(out, "suggests "+s)
+	}
+	if e.Why != "" {
+		out = append(out, "note: "+oneLine(e.Why))
+	}
+	if len(out) == 0 {
+		return "no suggestion or note"
+	}
+	return strings.Join(out, ", ")
+}
+
+func (e ReviewEntry) Path() string {
+	if e.TitleKind == "show" {
+		return "/shows/" + e.TitleSlug
+	}
+	return "/films/" + e.TitleSlug
+}
+
+func SameReport(a, b ReviewEntry) bool {
+	return a.Kind == ReportedTitle && b.Kind == ReportedTitle && a.Title == b.Title && a.Subject == b.Subject
 }

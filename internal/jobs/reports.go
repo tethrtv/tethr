@@ -86,7 +86,7 @@ func (r Reports) summary(open []store.OpenReportsRow, entries []core.ReviewEntry
 			subject = append(subject, fmt.Sprintf("Reports waiting on %d lists", lists))
 		}
 	}
-	if fresh := reviewSummary(&b, entries, since); fresh > 0 {
+	if fresh := reviewSummary(&b, r.AppURL, entries, since); fresh > 0 {
 		subject = append(subject, fmt.Sprintf("%d new for catalogue review", fresh))
 	}
 	if len(subject) == 0 {
@@ -139,7 +139,7 @@ func (r Reports) listReports(b *strings.Builder, open []store.OpenReportsRow) in
 
 const reviewListed = 50
 
-func reviewSummary(b *strings.Builder, entries []core.ReviewEntry, since time.Time) int {
+func reviewSummary(b *strings.Builder, appURL string, entries []core.ReviewEntry, since time.Time) int {
 	type group struct {
 		kind, batch string
 		entries     []core.ReviewEntry
@@ -148,7 +148,15 @@ func reviewSummary(b *strings.Builder, entries []core.ReviewEntry, since time.Ti
 	byBatch := map[[2]string]*group{}
 	older := map[string]int{}
 	fresh := 0
+	var reports []core.ReviewEntry
 	for _, e := range entries {
+		if e.Kind == core.ReportedTitle {
+			if e.CreatedAt.After(since) {
+				fresh++
+			}
+			reports = append(reports, e)
+			continue
+		}
 		if !e.CreatedAt.After(since) {
 			older[e.Kind]++
 			continue
@@ -170,6 +178,24 @@ func reviewSummary(b *strings.Builder, entries []core.ReviewEntry, since time.Ti
 		return 0
 	}
 
+	if len(reports) > 0 {
+		b.WriteString("Title reports\n\n")
+	}
+	for i, e := range reports {
+		if i == 0 || !core.SameReport(reports[i-1], e) {
+			fmt.Fprintf(b, "%s\n  %s%s\n", e.Describe(), appURL, e.Path())
+			if e.QID != "" {
+				fmt.Fprintf(b, "  %s\n", core.WikidataURL(e.QID))
+			}
+		}
+		fmt.Fprintf(b, "  %s\n", e.Said())
+		if i == len(reports)-1 || !core.SameReport(reports[i+1], e) {
+			fmt.Fprintf(b, "  tethr review dismiss %d <reason>\n\n", e.ID)
+		}
+	}
+	if len(groups) == 0 && len(older) == 0 {
+		return fresh
+	}
 	b.WriteString("Catalogue review\n\n")
 	listed := map[string]int{}
 	skipped := map[string]int{}

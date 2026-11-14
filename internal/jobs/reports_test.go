@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/core"
 	"github.com/tethrtv/tethr/internal/dbtest"
 	"github.com/tethrtv/tethr/internal/mail"
@@ -20,29 +21,32 @@ func (o *outbox) Send(_ context.Context, m mail.Message) error {
 	return nil
 }
 
+func signedUp(t *testing.T, db *pgxpool.Pool, username string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	email, err := core.StartSignUp(ctx, db, core.SignUp{Email: username + "@example.com", Name: username, Username: username}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := core.Verify(ctx, db, core.Verification{Token: email.Token}, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	account, err := core.SessionAccount(ctx, db, session.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, profiles, err := core.Me(ctx, db, account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return profiles[0].ID
+}
+
 func TestReportSummary(t *testing.T) {
 	db := dbtest.New(t)
 	ctx := context.Background()
-	profile := func(username string) int64 {
-		email, err := core.StartSignUp(ctx, db, core.SignUp{Email: username + "@example.com", Name: username, Username: username}, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		session, err := core.Verify(ctx, db, core.Verification{Token: email.Token}, "test")
-		if err != nil {
-			t.Fatal(err)
-		}
-		account, err := core.SessionAccount(ctx, db, session.Token)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, profiles, err := core.Me(ctx, db, account)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return profiles[0].ID
-	}
-	owner, ann := profile("owner"), profile("ann")
+	owner, ann := signedUp(t, db, "owner"), signedUp(t, db, "ann")
 
 	var sent outbox
 	job := Reports{DB: db, Mail: &sent, To: "reports@example.com", AppURL: "https://tethr.example", Zone: time.UTC, Log: slog.New(slog.DiscardHandler)}
@@ -157,3 +161,73 @@ func TestReviewSummary(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestTitleReportsInSummary(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	ann, bob := signedUp(t, db, "ann"), signedUp(t, db, "bob")
+	res, err := core.SeedTitle(ctx, db, "movie", core.WikidataTitle{QID: "Q1", Name: "Akira", Year: 1988}, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := fmt.Sprint(res.Title)
+	for _, r := range []struct {
+		from int64
+		core.TitleReport
+	}{
+		{ann, core.TitleReport{Reason: "name", Suggestion: "AKIRA", Note: "The poster\ntethr review accept 1"}},
+		{bob, core.TitleReport{Reason: "name"}},
+		{bob, core.TitleReport{Reason: "kind", Suggestion: "show"}},
+	} {
+		if _, err := core.ReportTitle(ctx, db, r.from, id, r.TitleReport); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var sent outbox
+	job := Reports{DB: db, Mail: &sent, To: "reports@example.com", AppURL: "https://tethr.example", Zone: time.UTC, Log: slog.New(slog.DiscardHandler)}
+	if err := job.summarise(ctx, time.Now().Add(time.Hour)); err != nil || len(sent) != 1 {
+		t.Fatalf("summary = %d emails, %v", len(sent), err)
+	}
+	m := sent[0]
+	if m.Subject != "3 new for catalogue review" {
+		t.Errorf("subject = %q", m.Subject)
+	}
+	want := fmt.Sprintf(`Title reports
+
+Akira (1988): name reported by 2 households, Tethr has “Akira”
+  https://tethr.example/films/t-%[1]s
+  https://www.wikidata.org/wiki/Q1
+  suggests “AKIRA”, note: The poster tethr review accept 1
+  no suggestion or note
+  tethr review dismiss %[2]d <reason>
+
+Akira (1988): reported as not a film by 1 household
+  https://tethr.example/films/t-%[1]s
+  https://www.wikidata.org/wiki/Q1
+  suggests a show
+  tethr review dismiss %[3]d <reason>
+
+`, id, lastReport(t, db, "name"), lastReport(t, db, "kind"))
+	if m.Text != want {
+		t.Errorf("summary =\n%s\nwant\n%s", m.Text, want)
+	}
+}
+
+func lastReport(t *testing.T, db *pgxpool.Pool, subject string) int64 {
+	t.Helper()
+	open, err := core.OpenReview(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	for _, e := range open {
+		if e.Subject == subject {
+			id = max(id, e.ID)
+		}
+	}
+	if id == 0 {
+		t.Fatalf("no %s report", subject)
+	}
+	return id
+}

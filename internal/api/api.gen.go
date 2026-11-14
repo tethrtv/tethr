@@ -377,6 +377,90 @@ func (e NewReportReason) Valid() bool {
 	}
 }
 
+// Defines values for NewTitleReportProvider.
+const (
+	NewTitleReportProviderAnidb          NewTitleReportProvider = "anidb"
+	NewTitleReportProviderAnilist        NewTitleReportProvider = "anilist"
+	NewTitleReportProviderAppletv        NewTitleReportProvider = "appletv"
+	NewTitleReportProviderDisneyplus     NewTitleReportProvider = "disneyplus"
+	NewTitleReportProviderImdb           NewTitleReportProvider = "imdb"
+	NewTitleReportProviderLetterboxd     NewTitleReportProvider = "letterboxd"
+	NewTitleReportProviderMal            NewTitleReportProvider = "mal"
+	NewTitleReportProviderMetacritic     NewTitleReportProvider = "metacritic"
+	NewTitleReportProviderNetflix        NewTitleReportProvider = "netflix"
+	NewTitleReportProviderPlex           NewTitleReportProvider = "plex"
+	NewTitleReportProviderPrimevideo     NewTitleReportProvider = "primevideo"
+	NewTitleReportProviderRottentomatoes NewTitleReportProvider = "rottentomatoes"
+	NewTitleReportProviderTmdb           NewTitleReportProvider = "tmdb"
+	NewTitleReportProviderTvdb           NewTitleReportProvider = "tvdb"
+	NewTitleReportProviderTvmaze         NewTitleReportProvider = "tvmaze"
+)
+
+// Valid indicates whether the value is a known member of the NewTitleReportProvider enum.
+func (e NewTitleReportProvider) Valid() bool {
+	switch e {
+	case NewTitleReportProviderAnidb:
+		return true
+	case NewTitleReportProviderAnilist:
+		return true
+	case NewTitleReportProviderAppletv:
+		return true
+	case NewTitleReportProviderDisneyplus:
+		return true
+	case NewTitleReportProviderImdb:
+		return true
+	case NewTitleReportProviderLetterboxd:
+		return true
+	case NewTitleReportProviderMal:
+		return true
+	case NewTitleReportProviderMetacritic:
+		return true
+	case NewTitleReportProviderNetflix:
+		return true
+	case NewTitleReportProviderPlex:
+		return true
+	case NewTitleReportProviderPrimevideo:
+		return true
+	case NewTitleReportProviderRottentomatoes:
+		return true
+	case NewTitleReportProviderTmdb:
+		return true
+	case NewTitleReportProviderTvdb:
+		return true
+	case NewTitleReportProviderTvmaze:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewTitleReportReason.
+const (
+	NewTitleReportReasonDuplicate NewTitleReportReason = "duplicate"
+	NewTitleReportReasonKind      NewTitleReportReason = "kind"
+	NewTitleReportReasonLink      NewTitleReportReason = "link"
+	NewTitleReportReasonName      NewTitleReportReason = "name"
+	NewTitleReportReasonYear      NewTitleReportReason = "year"
+)
+
+// Valid indicates whether the value is a known member of the NewTitleReportReason enum.
+func (e NewTitleReportReason) Valid() bool {
+	switch e {
+	case NewTitleReportReasonDuplicate:
+		return true
+	case NewTitleReportReasonKind:
+		return true
+	case NewTitleReportReasonLink:
+		return true
+	case NewTitleReportReasonName:
+		return true
+	case NewTitleReportReasonYear:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PlayAction.
 const (
 	PlayActionCheckin  PlayAction = "checkin"
@@ -1401,6 +1485,27 @@ type NewReport struct {
 // NewReportReason `illegal` for anything against the law, `harassment` for threats or abuse, `personal` for someone's private details, `spam` for adverts or scams.
 type NewReportReason string
 
+// NewTitleReport defines model for NewTitleReport.
+type NewTitleReport struct {
+	// Note Anything that helps, up to 500 characters.
+	Note *string `json:"note,omitempty"`
+
+	// Provider The site whose link is wrong. Needed with `link`. `tvdb` and `tvmaze` are for shows only, `letterboxd` for films only.
+	Provider *NewTitleReportProvider `json:"provider,omitempty"`
+
+	// Reason `kind` when a film is really a show or the other way round, `link` for a wrong link to another site, `duplicate` when it's the same as another title.
+	Reason NewTitleReportReason `json:"reason"`
+
+	// Suggestion What it should be, if you know: the name, the year, `movie` or `show`, or a link or ID on the provider's site (just the ID for `tvdb` and `plex`). Needed with `duplicate`: a link to the other title on Tethr, Wikidata, IMDb or TMDB, or its Wikidata ID.
+	Suggestion *string `json:"suggestion,omitempty"`
+}
+
+// NewTitleReportProvider The site whose link is wrong. Needed with `link`. `tvdb` and `tvmaze` are for shows only, `letterboxd` for films only.
+type NewTitleReportProvider string
+
+// NewTitleReportReason `kind` when a film is really a show or the other way round, `link` for a wrong link to another site, `duplicate` when it's the same as another title.
+type NewTitleReportReason string
+
 // NewWatches defines model for NewWatches.
 type NewWatches struct {
 	Items []struct {
@@ -2223,6 +2328,12 @@ type PickEpisodeOrderParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// ReportTitleParams defines parameters for ReportTitle.
+type ReportTitleParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // UnsubscribeParams defines parameters for Unsubscribe.
 type UnsubscribeParams struct {
 	Token string `form:"token" json:"token"`
@@ -2396,6 +2507,9 @@ type ScrobbleJSONRequestBody = ScrobbleRequest
 
 // PickEpisodeOrderJSONRequestBody defines body for PickEpisodeOrder for application/json ContentType.
 type PickEpisodeOrderJSONRequestBody = EpisodeOrderChoice
+
+// ReportTitleJSONRequestBody defines body for ReportTitle for application/json ContentType.
+type ReportTitleJSONRequestBody = NewTitleReport
 
 // AddToWatchlistJSONRequestBody defines body for AddToWatchlist for application/json ContentType.
 type AddToWatchlistJSONRequestBody = NewListings
@@ -2648,6 +2762,9 @@ type ServerInterface interface {
 	// PickEpisodeOrder Follow one of the show's TMDB episode groups instead of aired order
 	// (PUT /v1/titles/{id}/episode-order)
 	PickEpisodeOrder(w http.ResponseWriter, r *http.Request, id string, params PickEpisodeOrderParams)
+	// ReportTitle Report something wrong with a film or show
+	// (POST /v1/titles/{id}/reports)
+	ReportTitle(w http.ResponseWriter, r *http.Request, id string, params ReportTitleParams)
 	// Unsubscribe Stop the weekly email, using the token from its unsubscribe link
 	// (POST /v1/unsubscribe)
 	Unsubscribe(w http.ResponseWriter, r *http.Request, params UnsubscribeParams)
@@ -5469,6 +5586,48 @@ func (siw *ServerInterfaceWrapper) PickEpisodeOrder(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ReportTitle operation middleware
+func (siw *ServerInterfaceWrapper) ReportTitle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReportTitleParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportTitle(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Unsubscribe operation middleware
 func (siw *ServerInterfaceWrapper) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 
@@ -6287,6 +6446,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/popular", wrapper.GetPopular)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/years/{year}", wrapper.GetYear)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/titles/{id}", wrapper.GetTitle)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/titles/{id}/reports", wrapper.ReportTitle)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.UseAiredOrder)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.PickEpisodeOrder)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/search", wrapper.Search)
@@ -10745,6 +10905,94 @@ func (response PickEpisodeOrder503JSONResponse) VisitPickEpisodeOrderResponse(w 
 	return err
 }
 
+type ReportTitleRequestObject struct {
+	Id     string `json:"id"`
+	Params ReportTitleParams
+	Body   *ReportTitleJSONRequestBody
+}
+
+type ReportTitleResponseObject interface {
+	VisitReportTitleResponse(w http.ResponseWriter) error
+}
+
+type ReportTitle204Response struct {
+}
+
+func (response ReportTitle204Response) VisitReportTitleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportTitle400JSONResponse struct{ ProblemJSONResponse }
+
+func (response ReportTitle400JSONResponse) VisitReportTitleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportTitle401JSONResponse Problem
+
+func (response ReportTitle401JSONResponse) VisitReportTitleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportTitle403JSONResponse Problem
+
+func (response ReportTitle403JSONResponse) VisitReportTitleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportTitle404JSONResponse Problem
+
+func (response ReportTitle404JSONResponse) VisitReportTitleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportTitle429JSONResponse Problem
+
+func (response ReportTitle429JSONResponse) VisitReportTitleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UnsubscribeRequestObject struct {
 	Params UnsubscribeParams
 }
@@ -11797,6 +12045,9 @@ type StrictServerInterface interface {
 	// PickEpisodeOrder Follow one of the show's TMDB episode groups instead of aired order
 	// (PUT /v1/titles/{id}/episode-order)
 	PickEpisodeOrder(ctx context.Context, request PickEpisodeOrderRequestObject) (PickEpisodeOrderResponseObject, error)
+	// ReportTitle Report something wrong with a film or show
+	// (POST /v1/titles/{id}/reports)
+	ReportTitle(ctx context.Context, request ReportTitleRequestObject) (ReportTitleResponseObject, error)
 	// Unsubscribe Stop the weekly email, using the token from its unsubscribe link
 	// (POST /v1/unsubscribe)
 	Unsubscribe(ctx context.Context, request UnsubscribeRequestObject) (UnsubscribeResponseObject, error)
@@ -14188,6 +14439,40 @@ func (sh *strictHandler) PickEpisodeOrder(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PickEpisodeOrderResponseObject); ok {
 		if err := validResponse.VisitPickEpisodeOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportTitle operation middleware
+func (sh *strictHandler) ReportTitle(w http.ResponseWriter, r *http.Request, id string, params ReportTitleParams) {
+	var request ReportTitleRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body ReportTitleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportTitle(ctx, request.(ReportTitleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportTitle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportTitleResponseObject); ok {
+		if err := validResponse.VisitReportTitleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
