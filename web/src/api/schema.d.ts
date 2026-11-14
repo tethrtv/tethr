@@ -1139,6 +1139,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/titles/{id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report something wrong with a film or show
+         * @description Not for kids or guest profiles. Tethr's details come from Wikidata, so a report never changes anything by itself. Each household can send up to 20 title reports a day.
+         */
+        post: operations["reportTitle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/titles/{id}/episode-order": {
         parameters: {
             query?: never;
@@ -1958,6 +1978,22 @@ export interface components {
              * @enum {string}
              */
             reason: "illegal" | "harassment" | "personal" | "spam" | "other";
+            /** @description Anything that helps, up to 500 characters. */
+            note?: string;
+        };
+        NewTitleReport: {
+            /**
+             * @description `kind` when a film is really a show or the other way round, `link` for a wrong link to another site, `duplicate` when it's the same as another title.
+             * @enum {string}
+             */
+            reason: "name" | "year" | "kind" | "link" | "duplicate";
+            /**
+             * @description The site whose link is wrong. Needed with `link`. `tvdb` and `tvmaze` are for shows only, `letterboxd` for films only.
+             * @enum {string}
+             */
+            provider?: "imdb" | "tmdb" | "tvdb" | "tvmaze" | "letterboxd" | "mal" | "anidb" | "anilist" | "rottentomatoes" | "metacritic" | "appletv" | "netflix" | "primevideo" | "disneyplus" | "plex";
+            /** @description What it should be, if you know: the name, the year, `movie` or `show`, or a link or ID on the provider's site (just the ID for `tvdb` and `plex`). Needed with `duplicate`: a link to the other title on Tethr, Wikidata, IMDb or TMDB, or its Wikidata ID. */
+            suggestion?: string;
             /** @description Anything that helps, up to 500 characters. */
             note?: string;
         };
@@ -4515,6 +4551,38 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    reportTitle: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewTitleReport"];
+            };
+        };
+        responses: {
+            /** @description Reported */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
         };
     };
     pickEpisodeOrder: {

@@ -149,3 +149,46 @@ func toResume(e *core.Entry) *Resume {
 	}
 	return &Resume{Id: e.ID, Progress: e.Progress}
 }
+
+func (s *Server) ReportTitle(ctx context.Context, req ReportTitleRequestObject) (ReportTitleResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return ReportTitle404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return ReportTitle401JSONResponse(notConnected), err
+	}
+	r := core.TitleReport{Reason: string(req.Body.Reason), Suggestion: value(req.Body.Suggestion), Note: value(req.Body.Note)}
+	if req.Body.Provider != nil {
+		r.Provider = string(*req.Body.Provider)
+	}
+	_, err = core.ReportTitle(ctx, s.DB, c.ProfileID, req.Id, r)
+	bad := func(code, detail string) (ReportTitleResponseObject, error) {
+		return ReportTitle400JSONResponse{problem(code, detail)}, nil
+	}
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+		return ReportTitle404JSONResponse(problem("not_found", "That film or show isn’t on Tethr any more.")), nil
+	case errors.Is(err, core.ErrReportProfile):
+		return ReportTitle403JSONResponse(problem("adults_only", "Kids and guest profiles can’t send reports.")), nil
+	case errors.Is(err, core.ErrTitleReportReason):
+		return bad("invalid_reason", "Pick what’s wrong.")
+	case errors.Is(err, core.ErrReportSuggestion):
+		return bad("invalid_suggestion", "That doesn’t look right for what you picked. Leave it empty if you’re not sure.")
+	case errors.Is(err, core.ErrReportSame):
+		return bad("same_as_now", "That’s what Tethr already has.")
+	case errors.Is(err, core.ErrReportProvider):
+		return bad("invalid_provider", "Pick a site that lists this film or show.")
+	case errors.Is(err, core.ErrReportDuplicate):
+		return bad("unknown_duplicate", "Tethr can’t find another title there. Paste the other one’s Wikidata link.")
+	case errors.Is(err, core.ErrReportSelf):
+		return bad("same_title", "That’s this title. Paste a link to the other one.")
+	case errors.Is(err, core.ErrReportNote):
+		return bad("invalid_note", "Notes are up to 500 characters.")
+	case errors.Is(err, core.ErrTooManyTitleReports):
+		return ReportTitle429JSONResponse(problem("too_many_reports", "That’s a lot of reports for one day. Try again tomorrow, or email reports@tethr.tv.")), nil
+	case err != nil:
+		return nil, err
+	}
+	return ReportTitle204Response{}, nil
+}

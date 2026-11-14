@@ -1846,6 +1846,40 @@ paths:
           $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
+  /v1/titles/{id}/reports:
+    post:
+      operationId: reportTitle
+      summary: Report something wrong with a film or show
+      description: Not for kids or guest profiles. Tethr's details come from Wikidata, so a report never changes anything by itself. Each household can send up to 20 title reports a day.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewTitleReport'
+      responses:
+        '204':
+          description: Reported
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
   /v1/titles/{id}/episode-order:
     put:
       operationId: pickEpisodeOrder
@@ -3237,6 +3271,24 @@ components:
           type: string
           description: "`illegal` for anything against the law, `harassment` for threats or abuse, `personal` for someone's private details, `spam` for adverts or scams."
           enum: [illegal, harassment, personal, spam, other]
+        note:
+          type: string
+          description: Anything that helps, up to 500 characters.
+    NewTitleReport:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: "`kind` when a film is really a show or the other way round, `link` for a wrong link to another site, `duplicate` when it's the same as another title."
+          enum: [name, year, kind, link, duplicate]
+        provider:
+          type: string
+          description: The site whose link is wrong. Needed with `link`. `tvdb` and `tvmaze` are for shows only, `letterboxd` for films only.
+          enum: [imdb, tmdb, tvdb, tvmaze, letterboxd, mal, anidb, anilist, rottentomatoes, metacritic, appletv, netflix, primevideo, disneyplus, plex]
+        suggestion:
+          type: string
+          description: "What it should be, if you know: the name, the year, `movie` or `show`, or a link or ID on the provider's site (just the ID for `tvdb` and `plex`). Needed with `duplicate`: a link to the other title on Tethr, Wikidata, IMDb or TMDB, or its Wikidata ID."
         note:
           type: string
           description: Anything that helps, up to 500 characters.

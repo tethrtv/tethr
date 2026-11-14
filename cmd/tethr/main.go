@@ -130,7 +130,7 @@ func printReview(entries []core.ReviewEntry, collapse bool) {
 		}
 	}
 	kind := ""
-	for _, e := range entries {
+	for i, e := range entries {
 		if e.Kind != kind {
 			kind = e.Kind
 			n := 0
@@ -147,6 +147,17 @@ func printReview(entries []core.ReviewEntry, collapse bool) {
 				fmt.Printf("  %s: %s  %s\n", e.Batch, core.BatchSummary(e.Kind, b), wikidata.BatchURL(e.Batch))
 				delete(batches, k)
 			}
+			continue
+		}
+		if e.Kind == core.ReportedTitle {
+			if i == 0 || !core.SameReport(entries[i-1], e) {
+				last := i
+				for last+1 < len(entries) && core.SameReport(entries[last+1], e) {
+					last++
+				}
+				fmt.Printf("  %d  %s  %s\n", entries[last].ID, e.Describe(), core.WikidataURL(e.QID))
+			}
+			fmt.Printf("        %s\n", e.Said())
 			continue
 		}
 		fmt.Printf("  %d  %s  %s\n", e.ID, e.Describe(), core.WikidataURL(e.QID))
