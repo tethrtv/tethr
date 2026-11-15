@@ -30,7 +30,8 @@ SELECT sqlc.embed(l), o.username AS owner_username, o.name AS owner_name, o.priv
     CASE WHEN l.profile_id = sqlc.arg(viewer)::bigint THEN 'mine'
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
-    (SELECT count(*) FROM list_items i WHERE i.list_id = l.id)::bigint AS item_count,
+    (SELECT count(*) FROM list_items i JOIN titles t ON t.id = i.title_id
+     WHERE i.list_id = l.id AND NOT (sqlc.arg(for_kids)::bool AND (t.adult OR t.sexual_content)))::bigint AS item_count,
     coalesce((SELECT max(t.wikidata_checked_at) FROM list_items i JOIN titles t ON t.id = i.title_id WHERE i.list_id = l.id), 'epoch')::timestamptz AS titles_checked_at,
     EXISTS (SELECT 1 FROM up_next_lists u WHERE u.list_id = l.id AND u.profile_id = sqlc.arg(viewer)::bigint) AS in_up_next,
     (SELECT count(*) FROM list_follows f WHERE f.list_id = l.id)::bigint AS follower_count,
@@ -60,6 +61,7 @@ FROM list_items li
 JOIN titles t ON t.id = li.title_id
 LEFT JOIN seasons s ON s.id = li.season_id
 WHERE li.list_id = ANY(sqlc.arg(list_ids)::bigint[])
+  AND NOT (sqlc.arg(for_kids)::bool AND (t.adult OR t.sexual_content))
 ORDER BY li.list_id, li.rank, li.id;
 
 -- name: WatchedInTitles :many
@@ -84,7 +86,10 @@ DELETE FROM list_items WHERE list_id = $1 AND id = ANY(sqlc.arg(ids)::bigint[]);
 SELECT EXISTS (SELECT 1 FROM list_items WHERE id = $1 AND list_id = $2);
 
 -- name: ListEntryIDs :many
-SELECT id FROM list_items WHERE list_id = $1;
+SELECT li.id, coalesce(t.adult OR t.sexual_content, false)::bool AS flagged
+FROM list_items li JOIN titles t ON t.id = li.title_id
+WHERE li.list_id = $1
+ORDER BY li.rank, li.id;
 
 -- name: RankListItems :exec
 UPDATE list_items li SET rank = x.rank::int
