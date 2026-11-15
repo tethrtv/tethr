@@ -16,6 +16,7 @@ import (
 
 type TitleState struct {
 	Item        Item
+	Facts       TitleFacts
 	Watches     []Entry
 	Resume      *Entry
 	Rating      *Entry
@@ -24,6 +25,11 @@ type TitleState struct {
 	Order       string
 	Seasons     []SeasonState
 	RewatchFrom *time.Time
+}
+
+type TitleFacts struct {
+	Genres, Countries, Languages, TypeFlags []string
+	Started, Ended                          *string
 }
 
 type InList struct {
@@ -53,7 +59,9 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 	if err != nil {
 		return TitleState{}, err
 	}
-	s := TitleState{Item: item}
+	s := TitleState{Item: item, Facts: TitleFacts{
+		Genres: t.Genres, Countries: t.Countries, Languages: t.Languages, TypeFlags: t.TypeFlags, Started: t.Started, Ended: t.Ended,
+	}}
 
 	rating, err := q.TitleRating(ctx, store.TitleRatingParams{ProfileID: profileID, TitleID: t.ID})
 	if err == nil {

@@ -587,6 +587,129 @@ func (e TitleDetailType) Valid() bool {
 	}
 }
 
+// Defines values for TitleFactsGenres.
+const (
+	TitleFactsGenresAction         TitleFactsGenres = "action"
+	TitleFactsGenresAdventure      TitleFactsGenres = "adventure"
+	TitleFactsGenresBiography      TitleFactsGenres = "biography"
+	TitleFactsGenresComedy         TitleFactsGenres = "comedy"
+	TitleFactsGenresCrime          TitleFactsGenres = "crime"
+	TitleFactsGenresDocumentary    TitleFactsGenres = "documentary"
+	TitleFactsGenresDrama          TitleFactsGenres = "drama"
+	TitleFactsGenresFamily         TitleFactsGenres = "family"
+	TitleFactsGenresFantasy        TitleFactsGenres = "fantasy"
+	TitleFactsGenresHistory        TitleFactsGenres = "history"
+	TitleFactsGenresHorror         TitleFactsGenres = "horror"
+	TitleFactsGenresKids           TitleFactsGenres = "kids"
+	TitleFactsGenresMusic          TitleFactsGenres = "music"
+	TitleFactsGenresMystery        TitleFactsGenres = "mystery"
+	TitleFactsGenresNews           TitleFactsGenres = "news"
+	TitleFactsGenresReality        TitleFactsGenres = "reality"
+	TitleFactsGenresRomance        TitleFactsGenres = "romance"
+	TitleFactsGenresScienceFiction TitleFactsGenres = "science-fiction"
+	TitleFactsGenresSoap           TitleFactsGenres = "soap"
+	TitleFactsGenresSport          TitleFactsGenres = "sport"
+	TitleFactsGenresTalkAndGame    TitleFactsGenres = "talk-and-game"
+	TitleFactsGenresThriller       TitleFactsGenres = "thriller"
+	TitleFactsGenresWar            TitleFactsGenres = "war"
+	TitleFactsGenresWestern        TitleFactsGenres = "western"
+)
+
+// Valid indicates whether the value is a known member of the TitleFactsGenres enum.
+func (e TitleFactsGenres) Valid() bool {
+	switch e {
+	case TitleFactsGenresAction:
+		return true
+	case TitleFactsGenresAdventure:
+		return true
+	case TitleFactsGenresBiography:
+		return true
+	case TitleFactsGenresComedy:
+		return true
+	case TitleFactsGenresCrime:
+		return true
+	case TitleFactsGenresDocumentary:
+		return true
+	case TitleFactsGenresDrama:
+		return true
+	case TitleFactsGenresFamily:
+		return true
+	case TitleFactsGenresFantasy:
+		return true
+	case TitleFactsGenresHistory:
+		return true
+	case TitleFactsGenresHorror:
+		return true
+	case TitleFactsGenresKids:
+		return true
+	case TitleFactsGenresMusic:
+		return true
+	case TitleFactsGenresMystery:
+		return true
+	case TitleFactsGenresNews:
+		return true
+	case TitleFactsGenresReality:
+		return true
+	case TitleFactsGenresRomance:
+		return true
+	case TitleFactsGenresScienceFiction:
+		return true
+	case TitleFactsGenresSoap:
+		return true
+	case TitleFactsGenresSport:
+		return true
+	case TitleFactsGenresTalkAndGame:
+		return true
+	case TitleFactsGenresThriller:
+		return true
+	case TitleFactsGenresWar:
+		return true
+	case TitleFactsGenresWestern:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TitleFactsTypeFlags.
+const (
+	Animated   TitleFactsTypeFlags = "animated"
+	Anime      TitleFactsTypeFlags = "anime"
+	Event      TitleFactsTypeFlags = "event"
+	Miniseries TitleFactsTypeFlags = "miniseries"
+	Short      TitleFactsTypeFlags = "short"
+	Silent     TitleFactsTypeFlags = "silent"
+	Special    TitleFactsTypeFlags = "special"
+	TvFilm     TitleFactsTypeFlags = "tv-film"
+	Web        TitleFactsTypeFlags = "web"
+)
+
+// Valid indicates whether the value is a known member of the TitleFactsTypeFlags enum.
+func (e TitleFactsTypeFlags) Valid() bool {
+	switch e {
+	case Animated:
+		return true
+	case Anime:
+		return true
+	case Event:
+		return true
+	case Miniseries:
+		return true
+	case Short:
+		return true
+	case Silent:
+		return true
+	case Special:
+		return true
+	case TvFilm:
+		return true
+	case Web:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WatchAction.
 const (
 	WatchActionCheckin  WatchAction = "checkin"
@@ -1028,7 +1151,7 @@ type EmailLinkRequest struct {
 type Episode struct {
 	FirstAired *openapi_types.Date `json:"first_aired,omitempty"`
 
-	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 	Ids    Ids `json:"ids"`
 	Number int `json:"number"`
 
@@ -1106,12 +1229,29 @@ type HistoryPage struct {
 	Total int64   `json:"total"`
 }
 
-// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 type Ids struct {
-	Imdb  *string `json:"imdb,omitempty"`
-	Tethr *int64  `json:"tethr,omitempty"`
-	Tmdb  *int    `json:"tmdb,omitempty"`
-	Tvdb  *int    `json:"tvdb,omitempty"`
+	Anidb          *int    `json:"anidb,omitempty"`
+	Anilist        *int    `json:"anilist,omitempty"`
+	Appletv        *string `json:"appletv,omitempty"`
+	Disneyplus     *string `json:"disneyplus,omitempty"`
+	Eidr           *string `json:"eidr,omitempty"`
+	Imdb           *string `json:"imdb,omitempty"`
+	Isan           *string `json:"isan,omitempty"`
+	Letterboxd     *string `json:"letterboxd,omitempty"`
+	Mal            *int    `json:"mal,omitempty"`
+	Metacritic     *string `json:"metacritic,omitempty"`
+	Netflix        *string `json:"netflix,omitempty"`
+	Plex           *string `json:"plex,omitempty"`
+	Primevideo     *string `json:"primevideo,omitempty"`
+	Rottentomatoes *string `json:"rottentomatoes,omitempty"`
+	Tethr          *int64  `json:"tethr,omitempty"`
+	Tmdb           *int    `json:"tmdb,omitempty"`
+	Trakt          *int    `json:"trakt,omitempty"`
+	TraktSlug      *string `json:"trakt_slug,omitempty"`
+	Tvdb           *int    `json:"tvdb,omitempty"`
+	Tvmaze         *int    `json:"tvmaze,omitempty"`
+	Wikidata       *string `json:"wikidata,omitempty"`
 }
 
 // Import defines model for Import.
@@ -1240,12 +1380,12 @@ type ItemProgress struct {
 
 // ItemRef A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 type ItemRef struct {
-	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 	Ids    *Ids `json:"ids,omitempty"`
 	Number *int `json:"number,omitempty"`
 	Season *int `json:"season,omitempty"`
 
-	// Show Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	// Show Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 	Show *Ids        `json:"show,omitempty"`
 	Type ItemRefType `json:"type"`
 }
@@ -1705,7 +1845,7 @@ type ScrobbleResultResult string
 
 // Season defines model for Season.
 type Season struct {
-	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 	Ids    Ids `json:"ids"`
 	Number int `json:"number"`
 }
@@ -1714,7 +1854,7 @@ type Season struct {
 type SeasonDetail struct {
 	Episodes []EpisodeDetail `json:"episodes"`
 
-	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 	Ids    *Ids `json:"ids,omitempty"`
 	Number int  `json:"number"`
 }
@@ -1754,7 +1894,7 @@ type SyncResult struct {
 
 // Title defines model for Title.
 type Title struct {
-	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 	Ids Ids `json:"ids"`
 
 	// Name The English title, from Wikidata. Usually there within a minute of Tethr first seeing the title, but missing for anything Wikidata doesn't have. Fetch artwork and anything else from TMDB yourself.
@@ -1777,6 +1917,9 @@ type Title struct {
 type TitleDetail struct {
 	// EpisodeOrder The TMDB episode group the show follows for this profile. Left out, it's aired order.
 	EpisodeOrder *string `json:"episode_order,omitempty"`
+
+	// Facts What Wikidata says about the film or show. Each one is left out when Wikidata doesn't say.
+	Facts *TitleFacts `json:"facts,omitempty"`
 
 	// Listing Set when the film or show itself is on your watchlist.
 	Listing *TitleListing `json:"listing,omitempty"`
@@ -1804,6 +1947,33 @@ type TitleDetail struct {
 
 // TitleDetailType defines model for TitleDetail.Type.
 type TitleDetailType string
+
+// TitleFacts What Wikidata says about the film or show. Each one is left out when Wikidata doesn't say.
+type TitleFacts struct {
+	// Countries Countries of origin, as ISO 3166 codes.
+	Countries *[]string `json:"countries,omitempty"`
+
+	// Ended When a show ended, in the same form. Left out when Wikidata has no end date, as while a show is running.
+	Ended *string `json:"ended,omitempty"`
+
+	// Genres Tethr's own genres, up to four, ordered by how many of Wikidata's genre values point to each.
+	Genres *[]TitleFactsGenres `json:"genres,omitempty"`
+
+	// Languages Original languages, as IETF tags.
+	Languages *[]string `json:"languages,omitempty"`
+
+	// Started When a show started, as `2008-01-20`, `2008-01` or `2008` depending on what's known.
+	Started *string `json:"started,omitempty"`
+
+	// TypeFlags What else it is, such as anime, a miniseries or a TV film.
+	TypeFlags *[]TitleFactsTypeFlags `json:"type_flags,omitempty"`
+}
+
+// TitleFactsGenres defines model for TitleFacts.Genres.
+type TitleFactsGenres string
+
+// TitleFactsTypeFlags defines model for TitleFacts.TypeFlags.
+type TitleFactsTypeFlags string
 
 // TitleInList defines model for TitleInList.
 type TitleInList struct {

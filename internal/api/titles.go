@@ -26,7 +26,7 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 	if err != nil {
 		return nil, err
 	}
-	out := TitleDetail{Type: TitleDetailType(t.Item.Kind()), Title: toItem(t.Item).Title, Watches: toPlays(t.Watches), Resume: toResume(t.Resume)}
+	out := TitleDetail{Type: TitleDetailType(t.Item.Kind()), Title: toItem(t.Item).Title, Watches: toPlays(t.Watches), Resume: toResume(t.Resume), Facts: toFacts(t.Facts)}
 	if r := t.Rating; r != nil {
 		out.Rating = &TitleRating{Id: r.ID, Rating: int(r.Rating), RatedAt: r.At}
 	}
@@ -227,4 +227,33 @@ func (s *Server) MatchFilms(ctx context.Context, req MatchFilmsRequestObject) (M
 		}
 	}
 	return out, nil
+}
+
+func toFacts(f core.TitleFacts) *TitleFacts {
+	out := TitleFacts{Countries: some(f.Countries), Languages: some(f.Languages), Started: f.Started, Ended: f.Ended}
+	if len(f.Genres) > 0 {
+		genres := make([]TitleFactsGenres, 0, len(f.Genres))
+		for _, g := range f.Genres {
+			genres = append(genres, TitleFactsGenres(g))
+		}
+		out.Genres = &genres
+	}
+	if len(f.TypeFlags) > 0 {
+		flags := make([]TitleFactsTypeFlags, 0, len(f.TypeFlags))
+		for _, t := range f.TypeFlags {
+			flags = append(flags, TitleFactsTypeFlags(t))
+		}
+		out.TypeFlags = &flags
+	}
+	if out == (TitleFacts{}) {
+		return nil
+	}
+	return &out
+}
+
+func some[T any](s []T) *[]T {
+	if len(s) == 0 {
+		return nil
+	}
+	return &s
 }

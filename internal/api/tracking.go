@@ -345,6 +345,25 @@ func toIDs(ids core.IDs) *Ids {
 	return out
 }
 
+func outsideIDs(ids *Ids, outside []string) {
+	text := map[string]**string{
+		"letterboxd": &ids.Letterboxd, "trakt_slug": &ids.TraktSlug, "plex": &ids.Plex, "eidr": &ids.Eidr, "isan": &ids.Isan,
+		"rottentomatoes": &ids.Rottentomatoes, "metacritic": &ids.Metacritic, "netflix": &ids.Netflix, "primevideo": &ids.Primevideo,
+		"disneyplus": &ids.Disneyplus, "appletv": &ids.Appletv,
+	}
+	numbers := map[string]**int{"tvmaze": &ids.Tvmaze, "mal": &ids.Mal, "anilist": &ids.Anilist, "anidb": &ids.Anidb}
+	for _, pair := range outside {
+		provider, value, _ := strings.Cut(pair, " ")
+		if id, ok := text[provider]; ok {
+			*id = &value
+		} else if id, ok := numbers[provider]; ok {
+			if n, err := strconv.Atoi(value); err == nil {
+				*id = &n
+			}
+		}
+	}
+}
+
 func toRefs(refs []core.Ref) []ItemRef {
 	out := make([]ItemRef, 0, len(refs))
 	for _, r := range refs {
@@ -386,6 +405,14 @@ func toItem(i core.Item) Item {
 	if tvdb, err := strconv.Atoi(t.Tvdb); err == nil {
 		title.Ids.Tvdb = &tvdb
 	}
+	if t.Trakt > 0 {
+		trakt := int(t.Trakt)
+		title.Ids.Trakt = &trakt
+	}
+	if !t.WikidataDeleted {
+		title.Ids.Wikidata = t.WikidataID
+	}
+	outsideIDs(&title.Ids, t.Outside)
 	out := Item{Type: ItemType(i.Kind()), Title: title}
 	if s := i.Season; s != nil {
 		out.Season = &Season{Ids: Ids{Tethr: &s.ID}, Number: int(s.SeasonNumber)}

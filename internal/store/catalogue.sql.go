@@ -133,27 +133,32 @@ func (q *Queries) CatalogueSeasons(ctx context.Context, ids []int64) ([]Season, 
 
 const catalogueTitles = `-- name: CatalogueTitles :many
 SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.runtime_minutes, t.tmdb_id, t.wikidata_id,
+    (t.wikidata_deleted_at IS NOT NULL)::bool AS wikidata_deleted,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb,
     coalesce((SELECT min(value::bigint) FROM external_ids
-        WHERE title_id = t.id AND provider = CASE t.kind WHEN 'movie' THEN 'trakt_film' ELSE 'trakt_show' END), 0)::bigint AS trakt
+        WHERE title_id = t.id AND provider = CASE t.kind WHEN 'movie' THEN 'trakt_film' ELSE 'trakt_show' END), 0)::bigint AS trakt,
+    coalesce((SELECT array_agg(provider || ' ' || value ORDER BY provider) FROM (
+        SELECT provider, min(value) AS value FROM external_ids WHERE title_id = t.id GROUP BY provider) x), '{}')::text[] AS outside
 FROM titles t
 WHERE t.id = ANY($1::bigint[])
 `
 
 type CatalogueTitlesRow struct {
-	ID             int64
-	Kind           string
-	Slug           string
-	Name           *string
-	OriginalName   *string
-	Year           *int16
-	RuntimeMinutes *int16
-	TmdbID         *int32
-	WikidataID     *string
-	Imdb           string
-	Tvdb           string
-	Trakt          int64
+	ID              int64
+	Kind            string
+	Slug            string
+	Name            *string
+	OriginalName    *string
+	Year            *int16
+	RuntimeMinutes  *int16
+	TmdbID          *int32
+	WikidataID      *string
+	WikidataDeleted bool
+	Imdb            string
+	Tvdb            string
+	Trakt           int64
+	Outside         []string
 }
 
 func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]CatalogueTitlesRow, error) {
@@ -175,9 +180,11 @@ func (q *Queries) CatalogueTitles(ctx context.Context, ids []int64) ([]Catalogue
 			&i.RuntimeMinutes,
 			&i.TmdbID,
 			&i.WikidataID,
+			&i.WikidataDeleted,
 			&i.Imdb,
 			&i.Tvdb,
 			&i.Trakt,
+			&i.Outside,
 		); err != nil {
 			return nil, err
 		}
