@@ -97,6 +97,21 @@
   font-weight: 600;
 }
 
+.elsewhere {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.elsewhere span {
+  color: var(--ink-3);
+}
+
+.elsewhere a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
 .progress {
   display: grid;
   gap: 12px;

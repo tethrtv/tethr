@@ -1776,13 +1776,30 @@ export interface components {
              */
             created_at: number;
         };
-        /** @description Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB. */
+        /** @description Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata. */
         Ids: {
             /** Format: int64 */
             tethr?: number;
             tmdb?: number;
             imdb?: string;
             tvdb?: number;
+            wikidata?: string;
+            tvmaze?: number;
+            letterboxd?: string;
+            trakt?: number;
+            trakt_slug?: string;
+            mal?: number;
+            anilist?: number;
+            anidb?: number;
+            plex?: string;
+            eidr?: string;
+            isan?: string;
+            rottentomatoes?: string;
+            metacritic?: string;
+            netflix?: string;
+            primevideo?: string;
+            disneyplus?: string;
+            appletv?: string;
         };
         /** @description A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`. */
         ItemRef: {
@@ -2330,6 +2347,7 @@ export interface components {
             /** @enum {string} */
             type: "movie" | "show";
             title: components["schemas"]["Title"];
+            facts?: components["schemas"]["TitleFacts"];
             /** @description Plays of the film, newest first. Always empty for a show. */
             watches: components["schemas"]["Play"][];
             resume?: components["schemas"]["Resume"];
@@ -2346,6 +2364,21 @@ export interface components {
              * @description Set while you're rewatching the show. Only plays after it count towards progress.
              */
             rewatch_from?: string;
+        };
+        /** @description What Wikidata says about the film or show. Each one is left out when Wikidata doesn't say. */
+        TitleFacts: {
+            /** @description Tethr's own genres, up to four, ordered by how many of Wikidata's genre values point to each. */
+            genres?: ("drama" | "comedy" | "documentary" | "crime" | "romance" | "action" | "thriller" | "horror" | "adventure" | "fantasy" | "science-fiction" | "music" | "mystery" | "kids" | "history" | "biography" | "western" | "family" | "war" | "soap" | "reality" | "talk-and-game" | "sport" | "news")[];
+            /** @description Countries of origin, as ISO 3166 codes. */
+            countries?: string[];
+            /** @description Original languages, as IETF tags. */
+            languages?: string[];
+            /** @description What else it is, such as anime, a miniseries or a TV film. */
+            type_flags?: ("animated" | "anime" | "event" | "miniseries" | "short" | "silent" | "special" | "tv-film" | "web")[];
+            /** @description When a show started, as `2008-01-20`, `2008-01` or `2008` depending on what's known. */
+            started?: string;
+            /** @description When a show ended, in the same form. Left out when Wikidata has no end date, as while a show is running. */
+            ended?: string;
         };
         /** @description Your rating of the film or show itself. */
         TitleRating: {

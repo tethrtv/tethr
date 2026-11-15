@@ -2978,7 +2978,7 @@ components:
           description: Unix seconds.
     Ids:
       type: object
-      description: Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB.
+      description: Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
       properties:
         tethr:
           type: integer
@@ -2989,6 +2989,40 @@ components:
           type: string
         tvdb:
           type: integer
+        wikidata:
+          type: string
+        tvmaze:
+          type: integer
+        letterboxd:
+          type: string
+        trakt:
+          type: integer
+        trakt_slug:
+          type: string
+        mal:
+          type: integer
+        anilist:
+          type: integer
+        anidb:
+          type: integer
+        plex:
+          type: string
+        eidr:
+          type: string
+        isan:
+          type: string
+        rottentomatoes:
+          type: string
+        metacritic:
+          type: string
+        netflix:
+          type: string
+        primevideo:
+          type: string
+        disneyplus:
+          type: string
+        appletv:
+          type: string
     ItemRef:
       type: object
       description: A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
@@ -3877,6 +3911,8 @@ components:
           enum: [movie, show]
         title:
           $ref: '#/components/schemas/Title'
+        facts:
+          $ref: '#/components/schemas/TitleFacts'
         watches:
           type: array
           description: Plays of the film, newest first. Always empty for a show.
@@ -3905,6 +3941,38 @@ components:
           type: string
           format: date-time
           description: Set while you're rewatching the show. Only plays after it count towards progress.
+    TitleFacts:
+      type: object
+      description: What Wikidata says about the film or show. Each one is left out when Wikidata doesn't say.
+      properties:
+        genres:
+          type: array
+          description: Tethr's own genres, up to four, ordered by how many of Wikidata's genre values point to each.
+          items:
+            type: string
+            enum: [drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news]
+        countries:
+          type: array
+          description: Countries of origin, as ISO 3166 codes.
+          items:
+            type: string
+        languages:
+          type: array
+          description: Original languages, as IETF tags.
+          items:
+            type: string
+        type_flags:
+          type: array
+          description: What else it is, such as anime, a miniseries or a TV film.
+          items:
+            type: string
+            enum: [animated, anime, event, miniseries, short, silent, special, tv-film, web]
+        started:
+          type: string
+          description: When a show started, as `2008-01-20`, `2008-01` or `2008` depending on what's known.
+        ended:
+          type: string
+          description: When a show ended, in the same form. Left out when Wikidata has no end date, as while a show is running.
     TitleRating:
       type: object
       description: Your rating of the film or show itself.

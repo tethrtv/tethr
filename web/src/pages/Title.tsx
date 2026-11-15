@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
@@ -9,6 +9,7 @@ import { Field } from '../components/Field'
 import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { useToast } from '../components/Toast'
+import { countries, elsewhere, genres, languages, runYears, types } from '../facts'
 import { date, duration, ep, playedAgo, playedOn, plural } from '../format'
 import { type Details, type Group, type Season, useDetails, useGroup, useOrders, useSeason } from '../tmdb'
 import lists from './Lists.module.css'
@@ -41,25 +42,9 @@ const how = (p: Play) =>
 const names = (list?: string[]) => (list?.length ? new Intl.ListFormat('en-GB').format(list) : undefined)
 const day = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-const statuses: Record<string, string> = {
-  'Returning Series': 'Returning',
-  Ended: 'Ended',
-  Canceled: 'Cancelled',
-  'In Production': 'In production',
-  Planned: 'Planned',
-  Pilot: 'Pilot',
-}
-
 function rated(meta?: Details | null) {
   const c = meta?.certificate
   return c && (c.country === 'GB' ? c.rating : `${c.rating} (${c.country})`)
-}
-
-function status(meta?: Details | null) {
-  const word = meta?.status && statuses[meta.status]
-  const next = meta?.nextEpisode
-  if (!word || !next?.airDate) return word
-  return `${word}, ${ep(next.season, next.number)} on ${day(next.airDate)}`
 }
 
 export function TitlePage({ slug, kind }: { slug: string; kind: Kind }) {
@@ -172,6 +157,24 @@ function Facts({ facts }: { facts: [string, string | undefined][] }) {
   )
 }
 
+function Elsewhere({ detail: d }: { detail: Detail }) {
+  const links = elsewhere(d.type, d.title.ids)
+  if (!links.length) return null
+  return (
+    <p className={styles.elsewhere}>
+      <span>Elsewhere</span>{' '}
+      {links.map((l, i) => (
+        <Fragment key={l.name}>
+          {i > 0 && ', '}
+          <a href={l.url} target="_blank" rel="noopener noreferrer">
+            {l.name}
+          </a>
+        </Fragment>
+      ))}
+    </p>
+  )
+}
+
 function About({ meta, made }: { meta?: Details | null; made: string }) {
   const by = names(meta?.creators)
   const cast = names(meta?.cast)
@@ -259,7 +262,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           <Facts
             facts={[
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
-              ['First aired', (d.title.year ?? meta?.year)?.toString()],
+              ['Aired', runYears(d.facts?.started, d.facts?.ended, d.title.year ?? meta?.year)],
               [
                 'Episodes',
                 outlined && episodes.length
@@ -270,11 +273,14 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               ],
               ['Runtime', runtime ? `About ${duration(runtime)} each` : undefined],
               ['Network', names(meta?.networks)],
-              ['Genre', meta?.genres?.join(', ')],
+              ['Genre', genres(d.facts?.genres)],
+              ['Type', types('show', d.facts?.type_flags)],
+              ['Country', countries(d.facts?.countries)],
+              ['Language', languages(d.facts?.languages)],
               ['Rated', rated(meta)],
-              ['Status', status(meta)],
             ]}
           />
+          <Elsewhere detail={d} />
           <div className={styles.progress}>
             <p className={lists.lead}>
               {!outlined && seen ? (
@@ -676,10 +682,14 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
               ['Released', (d.title.year ?? meta?.year)?.toString()],
               ['Runtime', runtime ? duration(runtime) : undefined],
-              ['Genre', meta?.genres?.join(', ')],
+              ['Genre', genres(d.facts?.genres)],
+              ['Type', types('movie', d.facts?.type_flags)],
+              ['Country', countries(d.facts?.countries)],
+              ['Language', languages(d.facts?.languages)],
               ['Rated', rated(meta)],
             ]}
           />
+          <Elsewhere detail={d} />
           <div className={styles.progress}>
             <p className={lists.lead}>
               {d.resume
