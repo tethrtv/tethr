@@ -94,7 +94,7 @@ services:
 
   cloudflared:
     <<: *logging
-    image: cloudflare/cloudflared:2026.10.7
+    image: cloudflare/cloudflared:2026.11.0
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?}
