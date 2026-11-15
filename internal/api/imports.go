@@ -134,6 +134,9 @@ func matchedImport(in NewImport) core.ImportFile {
 		var out []core.ImportItem
 		for _, i := range value(list) {
 			item := core.ImportItem{Ref: core.Ref{Kind: string(i.Type)}, Label: i.Label, At: i.At, Rating: int16(value(i.Rating))}
+			if i.Tethr != nil && *i.Tethr > 0 {
+				item.Ref.IDs.Tethr = *i.Tethr
+			}
 			if i.Tmdb != nil && *i.Tmdb > 0 {
 				item.Ref.IDs.TMDB = int64(*i.Tmdb)
 			}

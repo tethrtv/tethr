@@ -770,6 +770,24 @@ func (e ListRatingsParamsType) Valid() bool {
 	}
 }
 
+// Defines values for SearchParamsScope.
+const (
+	Catalogue SearchParamsScope = "catalogue"
+	Library   SearchParamsScope = "library"
+)
+
+// Valid indicates whether the value is a known member of the SearchParamsScope enum.
+func (e SearchParamsScope) Valid() bool {
+	switch e {
+	case Catalogue:
+		return true
+	case Library:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SearchParamsType.
 const (
 	SearchParamsTypeMovie SearchParamsType = "movie"
@@ -1058,6 +1076,12 @@ type Export struct {
 // ExportFormat defines model for Export.Format.
 type ExportFormat string
 
+// FilmMatch defines model for FilmMatch.
+type FilmMatch struct {
+	Candidates []Item `json:"candidates"`
+	Match      *Item  `json:"match,omitempty"`
+}
+
 // Follower defines model for Follower.
 type Follower struct {
 	FollowedAt time.Time `json:"followed_at"`
@@ -1148,8 +1172,11 @@ type ImportedItem struct {
 	// Precision Set `day` when only the date of `at` is known.
 	Precision *ImportedItemPrecision `json:"precision,omitempty"`
 	Rating    *int                   `json:"rating,omitempty"`
-	Tmdb      *int32                 `json:"tmdb,omitempty"`
-	Type      ImportedItemType       `json:"type"`
+
+	// Tethr Tethr's ID for it, from `/v1/match` or search. Used before `tmdb`.
+	Tethr *int64           `json:"tethr,omitempty"`
+	Tmdb  *int32           `json:"tmdb,omitempty"`
+	Type  ImportedItemType `json:"type"`
 }
 
 // ImportedItemPrecision Set `day` when only the date of `at` is known.
@@ -2221,6 +2248,14 @@ type ReportListParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// MatchFilmsJSONBody defines parameters for MatchFilms.
+type MatchFilmsJSONBody struct {
+	Films []struct {
+		Name string `json:"name"`
+		Year *int   `json:"year,omitempty"`
+	} `json:"films"`
+}
+
 // DeleteAccountJSONBody defines parameters for DeleteAccount.
 type DeleteAccountJSONBody struct {
 	Username string `json:"username"`
@@ -2298,10 +2333,14 @@ type RemoveRatingParams struct {
 // SearchParams defines parameters for Search.
 type SearchParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
-	ProfileId *ProfileId        `form:"profile_id,omitempty" json:"profile_id,omitempty"`
-	Q         string            `form:"q" json:"q"`
-	Type      *SearchParamsType `form:"type,omitempty" json:"type,omitempty"`
+	ProfileId *ProfileId         `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Q         string             `form:"q" json:"q"`
+	Scope     *SearchParamsScope `form:"scope,omitempty" json:"scope,omitempty"`
+	Type      *SearchParamsType  `form:"type,omitempty" json:"type,omitempty"`
 }
+
+// SearchParamsScope defines parameters for Search.
+type SearchParamsScope string
 
 // SearchParamsType defines parameters for Search.
 type SearchParamsType string
@@ -2477,6 +2516,9 @@ type ReorderListJSONRequestBody ReorderListJSONBody
 
 // ReportListJSONRequestBody defines body for ReportList for application/json ContentType.
 type ReportListJSONRequestBody = NewReport
+
+// MatchFilmsJSONRequestBody defines body for MatchFilms for application/json ContentType.
+type MatchFilmsJSONRequestBody MatchFilmsJSONBody
 
 // DeleteAccountJSONRequestBody defines body for DeleteAccount for application/json ContentType.
 type DeleteAccountJSONRequestBody DeleteAccountJSONBody
@@ -2669,6 +2711,9 @@ type ServerInterface interface {
 	// ReportList Report a list that breaks the rules
 	// (POST /v1/lists/{id}/reports)
 	ReportList(w http.ResponseWriter, r *http.Request, id Id, params ReportListParams)
+	// MatchFilms Find films by name and year
+	// (POST /v1/match)
+	MatchFilms(w http.ResponseWriter, r *http.Request)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(w http.ResponseWriter, r *http.Request)
@@ -2741,7 +2786,7 @@ type ServerInterface interface {
 	// Scrobble Report playback starting, pausing or stopping
 	// (POST /v1/scrobble)
 	Scrobble(w http.ResponseWriter, r *http.Request)
-	// Search Search the films and shows you've watched, rated or listed
+	// Search Search for films and shows
 	// (GET /v1/search)
 	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
 	// ListSessions Where the account is signed in
@@ -4662,6 +4707,20 @@ func (siw *ServerInterfaceWrapper) ReportList(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// MatchFilms operation middleware
+func (siw *ServerInterfaceWrapper) MatchFilms(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MatchFilms(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteAccount operation middleware
 func (siw *ServerInterfaceWrapper) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 
@@ -5365,6 +5424,19 @@ func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
 		}
 		return
 	}
@@ -6450,6 +6522,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.UseAiredOrder)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/titles/{id}/episode-order", wrapper.PickEpisodeOrder)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/search", wrapper.Search)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/match", wrapper.MatchFilms)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/ratings", wrapper.ListRatings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/ratings", wrapper.Rate)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/ratings/{id}", wrapper.RemoveRating)
@@ -9340,6 +9413,58 @@ func (response ReportList429JSONResponse) VisitReportListResponse(w http.Respons
 	return err
 }
 
+type MatchFilmsRequestObject struct {
+	Body *MatchFilmsJSONRequestBody
+}
+
+type MatchFilmsResponseObject interface {
+	VisitMatchFilmsResponse(w http.ResponseWriter) error
+}
+
+type MatchFilms200JSONResponse struct {
+	Results []FilmMatch `json:"results"`
+}
+
+func (response MatchFilms200JSONResponse) VisitMatchFilmsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MatchFilms400JSONResponse struct{ ProblemJSONResponse }
+
+func (response MatchFilms400JSONResponse) VisitMatchFilmsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MatchFilms401JSONResponse Problem
+
+func (response MatchFilms401JSONResponse) VisitMatchFilmsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteAccountRequestObject struct {
 	Body *DeleteAccountJSONRequestBody
 }
@@ -10599,7 +10724,21 @@ func (response Search200JSONResponse) VisitSearchResponse(w http.ResponseWriter)
 	return err
 }
 
-type Search401JSONResponse struct{ ProblemJSONResponse }
+type Search400JSONResponse struct{ ProblemJSONResponse }
+
+func (response Search400JSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Search401JSONResponse Problem
 
 func (response Search401JSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
 
@@ -11952,6 +12091,9 @@ type StrictServerInterface interface {
 	// ReportList Report a list that breaks the rules
 	// (POST /v1/lists/{id}/reports)
 	ReportList(ctx context.Context, request ReportListRequestObject) (ReportListResponseObject, error)
+	// MatchFilms Find films by name and year
+	// (POST /v1/match)
+	MatchFilms(ctx context.Context, request MatchFilmsRequestObject) (MatchFilmsResponseObject, error)
 	// DeleteAccount Delete the account, its household and everything in it
 	// (DELETE /v1/me)
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
@@ -12024,7 +12166,7 @@ type StrictServerInterface interface {
 	// Scrobble Report playback starting, pausing or stopping
 	// (POST /v1/scrobble)
 	Scrobble(ctx context.Context, request ScrobbleRequestObject) (ScrobbleResponseObject, error)
-	// Search Search the films and shows you've watched, rated or listed
+	// Search Search for films and shows
 	// (GET /v1/search)
 	Search(ctx context.Context, request SearchRequestObject) (SearchResponseObject, error)
 	// ListSessions Where the account is signed in
@@ -13583,6 +13725,37 @@ func (sh *strictHandler) ReportList(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReportListResponseObject); ok {
 		if err := validResponse.VisitReportListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MatchFilms operation middleware
+func (sh *strictHandler) MatchFilms(w http.ResponseWriter, r *http.Request) {
+	var request MatchFilmsRequestObject
+
+	var body MatchFilmsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MatchFilms(ctx, request.(MatchFilmsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MatchFilms")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MatchFilmsResponseObject); ok {
+		if err := validResponse.VisitMatchFilmsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -118,13 +118,20 @@ func (s *Server) Search(ctx context.Context, req SearchRequestObject) (SearchRes
 		return Search404JSONResponse(noSuchProfile), nil
 	}
 	if !ok {
-		return Search401JSONResponse{notConnected}, err
+		return Search401JSONResponse(notConnected), err
 	}
 	kind := ""
 	if req.Params.Type != nil {
 		kind = string(*req.Params.Type)
 	}
-	items, err := core.Search(ctx, s.DB, c.ProfileID, req.Params.Q, kind)
+	scope := Library
+	if req.Params.Scope != nil {
+		scope = *req.Params.Scope
+	}
+	if !scope.Valid() {
+		return Search400JSONResponse{problem("invalid_scope", "Scope is library or catalogue.")}, nil
+	}
+	items, err := core.Search(ctx, s.DB, c.ProfileID, req.Params.Q, kind, string(scope))
 	if err != nil {
 		return nil, err
 	}
@@ -191,4 +198,33 @@ func (s *Server) ReportTitle(ctx context.Context, req ReportTitleRequestObject) 
 		return nil, err
 	}
 	return ReportTitle204Response{}, nil
+}
+
+func (s *Server) MatchFilms(ctx context.Context, req MatchFilmsRequestObject) (MatchFilmsResponseObject, error) {
+	if _, ok, err := s.caller(ctx); !ok {
+		return MatchFilms401JSONResponse(notConnected), err
+	}
+	if n := len(req.Body.Films); n == 0 || n > 100 {
+		return MatchFilms400JSONResponse{problem("invalid_films", "Send between 1 and 100 films.")}, nil
+	}
+	films := make([]core.FilmName, len(req.Body.Films))
+	for i, f := range req.Body.Films {
+		films[i] = core.FilmName{Name: f.Name, Year: value(f.Year)}
+	}
+	found, err := core.MatchFilms(ctx, s.DB, films)
+	if err != nil {
+		return nil, err
+	}
+	out := MatchFilms200JSONResponse{Results: make([]FilmMatch, len(found))}
+	for i, f := range found {
+		out.Results[i].Candidates = make([]Item, len(f.Candidates))
+		for j, c := range f.Candidates {
+			out.Results[i].Candidates[j] = toItem(c)
+		}
+		if f.Match != nil {
+			m := toItem(*f.Match)
+			out.Results[i].Match = &m
+		}
+	}
+	return out, nil
 }

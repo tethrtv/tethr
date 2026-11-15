@@ -427,6 +427,8 @@ type Title struct {
 	Languages          []string
 	FactsVersion       *string
 	SexualContent      bool
+	SearchName         *string
+	SearchOriginal     *string
 }
 
 type UpNextList struct {

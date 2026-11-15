@@ -501,3 +501,24 @@ WHERE merged_into_id IS NULL AND facts_version IS NOT NULL
 
 -- name: WikidataItemsOf :many
 SELECT DISTINCT wikidata_id::text FROM titles WHERE id = ANY(@ids::bigint[]) AND wikidata_id IS NOT NULL;
+
+-- name: SearchCatalogue :many
+WITH q AS (SELECT fold_name(sqlc.arg(words)::text) AS f)
+SELECT t.id
+FROM titles t, q
+WHERE length(q.f) >= 2 AND t.merged_into_id IS NULL AND NOT t.adult
+  AND NOT (sqlc.arg(kids)::bool AND t.sexual_content)
+  AND (sqlc.narg(kind)::text IS NULL OR t.kind = sqlc.narg(kind))
+  AND (t.search_name LIKE '%' || q.f || '%' OR t.search_original LIKE '%' || q.f || '%')
+ORDER BY (t.search_name = q.f) IS TRUE OR (t.search_original = q.f) IS TRUE DESC,
+    (t.search_name LIKE q.f || '%') IS TRUE OR (t.search_original LIKE q.f || '%') IS TRUE DESC,
+    t.sitelinks DESC, t.id
+LIMIT sqlc.arg(max)::int;
+
+-- name: FilmsNamed :many
+WITH q AS (SELECT fold_name(sqlc.arg(name)::text) AS f)
+SELECT t.id, coalesce(t.year, 0)::int AS year
+FROM titles t, q
+WHERE q.f <> '' AND t.kind = 'movie' AND t.merged_into_id IS NULL AND NOT t.adult
+  AND (t.search_name = q.f OR t.search_original = q.f)
+ORDER BY t.sitelinks DESC, t.id;
