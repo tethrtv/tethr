@@ -113,22 +113,30 @@ func (q *Queries) LatestActivity(ctx context.Context, profileID int64) (time.Tim
 }
 
 const listEntryIDs = `-- name: ListEntryIDs :many
-SELECT id FROM list_items WHERE list_id = $1
+SELECT li.id, coalesce(t.adult OR t.sexual_content, false)::bool AS flagged
+FROM list_items li JOIN titles t ON t.id = li.title_id
+WHERE li.list_id = $1
+ORDER BY li.rank, li.id
 `
 
-func (q *Queries) ListEntryIDs(ctx context.Context, listID int64) ([]int64, error) {
+type ListEntryIDsRow struct {
+	ID      int64
+	Flagged bool
+}
+
+func (q *Queries) ListEntryIDs(ctx context.Context, listID int64) ([]ListEntryIDsRow, error) {
 	rows, err := q.db.Query(ctx, listEntryIDs, listID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []int64
+	var items []ListEntryIDsRow
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var i ListEntryIDsRow
+		if err := rows.Scan(&i.ID, &i.Flagged); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -178,8 +186,14 @@ FROM list_items li
 JOIN titles t ON t.id = li.title_id
 LEFT JOIN seasons s ON s.id = li.season_id
 WHERE li.list_id = ANY($1::bigint[])
+  AND NOT ($2::bool AND (t.adult OR t.sexual_content))
 ORDER BY li.list_id, li.rank, li.id
 `
+
+type ListItemsInParams struct {
+	ListIds []int64
+	ForKids bool
+}
 
 type ListItemsInRow struct {
 	ID           int64
@@ -195,8 +209,8 @@ type ListItemsInRow struct {
 	SeasonNumber *int32
 }
 
-func (q *Queries) ListItemsIn(ctx context.Context, listIds []int64) ([]ListItemsInRow, error) {
-	rows, err := q.db.Query(ctx, listItemsIn, listIds)
+func (q *Queries) ListItemsIn(ctx context.Context, arg ListItemsInParams) ([]ListItemsInRow, error) {
+	rows, err := q.db.Query(ctx, listItemsIn, arg.ListIds, arg.ForKids)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +531,8 @@ SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.c
     CASE WHEN l.profile_id = $1::bigint THEN 'mine'
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
-    (SELECT count(*) FROM list_items i WHERE i.list_id = l.id)::bigint AS item_count,
+    (SELECT count(*) FROM list_items i JOIN titles t ON t.id = i.title_id
+     WHERE i.list_id = l.id AND NOT ($2::bool AND (t.adult OR t.sexual_content)))::bigint AS item_count,
     coalesce((SELECT max(t.wikidata_checked_at) FROM list_items i JOIN titles t ON t.id = i.title_id WHERE i.list_id = l.id), 'epoch')::timestamptz AS titles_checked_at,
     EXISTS (SELECT 1 FROM up_next_lists u WHERE u.list_id = l.id AND u.profile_id = $1::bigint) AS in_up_next,
     (SELECT count(*) FROM list_follows f WHERE f.list_id = l.id)::bigint AS follower_count,
@@ -526,16 +541,17 @@ FROM lists l
 JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN profiles v ON v.id = $1::bigint
 WHERE l.kind = 'custom'
-  AND ($2::bigint IS NULL OR l.id = $2)
-  AND ($3::bigint IS NULL OR l.profile_id = $3)
-  AND ($4::bigint[] IS NULL OR l.id = ANY($4::bigint[]))
-  AND ($2::bigint IS NOT NULL OR $3::bigint IS NOT NULL OR $4::bigint[] IS NOT NULL OR o.household_id = v.household_id)
+  AND ($3::bigint IS NULL OR l.id = $3)
+  AND ($4::bigint IS NULL OR l.profile_id = $4)
+  AND ($5::bigint[] IS NULL OR l.id = ANY($5::bigint[]))
+  AND ($3::bigint IS NOT NULL OR $4::bigint IS NOT NULL OR $5::bigint[] IS NOT NULL OR o.household_id = v.household_id)
   AND (l.profile_id = $1::bigint OR l.privacy = 'public' OR (l.privacy = 'household' AND o.household_id = v.household_id))
 ORDER BY l.profile_id <> $1::bigint, o.position, lower(l.name), l.id
 `
 
 type VisibleListsParams struct {
 	Viewer  int64
+	ForKids bool
 	ListID  *int64
 	Owner   *int64
 	ListIds []int64
@@ -557,6 +573,7 @@ type VisibleListsRow struct {
 func (q *Queries) VisibleLists(ctx context.Context, arg VisibleListsParams) ([]VisibleListsRow, error) {
 	rows, err := q.db.Query(ctx, visibleLists,
 		arg.Viewer,
+		arg.ForKids,
 		arg.ListID,
 		arg.Owner,
 		arg.ListIds,

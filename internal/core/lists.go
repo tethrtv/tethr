@@ -155,28 +155,35 @@ func getList(ctx context.Context, q *store.Queries, viewer, id int64) (List, err
 }
 
 func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params store.VisibleListsParams) ([]List, error) {
-	params.Viewer = viewer
-	rows, err := q.VisibleLists(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	var latest time.Time
+	return loadLists(ctx, q, viewer, params, true)
+}
+
+func loadLists(ctx context.Context, q *store.Queries, viewer int64, params store.VisibleListsParams, hide bool) ([]List, error) {
 	var viewerKind string
-	if viewer != 0 && len(rows) > 0 {
-		if latest, err = q.LatestActivity(ctx, viewer); err != nil {
-			return nil, err
-		}
+	if viewer != 0 {
 		p, err := q.ProfileByID(ctx, viewer)
 		if err != nil {
 			return nil, err
 		}
 		viewerKind = p.Kind
 	}
+	params.Viewer = viewer
+	params.ForKids = hide && viewerKind == "kids"
+	rows, err := q.VisibleLists(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	var latest time.Time
+	if viewer != 0 && len(rows) > 0 {
+		if latest, err = q.LatestActivity(ctx, viewer); err != nil {
+			return nil, err
+		}
+	}
 	lists := make([]List, 0, len(rows))
 	ids := make([]int64, 0, len(rows))
 	for _, row := range rows {
 		l := row.List
-		version := sha256.Sum256(fmt.Appendf(nil, "%d %d %d", l.UpdatedAt.UnixMicro(), row.TitlesCheckedAt.UnixMicro(), latest.UnixMicro()))
+		version := sha256.Sum256(fmt.Appendf(nil, "%d %d %d %s %d", l.UpdatedAt.UnixMicro(), row.TitlesCheckedAt.UnixMicro(), latest.UnixMicro(), viewerKind, row.ItemCount))
 		owner := ListOwner{ID: l.ProfileID, Username: row.OwnerUsername, Name: row.OwnerName, Private: row.OwnerPrivate}
 		if row.Access == "public" && owner.Private {
 			owner.Name = ""
@@ -206,7 +213,7 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 	if len(ids) == 0 {
 		return lists, nil
 	}
-	items, err := q.ListItemsIn(ctx, ids)
+	items, err := q.ListItemsIn(ctx, store.ListItemsInParams{ListIds: ids, ForKids: params.ForKids})
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +241,13 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 }
 
 func addCovers(ctx context.Context, q *store.Queries, viewer int64, lists []List, items []store.ListItemsInRow) error {
+	listed := map[int64]bool{}
+	for _, item := range items {
+		listed[item.ID] = true
+	}
 	picked := map[int64]int64{}
 	for _, l := range lists {
-		if l.CoverItemID != nil {
+		if l.CoverItemID != nil && listed[*l.CoverItemID] {
 			picked[l.ID] = *l.CoverItemID
 		}
 	}
@@ -269,12 +280,22 @@ func addCovers(ctx context.Context, q *store.Queries, viewer int64, lists []List
 }
 
 func ListEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query ListQuery) (List, []ListEntry, int, error) {
+	return listEntries(ctx, db, viewer, id, query, true)
+}
+
+func listEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query ListQuery, hide bool) (List, []ListEntry, int, error) {
 	q := store.New(db)
 	list, err := getList(ctx, q, viewer, id)
 	if err != nil {
 		return List{}, nil, 0, err
 	}
-	rows, err := q.ListItemsIn(ctx, []int64{id})
+	var kids bool
+	if hide {
+		if kids, err = isKids(ctx, q, viewer); err != nil {
+			return List{}, nil, 0, err
+		}
+	}
+	rows, err := q.ListItemsIn(ctx, store.ListItemsInParams{ListIds: []int64{id}, ForKids: kids})
 	if err != nil {
 		return List{}, nil, 0, err
 	}
@@ -294,7 +315,10 @@ func ListEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query 
 		return List{}, nil, 0, err
 	}
 	entries := make([]ListEntry, 0, len(rows))
-	for _, row := range rows {
+	for n, row := range rows {
+		if kids {
+			row.Rank = int32(n + 1)
+		}
 		e := ListEntry{Entry: Entry{ID: row.ID, At: row.ListedAt, Rank: row.Rank, Notes: row.Notes, Item: c.item(row.TitleID, seasonOf(row.TitleID, row.SeasonID, row.SeasonNumber), row.EpisodeID)}}
 		if query.Kind != "" && e.Item.Kind() != query.Kind {
 			continue
@@ -617,9 +641,19 @@ func SetListNotes(ctx context.Context, db *pgxpool.Pool, profileID, listID, item
 
 func ReorderList(ctx context.Context, db *pgxpool.Pool, profileID, listID int64, order []int64) error {
 	return changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
-		ids, err := q.ListEntryIDs(ctx, l.ID)
+		rows, err := q.ListEntryIDs(ctx, l.ID)
 		if err != nil {
 			return err
+		}
+		kids, err := isKids(ctx, q, profileID)
+		if err != nil {
+			return err
+		}
+		var ids []int64
+		for _, r := range rows {
+			if !kids || !r.Flagged {
+				ids = append(ids, r.ID)
+			}
 		}
 		sorted := slices.Clone(order)
 		slices.Sort(sorted)
@@ -627,7 +661,17 @@ func ReorderList(ctx context.Context, db *pgxpool.Pool, profileID, listID int64,
 		if !slices.Equal(sorted, ids) {
 			return ErrListOrder
 		}
-		return q.RankListItems(ctx, store.RankListItemsParams{Ids: order, ListID: l.ID})
+		full := make([]int64, 0, len(rows))
+		next := 0
+		for _, r := range rows {
+			if kids && r.Flagged {
+				full = append(full, r.ID)
+				continue
+			}
+			full = append(full, order[next])
+			next++
+		}
+		return q.RankListItems(ctx, store.RankListItemsParams{Ids: full, ListID: l.ID})
 	})
 }
 
@@ -761,4 +805,15 @@ func markLists(ctx context.Context, q *store.Queries, profileID int64) error {
 		}
 	}
 	return nil
+}
+
+func isKids(ctx context.Context, q *store.Queries, profileID int64) (bool, error) {
+	if profileID == 0 {
+		return false, nil
+	}
+	p, err := q.ProfileByID(ctx, profileID)
+	if err != nil {
+		return false, err
+	}
+	return p.Kind == "kids", nil
 }

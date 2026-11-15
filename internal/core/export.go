@@ -128,12 +128,12 @@ func Export(ctx context.Context, db *pgxpool.Pool, accountID int64) (HouseholdEx
 		if e.Watchlist, err = Watchlist(ctx, db, p.ID, ""); err != nil {
 			return out, err
 		}
-		lists, err := visibleLists(ctx, store.New(db), p.ID, store.VisibleListsParams{Owner: &p.ID})
+		lists, err := loadLists(ctx, store.New(db), p.ID, store.VisibleListsParams{Owner: &p.ID}, false)
 		if err != nil {
 			return out, err
 		}
 		for _, l := range lists {
-			_, entries, _, err := ListEntries(ctx, db, p.ID, l.ID, ListQuery{SortBy: "rank", SortHow: "asc"})
+			_, entries, _, err := listEntries(ctx, db, p.ID, l.ID, ListQuery{SortBy: "rank", SortHow: "asc"}, false)
 			if err != nil {
 				return out, err
 			}

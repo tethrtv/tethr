@@ -175,7 +175,11 @@ func UpNextLists(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNe
 	if err != nil {
 		return nil, err
 	}
-	items, err := q.ListItemsIn(ctx, ids)
+	kids, err := isKids(ctx, q, profileID)
+	if err != nil {
+		return nil, err
+	}
+	items, err := q.ListItemsIn(ctx, store.ListItemsInParams{ListIds: ids, ForKids: kids})
 	if err != nil {
 		return nil, err
 	}
