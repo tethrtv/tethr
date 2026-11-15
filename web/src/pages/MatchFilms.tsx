@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
@@ -6,13 +6,53 @@ import { Button } from '../components/Button'
 import { Cover } from '../components/Cover'
 import { plural } from '../format'
 import { type Film, label } from '../letterboxd'
-import { type Found, type Matched, matchFilms, useFind } from '../tmdb'
+import { type Found, useFind } from '../tmdb'
 import home from './Home.module.css'
 import styles from './Import.module.css'
 
 type Item = components['schemas']['ImportedItem']
+type TitleItem = components['schemas']['Item']
+type Pick = { tethr?: number; tmdb?: number; name: string; year?: number; poster?: string }
+type Matched = { match: Pick | null; candidates: Pick[] }
 
 const batch = 100
+
+const fromItem = (i: TitleItem): Pick => ({
+  tethr: i.title.ids.tethr,
+  tmdb: i.title.ids.tmdb,
+  name: i.title.name ?? 'Untitled',
+  year: i.title.year,
+})
+const fromTMDB = (f: Found): Pick => ({
+  tmdb: f.tmdb,
+  name: f.name,
+  year: f.year ?? undefined,
+  poster: f.poster ?? undefined,
+})
+const key = (p: Pick) => (p.tethr ? `t${p.tethr}` : `m${p.tmdb}`)
+const same = (a: Pick, b: Pick) => key(a) === key(b) || (!!a.tmdb && a.tmdb === b.tmdb)
+
+async function matchFilms(films: Film[], signal: AbortSignal, onWait: (waiting: boolean) => void): Promise<Matched[]> {
+  for (;;) {
+    const { data, response } = await api.POST('/v1/match', {
+      body: { films: films.map((f) => ({ name: f.name, year: f.year })) },
+      signal,
+    })
+    if (response.status === 429) {
+      onWait(true)
+      await new Promise((r) => setTimeout(r, Number(response.headers.get('Retry-After') ?? 5) * 1000))
+      signal.throwIfAborted()
+      continue
+    }
+    onWait(false)
+    if (response.status === 401) throw new Error('You’ve been signed out. Sign in again, then choose your file again.')
+    if (!data) throw new Error('Matching isn’t working right now. Try again in a moment.')
+    return data.results.map((r) => ({
+      match: r.match ? fromItem(r.match) : null,
+      candidates: r.candidates.map(fromItem),
+    }))
+  }
+}
 
 export function MatchFilms({
   films,
@@ -31,7 +71,7 @@ export function MatchFilms({
   const [failed, setFailed] = useState<string>()
   const [tries, setTries] = useState(0)
   const [waiting, setWaiting] = useState(false)
-  const [picks, setPicks] = useState<Record<number, Found | null>>({})
+  const [picks, setPicks] = useState<Record<number, Pick | null>>({})
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: tries carries on matching after a failure
   useEffect(() => {
@@ -53,8 +93,8 @@ export function MatchFilms({
       const watchlist: Item[] = []
       const ratings: Item[] = []
       films.forEach((f, i) => {
-        const tmdb = (i in picks ? picks[i] : matched[i]?.match)?.tmdb
-        const base = { type: 'movie' as const, tmdb, label: label(f) }
+        const pick = i in picks ? picks[i] : matched[i]?.match
+        const base = { type: 'movie' as const, tethr: pick?.tethr, tmdb: pick?.tmdb, label: label(f) }
         for (const p of f.plays) history.push({ ...base, at: p.at, precision: p.at ? 'day' : undefined })
         if (f.rating) ratings.push({ ...base, rating: f.rating, at: f.ratedAt })
         if (f.listedAt) watchlist.push({ ...base, at: f.listedAt })
@@ -89,7 +129,7 @@ export function MatchFilms({
       <div className={styles.review}>
         <p>
           Matching {matched.length.toLocaleString('en-GB')} of {plural(films.length, 'film')} from Letterboxd…
-          {waiting && ' Tethr has matched a lot of films this hour, so it’s waiting a moment before carrying on.'}
+          {waiting && ' That’s a lot of films at once, so Tethr is waiting a moment before carrying on.'}
         </p>
         <span className={styles.meter}>
           <span style={{ transform: `scaleX(${matched.length / films.length})` }} />
@@ -113,6 +153,7 @@ export function MatchFilms({
           {unsure.map(({ film, i }) => (
             <Unsure
               key={i}
+              profileID={profileID}
               film={film}
               candidates={matched[i].candidates}
               picked={picks[i] ?? null}
@@ -136,22 +177,41 @@ export function MatchFilms({
 }
 
 function Unsure({
+  profileID,
   film,
   candidates,
   picked,
   onPick,
 }: {
+  profileID: number
   film: Film
-  candidates: Found[]
-  picked: Found | null
-  onPick: (f: Found | null) => void
+  candidates: Pick[]
+  picked: Pick | null
+  onPick: (p: Pick | null) => void
 }) {
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState('')
-  const found = useFind(query)
-  const films = [...candidates, ...(found.data ?? []).filter((f) => f.type === 'movie')]
-  const options = films.filter((f, i) => films.findIndex((o) => o.tmdb === f.tmdb) === i)
-  if (picked && !options.some((o) => o.tmdb === picked.tmdb)) options.unshift(picked)
+  const [further, setFurther] = useState('')
+  const found = useQuery({
+    queryKey: ['search', 'catalogue', profileID, 'movie', query],
+    enabled: query.length >= 2,
+    queryFn: async () => {
+      const { data } = await api.GET('/v1/search', {
+        params: { query: { profile_id: profileID, q: query, scope: 'catalogue', type: 'movie' } },
+      })
+      if (!data) throw new Error('Search isn’t working right now. Try again in a moment.')
+      return data.map(fromItem)
+    },
+  })
+  const asking = !!query && (further === query || found.data?.length === 0)
+  const elsewhere = useFind(asking ? query : '')
+  const films = [
+    ...candidates,
+    ...(found.data ?? []),
+    ...(elsewhere.data ?? []).filter((f) => f.type === 'movie').map(fromTMDB),
+  ]
+  const options = films.filter((f, i) => films.findIndex((o) => same(o, f)) === i)
+  if (picked && !options.some((o) => same(o, picked))) options.unshift(picked)
   const name = `film-${label(film)}`
 
   const search = (e: FormEvent) => {
@@ -165,9 +225,12 @@ function Unsure({
       <fieldset className={styles.choices}>
         <legend className={home.visuallyHidden}>Which film is {label(film)}?</legend>
         {options.map((o) => (
-          <label key={o.tmdb} className={picked?.tmdb === o.tmdb ? `${styles.choice} ${styles.chosen}` : styles.choice}>
-            <input type="radio" name={name} checked={picked?.tmdb === o.tmdb} onChange={() => onPick(o)} />
-            <Cover id={o.tmdb} name={o.name} poster={o.poster ?? undefined} size="xs" />
+          <label
+            key={key(o)}
+            className={picked && same(picked, o) ? `${styles.choice} ${styles.chosen}` : styles.choice}
+          >
+            <input type="radio" name={name} checked={!!picked && same(picked, o)} onChange={() => onPick(o)} />
+            <Cover id={o.tethr ?? o.tmdb ?? 0} name={o.name} poster={o.poster} size="xs" />
             <span>
               {o.name}
               {o.year && <span className={home.kind}> {o.year}</span>}
@@ -192,7 +255,15 @@ function Unsure({
         </Button>
       </form>
       {found.isError && <p className={home.error}>{(found.error as Error).message}</p>}
-      {found.data && !found.data.some((f) => f.type === 'movie') && <p className={home.note}>No films called that.</p>}
+      {elsewhere.isError && <p className={home.error}>{(elsewhere.error as Error).message}</p>}
+      {found.data && !asking && (
+        <button type="button" className={styles.further} onClick={() => setFurther(query)}>
+          Not finding it? Look further
+        </button>
+      )}
+      {asking && elsewhere.data && !found.data?.length && !elsewhere.data.some((f) => f.type === 'movie') && (
+        <p className={home.note}>No films called that.</p>
+      )}
     </li>
   )
 }

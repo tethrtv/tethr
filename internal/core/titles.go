@@ -174,29 +174,4 @@ func titleByPath(ctx context.Context, q *store.Queries, id, kind string) (store.
 	return t, err
 }
 
-func Search(ctx context.Context, db *pgxpool.Pool, profileID int64, words, kind string) ([]Item, error) {
-	words = strings.TrimSpace(words)
-	if words == "" {
-		return []Item{}, nil
-	}
-	q := store.New(db)
-	params := store.SearchLibraryParams{ProfileID: profileID, Words: likeEscaper.Replace(words)}
-	if kind != "" {
-		params.Kind = &kind
-	}
-	ids, err := q.SearchLibrary(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	c, err := loadCatalogue(ctx, q, 0, ids, nil)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]Item, 0, len(ids))
-	for _, id := range ids {
-		items = append(items, c.item(id, nil, nil))
-	}
-	return items, nil
-}
-
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)

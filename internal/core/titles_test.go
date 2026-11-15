@@ -142,7 +142,7 @@ func TestSearchLibrary(t *testing.T) {
 
 	search := func(words, kind string) []string {
 		t.Helper()
-		items, err := Search(ctx, db, profile, words, kind)
+		items, err := Search(ctx, db, profile, words, kind, "library")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -173,3 +173,20 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.further {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.further:hover {
+  color: var(--ink);
+}

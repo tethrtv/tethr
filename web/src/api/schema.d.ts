@@ -1188,12 +1188,32 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search the films and shows you've watched, rated or listed
-         * @description Matches English and original names. Names that start with the words come first. Up to 20 results.
+         * Search for films and shows
+         * @description With `scope=library`, the default, only the films and shows you've watched, rated or listed, with names that start with the words first. With `scope=catalogue`, everything Tethr knows, your own first: then exact names, names that start with the words and names that contain them, the best known first within each. Catalogue search ignores case, spaces, accents, punctuation and a leading The, A or An, needs at least two letters or numbers, and leaves out adult titles (and, on kids profiles, titles with sexual content). English and original names both match. Up to 20 results.
          */
         get: operations["search"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find films by name and year
+         * @description For importing from services that only give a film's name and year. Names are compared ignoring case, spaces, accents, punctuation and a leading The, A or An, reading & as and. English and original names both count. A film matches when exactly one film in Tethr has that name and exactly that year. Candidates are up to 5 films whose names contain it. Exact names come first, then names that start with it, then the rest, the best known first within each. They're sent whether or not one matched. If no film with that name has that year but exactly one is a year earlier or later, that film comes first among the candidates instead of matching. Adult titles are left out. Up to 100 films at a time.
+         */
+        post: operations["matchFilms"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2464,6 +2484,11 @@ export interface components {
         ImportedItem: {
             /** @enum {string} */
             type: "movie";
+            /**
+             * Format: int64
+             * @description Tethr's ID for it, from `/v1/match` or search. Used before `tmdb`.
+             */
+            tethr?: number;
             /** Format: int32 */
             tmdb?: number;
             /** @description The name the export gave it, shown if it can't be matched. */
@@ -2479,6 +2504,10 @@ export interface components {
              */
             precision?: "time" | "day";
             rating?: number;
+        };
+        FilmMatch: {
+            match?: components["schemas"]["Item"];
+            candidates: components["schemas"]["Item"][];
         };
         /** @description Added and skipped are filled in once the import is applied. Skipped items were already there. */
         ImportCount: {
@@ -4647,6 +4676,7 @@ export interface operations {
                 /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
                 profile_id?: components["parameters"]["ProfileId"];
                 q: string;
+                scope?: "library" | "catalogue";
                 type?: "movie" | "show";
             };
             header?: never;
@@ -4664,8 +4694,42 @@ export interface operations {
                     "application/json": components["schemas"]["Item"][];
                 };
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    matchFilms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    films: {
+                        name: string;
+                        year?: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description One result for each film, in the order sent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        results: components["schemas"]["FilmMatch"][];
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
         };
     };
     listRatings: {
