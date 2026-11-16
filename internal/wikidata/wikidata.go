@@ -2,6 +2,7 @@ package wikidata
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -40,6 +41,8 @@ type Title struct {
 	Genres     []string
 	Countries  []string
 	Languages  []string
+	Studios    []string
+	Networks   []string
 	Started    string
 	Ended      string
 	Sitelinks  int
@@ -52,6 +55,7 @@ type Class struct {
 	Country  string
 	Language string
 	Parents  []string
+	Human    bool
 }
 
 var (
@@ -249,7 +253,7 @@ type snak struct {
 }
 
 func readProperties() []string {
-	read := []string{"P31", "P136", "P279", "P297", "P218", "P305", "P364", "P495", "P577", "P580", "P582", "P1476", "P2047", "P4947", "P4983"}
+	read := []string{"P31", "P136", "P272", "P279", "P297", "P218", "P305", "P364", "P449", "P495", "P577", "P580", "P582", "P1476", "P2047", "P4947", "P4983"}
 	for _, id := range outsideIDs {
 		read = append(read, id.movie, id.show)
 	}
@@ -359,6 +363,8 @@ func (e entity) title(kind string) Title {
 	t.Genres = e.items("P136")
 	t.Countries = e.items("P495")
 	t.Languages = e.items("P364")
+	t.Studios = e.items("P272")
+	t.Networks = e.networks()
 	t.Sitelinks = max(len(e.Sitelinks), e.sitelinkCount)
 	if kind == "show" {
 		for _, raw := range e.statements("P580", false) {
@@ -514,6 +520,43 @@ func (e entity) items(p string) []string {
 	return out
 }
 
+func (e entity) human() bool {
+	return slices.Contains(e.items("P31"), "Q5")
+}
+
+// A broadcaster qualified with a country or place aired it somewhere else, not first.
+func (e entity) networks() []string {
+	var all []struct {
+		MainSnak   snak                       `json:"mainsnak"`
+		Rank       string                     `json:"rank"`
+		Qualifiers map[string]json.RawMessage `json:"qualifiers"`
+	}
+	if json.Unmarshal(e.Claims["P449"], &all) != nil {
+		return nil
+	}
+	var preferred, normal []string
+	for _, s := range all {
+		_, country := s.Qualifiers["P17"]
+		_, place := s.Qualifiers["P3005"]
+		var v struct {
+			ID string `json:"id"`
+		}
+		if s.MainSnak.SnakType != "value" || country || place || json.Unmarshal(s.MainSnak.DataValue.Value, &v) != nil || !IsQID(v.ID) {
+			continue
+		}
+		switch {
+		case s.Rank == "preferred" && !slices.Contains(preferred, v.ID):
+			preferred = append(preferred, v.ID)
+		case s.Rank == "normal" && !slices.Contains(normal, v.ID):
+			normal = append(normal, v.ID)
+		}
+	}
+	if len(preferred) > 0 {
+		return preferred
+	}
+	return normal
+}
+
 func (e entity) first(p string) string {
 	for _, raw := range e.statements(p, true) {
 		var v string
@@ -542,7 +585,7 @@ func (c *Client) FetchClasses(ctx context.Context, qids []string) (map[string]Cl
 	var res struct {
 		Entities map[string]entity `json:"entities"`
 	}
-	if err := c.get(ctx, url.Values{"action": {"wbgetentities"}, "ids": {strings.Join(ids, "|")}, "props": {"labels|claims"}, "languages": {"en"}}, &res); err != nil {
+	if err := c.get(ctx, url.Values{"action": {"wbgetentities"}, "ids": {strings.Join(ids, "|")}, "props": {"labels|claims"}, "languages": {"en|mul"}}, &res); err != nil {
 		return nil, nil, err
 	}
 	if len(res.Entities) == 0 {
@@ -555,7 +598,7 @@ func (c *Client) FetchClasses(ctx context.Context, qids []string) (map[string]Cl
 			unreadable = append(unreadable, q)
 			continue
 		}
-		class := Class{QID: q, Label: e.Labels["en"].Value, Country: e.first("P297"), Language: e.first("P305"), Parents: e.items("P279")}
+		class := Class{QID: q, Label: cmp.Or(e.Labels["en"].Value, e.Labels["mul"].Value), Country: e.first("P297"), Language: e.first("P305"), Parents: e.items("P279"), Human: e.human()}
 		if class.Language == "" {
 			class.Language = e.first("P218")
 		}

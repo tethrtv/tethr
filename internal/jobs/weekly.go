@@ -75,7 +75,7 @@ func (w Weekly) send(ctx context.Context, now time.Time) error {
 		if local := now.In(loc); local.Weekday() != time.Sunday || local.Hour() < weeklyHour {
 			continue
 		}
-		claimed, err := q.ClaimWeekly(ctx, store.ClaimWeeklyParams{ID: r.AccountID, SentBefore: sentBefore})
+		claimed, err := q.ClaimWeekly(ctx, store.ClaimWeeklyParams{ID: r.AccountID, SentAt: now, SentBefore: sentBefore})
 		if err != nil {
 			return err
 		}

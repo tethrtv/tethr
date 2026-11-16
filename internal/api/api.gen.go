@@ -1092,6 +1092,12 @@ type BusiestDay struct {
 	Plays     int                `json:"plays"`
 }
 
+// Company defines model for Company.
+type Company struct {
+	Name     string `json:"name"`
+	Wikidata string `json:"wikidata"`
+}
+
 // Connection defines model for Connection.
 type Connection struct {
 	AppName    string     `json:"app_name"`
@@ -1962,8 +1968,14 @@ type TitleFacts struct {
 	// Languages Original languages, as IETF tags.
 	Languages *[]string `json:"languages,omitempty"`
 
+	// Networks The channels or services it first aired on.
+	Networks *[]Company `json:"networks,omitempty"`
+
 	// Started When a show started, as `2008-01-20`, `2008-01` or `2008` depending on what's known.
 	Started *string `json:"started,omitempty"`
+
+	// Studios The companies that made it.
+	Studios *[]Company `json:"studios,omitempty"`
 
 	// TypeFlags What else it is, such as anime, a miniseries or a TV film.
 	TypeFlags *[]TitleFactsTypeFlags `json:"type_flags,omitempty"`

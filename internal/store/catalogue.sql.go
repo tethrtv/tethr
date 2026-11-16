@@ -264,6 +264,35 @@ func (q *Queries) ClassChecked(ctx context.Context, qid string) error {
 	return err
 }
 
+const classLabels = `-- name: ClassLabels :many
+SELECT qid, label FROM wikidata_classes WHERE qid = ANY($1::text[]) AND label <> '' AND NOT human
+`
+
+type ClassLabelsRow struct {
+	Qid   string
+	Label string
+}
+
+func (q *Queries) ClassLabels(ctx context.Context, qids []string) ([]ClassLabelsRow, error) {
+	rows, err := q.db.Query(ctx, classLabels, qids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClassLabelsRow
+	for rows.Next() {
+		var i ClassLabelsRow
+		if err := rows.Scan(&i.Qid, &i.Label); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const copyTitleSeasons = `-- name: CopyTitleSeasons :exec
 INSERT INTO seasons (show_id, season_number)
 SELECT $1, o.season_number FROM seasons o
@@ -341,7 +370,7 @@ const createTitle = `-- name: CreateTitle :one
 INSERT INTO titles (id, kind, slug, tmdb_id)
 SELECT n, $1, 't-' || n, $2 FROM nextval('catalogue_id') AS n
 ON CONFLICT (kind, tmdb_id) DO UPDATE SET updated_at = titles.updated_at
-RETURNING id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original
+RETURNING id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks
 `
 
 type CreateTitleParams struct {
@@ -385,6 +414,8 @@ func (q *Queries) CreateTitle(ctx context.Context, arg CreateTitleParams) (Title
 		&i.SexualContent,
 		&i.SearchName,
 		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
 	)
 	return i, err
 }
@@ -627,7 +658,9 @@ func (q *Queries) DueOutlines(ctx context.Context, limit int32) ([]DueOutlinesRo
 }
 
 const duePendingWikidata = `-- name: DuePendingWikidata :many
-SELECT qid, held, logged_out, batch FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1
+SELECT qid, held, logged_out, batch FROM wikidata_pending WHERE not_before <= now()
+ORDER BY last_edited_at IS NULL, not_before, qid
+LIMIT $1
 `
 
 type DuePendingWikidataRow struct {
@@ -1314,6 +1347,33 @@ func (q *Queries) NameSlug(ctx context.Context, arg NameSlugParams) (int64, erro
 	return result.RowsAffected(), nil
 }
 
+const namesNeeded = `-- name: NamesNeeded :many
+SELECT DISTINCT q::text FROM titles t, unnest(t.studios || t.networks) AS q
+WHERE t.merged_into_id IS NULL AND NOT EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = q)
+ORDER BY 1
+LIMIT $1
+`
+
+func (q *Queries) NamesNeeded(ctx context.Context, limit int32) ([]string, error) {
+	rows, err := q.db.Query(ctx, namesNeeded, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var q_ string
+		if err := rows.Scan(&q_); err != nil {
+			return nil, err
+		}
+		items = append(items, q_)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const outdatedFacts = `-- name: OutdatedFacts :many
 SELECT id, kind, runtime_minutes, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages
 FROM titles
@@ -1380,7 +1440,7 @@ func (q *Queries) OutlineDone(ctx context.Context, arg OutlineDoneParams) error 
 }
 
 const pendingClasses = `-- name: PendingClasses :many
-SELECT qid, label, country, language, parents, checked_at FROM wikidata_classes WHERE qid = ANY($1::text[])
+SELECT qid, label, country, language, parents, checked_at, human FROM wikidata_classes WHERE qid = ANY($1::text[])
 `
 
 func (q *Queries) PendingClasses(ctx context.Context, qids []string) ([]WikidataClass, error) {
@@ -1399,6 +1459,7 @@ func (q *Queries) PendingClasses(ctx context.Context, qids []string) ([]Wikidata
 			&i.Language,
 			&i.Parents,
 			&i.CheckedAt,
+			&i.Human,
 		); err != nil {
 			return nil, err
 		}
@@ -1411,7 +1472,7 @@ func (q *Queries) PendingClasses(ctx context.Context, qids []string) ([]Wikidata
 }
 
 const pendingTitles = `-- name: PendingTitles :many
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original FROM titles WHERE wikidata_id = ANY($1::text[]) AND merged_into_id IS NULL ORDER BY id
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks FROM titles WHERE wikidata_id = ANY($1::text[]) AND merged_into_id IS NULL ORDER BY id
 `
 
 func (q *Queries) PendingTitles(ctx context.Context, qids []string) ([]Title, error) {
@@ -1456,6 +1517,8 @@ func (q *Queries) PendingTitles(ctx context.Context, qids []string) ([]Title, er
 			&i.SexualContent,
 			&i.SearchName,
 			&i.SearchOriginal,
+			&i.Studios,
+			&i.Networks,
 		); err != nil {
 			return nil, err
 		}
@@ -1493,6 +1556,7 @@ FROM (SELECT unnest($1::text[]) AS qid, unnest($2::timestamptz[]) AS edited_at, 
 WHERE EXISTS (SELECT 1 FROM titles t WHERE t.wikidata_id = e.qid AND t.merged_into_id IS NULL)
    OR EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = e.qid)
 ON CONFLICT (qid) DO UPDATE SET last_edited_at = greatest(wikidata_pending.last_edited_at, excluded.last_edited_at),
+    not_before = CASE WHEN wikidata_pending.last_edited_at IS NULL THEN greatest(wikidata_pending.not_before, excluded.not_before) ELSE wikidata_pending.not_before END,
     logged_out = wikidata_pending.logged_out OR excluded.logged_out, batch = coalesce(wikidata_pending.batch, excluded.batch)
 `
 
@@ -1594,10 +1658,10 @@ func (q *Queries) RetryWikidataLater(ctx context.Context, qid string) error {
 }
 
 const saveClass = `-- name: SaveClass :exec
-INSERT INTO wikidata_classes (qid, label, country, language, parents, checked_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO wikidata_classes (qid, label, country, language, parents, human, checked_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
 ON CONFLICT (qid) DO UPDATE
-SET label = excluded.label, country = excluded.country, language = excluded.language, parents = excluded.parents, checked_at = now()
+SET label = excluded.label, country = excluded.country, language = excluded.language, parents = excluded.parents, human = excluded.human, checked_at = now()
 `
 
 type SaveClassParams struct {
@@ -1606,6 +1670,7 @@ type SaveClassParams struct {
 	Country  string
 	Language string
 	Parents  []string
+	Human    bool
 }
 
 func (q *Queries) SaveClass(ctx context.Context, arg SaveClassParams) error {
@@ -1615,6 +1680,7 @@ func (q *Queries) SaveClass(ctx context.Context, arg SaveClassParams) error {
 		arg.Country,
 		arg.Language,
 		arg.Parents,
+		arg.Human,
 	)
 	return err
 }
@@ -1623,9 +1689,10 @@ const saveTitleFacts = `-- name: SaveTitleFacts :exec
 UPDATE titles
 SET wikidata_instance_of = $1::text[], wikidata_genres = $2::text[], wikidata_countries = $3::text[],
     wikidata_languages = $4::text[], sitelinks = $5, started = $6, ended = $7,
-    genres = $8::text[], type_flags = $9::text[], adult = $10, sexual_content = $11, countries = $12::text[], languages = $13::text[],
-    facts_version = $14
-WHERE id = $15
+    studios = $8::text[], networks = $9::text[],
+    genres = $10::text[], type_flags = $11::text[], adult = $12, sexual_content = $13, countries = $14::text[], languages = $15::text[],
+    facts_version = $16
+WHERE id = $17
 `
 
 type SaveTitleFactsParams struct {
@@ -1636,6 +1703,8 @@ type SaveTitleFactsParams struct {
 	Sitelinks     int32
 	Started       *string
 	Ended         *string
+	Studios       []string
+	Networks      []string
 	Genres        []string
 	TypeFlags     []string
 	Adult         bool
@@ -1655,6 +1724,8 @@ func (q *Queries) SaveTitleFacts(ctx context.Context, arg SaveTitleFactsParams) 
 		arg.Sitelinks,
 		arg.Started,
 		arg.Ended,
+		arg.Studios,
+		arg.Networks,
 		arg.Genres,
 		arg.TypeFlags,
 		arg.Adult,
@@ -1901,7 +1972,7 @@ func (q *Queries) TakeTitleTMDB(ctx context.Context, arg TakeTitleTMDBParams) (*
 }
 
 const titleByExternalID = `-- name: TitleByExternalID :one
-SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id, t.created_at, t.updated_at, t.outline_refreshed_at, t.tmdb_missing_at, t.original_name, t.runtime_minutes, t.wikidata_id, t.wikidata_checked_at, t.merged_into_id, t.wikidata_deleted_at, t.wikidata_instance_of, t.wikidata_genres, t.wikidata_countries, t.wikidata_languages, t.sitelinks, t.started, t.ended, t.genres, t.type_flags, t.adult, t.countries, t.languages, t.facts_version, t.sexual_content, t.search_name, t.search_original
+SELECT t.id, t.kind, t.slug, t.name, t.year, t.tmdb_id, t.created_at, t.updated_at, t.outline_refreshed_at, t.tmdb_missing_at, t.original_name, t.runtime_minutes, t.wikidata_id, t.wikidata_checked_at, t.merged_into_id, t.wikidata_deleted_at, t.wikidata_instance_of, t.wikidata_genres, t.wikidata_countries, t.wikidata_languages, t.sitelinks, t.started, t.ended, t.genres, t.type_flags, t.adult, t.countries, t.languages, t.facts_version, t.sexual_content, t.search_name, t.search_original, t.studios, t.networks
 FROM titles t
 JOIN external_ids e ON e.title_id = t.id
 WHERE e.provider = $1 AND e.value = $2 AND t.kind = $3
@@ -1949,12 +2020,14 @@ func (q *Queries) TitleByExternalID(ctx context.Context, arg TitleByExternalIDPa
 		&i.SexualContent,
 		&i.SearchName,
 		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
 	)
 	return i, err
 }
 
 const titleByID = `-- name: TitleByID :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original FROM titles WHERE id = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks FROM titles WHERE id = $1 AND kind = $2
 `
 
 type TitleByIDParams struct {
@@ -1998,12 +2071,14 @@ func (q *Queries) TitleByID(ctx context.Context, arg TitleByIDParams) (Title, er
 		&i.SexualContent,
 		&i.SearchName,
 		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
 	)
 	return i, err
 }
 
 const titleBySlug = `-- name: TitleBySlug :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original FROM titles WHERE slug = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks FROM titles WHERE slug = $1 AND kind = $2
 `
 
 type TitleBySlugParams struct {
@@ -2047,12 +2122,14 @@ func (q *Queries) TitleBySlug(ctx context.Context, arg TitleBySlugParams) (Title
 		&i.SexualContent,
 		&i.SearchName,
 		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
 	)
 	return i, err
 }
 
 const titleByTMDB = `-- name: TitleByTMDB :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original FROM titles WHERE tmdb_id = $1 AND kind = $2
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks FROM titles WHERE tmdb_id = $1 AND kind = $2
 `
 
 type TitleByTMDBParams struct {
@@ -2096,12 +2173,14 @@ func (q *Queries) TitleByTMDB(ctx context.Context, arg TitleByTMDBParams) (Title
 		&i.SexualContent,
 		&i.SearchName,
 		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
 	)
 	return i, err
 }
 
 const titleByWikidata = `-- name: TitleByWikidata :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original FROM titles
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks FROM titles
 WHERE kind = $1 AND wikidata_id = $2 AND merged_into_id IS NULL
 ORDER BY id
 LIMIT 1
@@ -2148,6 +2227,8 @@ func (q *Queries) TitleByWikidata(ctx context.Context, arg TitleByWikidataParams
 		&i.SexualContent,
 		&i.SearchName,
 		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
 	)
 	return i, err
 }
@@ -2183,7 +2264,7 @@ func (q *Queries) TitleExternalIDs(ctx context.Context, titleID int64) ([]TitleE
 }
 
 const titleSharingWikidata = `-- name: TitleSharingWikidata :one
-SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original FROM titles
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks FROM titles
 WHERE kind = $1 AND wikidata_id = $2 AND id <> $3 AND merged_into_id IS NULL
 ORDER BY id
 LIMIT 1
@@ -2231,6 +2312,8 @@ func (q *Queries) TitleSharingWikidata(ctx context.Context, arg TitleSharingWiki
 		&i.SexualContent,
 		&i.SearchName,
 		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
 	)
 	return i, err
 }

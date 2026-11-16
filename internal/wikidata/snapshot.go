@@ -2,6 +2,7 @@ package wikidata
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ type Item struct {
 func (it Item) QID() string              { return it.e.ID }
 func (it Item) Title(kind string) Title  { return it.e.title(kind) }
 func (it Item) InstanceOf() []string     { return it.e.items("P31") }
+func (it Item) Companies() []string      { return append(it.e.items("P272"), it.e.items("P449")...) }
 func (it Item) Label(lang string) string { return it.e.Labels[lang].Value }
 
 func (it Item) TMDBKinds() []string {
@@ -115,7 +117,7 @@ func ReadSnapshotClasses(r io.Reader, each func(c Class, readable bool) error) e
 			}
 			continue
 		}
-		c := Class{QID: e.ID, Label: s.Labels["en"], Country: e.first("P297"), Language: e.first("P305"), Parents: slices.Clone(e.items("P279"))}
+		c := Class{QID: e.ID, Label: cmp.Or(s.Labels["en"], s.Labels["mul"]), Country: e.first("P297"), Language: e.first("P305"), Parents: slices.Clone(e.items("P279")), Human: e.human()}
 		if c.Language == "" {
 			c.Language = e.first("P218")
 		}
