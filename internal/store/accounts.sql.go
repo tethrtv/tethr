@@ -59,17 +59,18 @@ func (q *Queries) AccountByID(ctx context.Context, id int64) (Account, error) {
 }
 
 const claimWeekly = `-- name: ClaimWeekly :execrows
-UPDATE accounts SET weekly_sent_at = now()
-WHERE id = $1 AND weekly_email AND (weekly_sent_at IS NULL OR weekly_sent_at < $2::timestamptz)
+UPDATE accounts SET weekly_sent_at = $2::timestamptz
+WHERE id = $1 AND weekly_email AND (weekly_sent_at IS NULL OR weekly_sent_at < $3::timestamptz)
 `
 
 type ClaimWeeklyParams struct {
 	ID         int64
+	SentAt     time.Time
 	SentBefore time.Time
 }
 
 func (q *Queries) ClaimWeekly(ctx context.Context, arg ClaimWeeklyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, claimWeekly, arg.ID, arg.SentBefore)
+	result, err := q.db.Exec(ctx, claimWeekly, arg.ID, arg.SentAt, arg.SentBefore)
 	if err != nil {
 		return 0, err
 	}
