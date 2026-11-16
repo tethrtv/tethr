@@ -30,6 +30,11 @@ type TitleState struct {
 type TitleFacts struct {
 	Genres, Countries, Languages, TypeFlags []string
 	Started, Ended                          *string
+	Studios, Networks                       []Company
+}
+
+type Company struct {
+	QID, Name string
 }
 
 type InList struct {
@@ -62,6 +67,9 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 	s := TitleState{Item: item, Facts: TitleFacts{
 		Genres: t.Genres, Countries: t.Countries, Languages: t.Languages, TypeFlags: t.TypeFlags, Started: t.Started, Ended: t.Ended,
 	}}
+	if s.Facts.Studios, s.Facts.Networks, err = companies(ctx, q, t.Studios, t.Networks); err != nil {
+		return s, err
+	}
 
 	rating, err := q.TitleRating(ctx, store.TitleRatingParams{ProfileID: profileID, TitleID: t.ID})
 	if err == nil {
@@ -183,3 +191,27 @@ func titleByPath(ctx context.Context, q *store.Queries, id, kind string) (store.
 }
 
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func companies(ctx context.Context, q *store.Queries, studios, networks []string) ([]Company, []Company, error) {
+	if len(studios)+len(networks) == 0 {
+		return nil, nil, nil
+	}
+	labels, err := q.ClassLabels(ctx, slices.Concat(studios, networks))
+	if err != nil {
+		return nil, nil, err
+	}
+	names := map[string]string{}
+	for _, l := range labels {
+		names[l.Qid] = l.Label
+	}
+	named := func(qids []string) []Company {
+		var out []Company
+		for _, qid := range qids {
+			if name := names[qid]; name != "" {
+				out = append(out, Company{QID: qid, Name: name})
+			}
+		}
+		return out
+	}
+	return named(studios), named(networks), nil
+}

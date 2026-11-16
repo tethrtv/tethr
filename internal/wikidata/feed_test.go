@@ -69,6 +69,8 @@ func TestRelevantEdit(t *testing.T) {
 		{"/* clientsitelink-update:0|uk|ukwiki:Old|ukwiki:New */", false},
 		{"/* wbsetreference-add:2| */ [[Property:P577]]: 31 March 1999", false},
 		{"/* wbsetqualifier-add:1| */ [[Property:P291]]: [[Q30]]", false},
+		{"/* wbsetqualifier-add:1| */ [[Property:P17]]: [[Q36]]", true},
+		{"/* wbremovequalifiers-remove:1| */ [[Property:P3005]]: [[Q36]]", true},
 		{"/* wbcreateclaim-create:1| */ [[Property:P13459]]: [[Q133830758]], [[:toollabs:quickstatements/#/batch/294650|batch #294650]]", false},
 		{"/* wbcreateclaim-create:1| */ [[Property:P4947]]: 603", true},
 		{"/* wbsetclaim-update:2||1 */ [[Property:P31]]: [[Q11424]]", true},

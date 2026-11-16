@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -116,7 +117,7 @@ func (s Sweep) sweep(ctx context.Context, sd *seeding, fresh []string) error {
 		}
 		var classes []string
 		for _, it := range items {
-			classes = append(classes, it.InstanceOf()...)
+			classes = append(classes, slices.Concat(it.InstanceOf(), it.Companies())...)
 		}
 		if err := fillClasses(ctx, s.DB, s.Wikidata, s.Log, classes); err != nil {
 			return err

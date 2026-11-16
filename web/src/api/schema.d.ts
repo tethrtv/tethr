@@ -2379,6 +2379,14 @@ export interface components {
             started?: string;
             /** @description When a show ended, in the same form. Left out when Wikidata has no end date, as while a show is running. */
             ended?: string;
+            /** @description The companies that made it. */
+            studios?: components["schemas"]["Company"][];
+            /** @description The channels or services it first aired on. */
+            networks?: components["schemas"]["Company"][];
+        };
+        Company: {
+            wikidata: string;
+            name: string;
         };
         /** @description Your rating of the film or show itself. */
         TitleRating: {

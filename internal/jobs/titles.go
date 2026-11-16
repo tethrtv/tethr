@@ -105,7 +105,7 @@ func (j Titles) Refresh(ctx context.Context) error {
 	} else if err != nil {
 		errs = append(errs, err)
 	}
-	return errors.Join(append(errs, j.rederive(ctx))...)
+	return errors.Join(append(errs, j.rederive(ctx), j.name(ctx))...)
 }
 
 func (j Titles) match(ctx context.Context, kind, provider string, titles []store.DueWikidataRow, fresh map[int64]bool) ([]store.DueWikidataRow, error) {
@@ -147,7 +147,7 @@ func (j Titles) fetch(ctx context.Context, kind string, titles []store.DueWikida
 	}
 	var classes []string
 	for _, w := range found {
-		classes = append(classes, slices.Concat(w.InstanceOf, w.Genres, w.Countries, w.Languages)...)
+		classes = append(classes, slices.Concat(w.InstanceOf, w.Genres, w.Countries, w.Languages, w.Studios, w.Networks)...)
 	}
 	if err := j.fillClasses(ctx, classes); errors.Is(err, wikidata.ErrBusy) {
 		return err
@@ -253,6 +253,23 @@ func fillClasses(ctx context.Context, db *pgxpool.Pool, wd *wikidata.Client, log
 		}
 	}
 	return nil
+}
+
+const namesJob = "studio and network names"
+
+func (j Titles) name(ctx context.Context) error {
+	ran, err := core.JobRanSince(ctx, j.DB, namesJob, time.Now().Add(-time.Hour))
+	if err != nil || ran {
+		return err
+	}
+	qids, err := core.NamesNeeded(ctx, j.DB, 500)
+	if err != nil {
+		return err
+	}
+	if err := j.fillClasses(ctx, qids); err != nil {
+		return err
+	}
+	return core.MarkJobRun(ctx, j.DB, namesJob)
 }
 
 func (j Titles) rederive(ctx context.Context) error {

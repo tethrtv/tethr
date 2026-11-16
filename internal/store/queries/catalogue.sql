@@ -340,6 +340,15 @@ SELECT DISTINCT up.qid::text FROM up
 WHERE NOT EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = up.qid)
 ORDER BY 1;
 
+-- name: NamesNeeded :many
+SELECT DISTINCT q::text FROM titles t, unnest(t.studios || t.networks) AS q
+WHERE t.merged_into_id IS NULL AND NOT EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = q)
+ORDER BY 1
+LIMIT $1;
+
+-- name: ClassLabels :many
+SELECT qid, label FROM wikidata_classes WHERE qid = ANY(@qids::text[]) AND label <> '' AND NOT human;
+
 -- name: ClassAncestry :many
 WITH RECURSIVE up (qid, depth) AS (
     SELECT q, 0 FROM unnest(@qids::text[]) AS q
@@ -351,15 +360,16 @@ SELECT c.qid, c.country, c.language, c.parents FROM wikidata_classes c
 WHERE c.qid IN (SELECT qid FROM up);
 
 -- name: SaveClass :exec
-INSERT INTO wikidata_classes (qid, label, country, language, parents, checked_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO wikidata_classes (qid, label, country, language, parents, human, checked_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
 ON CONFLICT (qid) DO UPDATE
-SET label = excluded.label, country = excluded.country, language = excluded.language, parents = excluded.parents, checked_at = now();
+SET label = excluded.label, country = excluded.country, language = excluded.language, parents = excluded.parents, human = excluded.human, checked_at = now();
 
 -- name: SaveTitleFacts :exec
 UPDATE titles
 SET wikidata_instance_of = @instance_of::text[], wikidata_genres = @raw_genres::text[], wikidata_countries = @raw_countries::text[],
     wikidata_languages = @raw_languages::text[], sitelinks = @sitelinks, started = sqlc.narg(started), ended = sqlc.narg(ended),
+    studios = @studios::text[], networks = @networks::text[],
     genres = @genres::text[], type_flags = @type_flags::text[], adult = @adult, sexual_content = @sexual_content, countries = @countries::text[], languages = @languages::text[],
     facts_version = sqlc.narg(facts_version)
 WHERE id = @id;
@@ -423,6 +433,7 @@ FROM (SELECT unnest(@qids::text[]) AS qid, unnest(@edited_at::timestamptz[]) AS 
 WHERE EXISTS (SELECT 1 FROM titles t WHERE t.wikidata_id = e.qid AND t.merged_into_id IS NULL)
    OR EXISTS (SELECT 1 FROM wikidata_classes c WHERE c.qid = e.qid)
 ON CONFLICT (qid) DO UPDATE SET last_edited_at = greatest(wikidata_pending.last_edited_at, excluded.last_edited_at),
+    not_before = CASE WHEN wikidata_pending.last_edited_at IS NULL THEN greatest(wikidata_pending.not_before, excluded.not_before) ELSE wikidata_pending.not_before END,
     logged_out = wikidata_pending.logged_out OR excluded.logged_out, batch = coalesce(wikidata_pending.batch, excluded.batch);
 
 -- name: QueueAllWikidata :execrows
@@ -460,7 +471,9 @@ SELECT (SELECT count(*) FROM titles WHERE wikidata_id IS NOT NULL AND merged_int
     (SELECT count(*) FROM wikidata_classes)::bigint AS classes;
 
 -- name: DuePendingWikidata :many
-SELECT qid, held, logged_out, batch FROM wikidata_pending WHERE not_before <= now() ORDER BY not_before, qid LIMIT $1;
+SELECT qid, held, logged_out, batch FROM wikidata_pending WHERE not_before <= now()
+ORDER BY last_edited_at IS NULL, not_before, qid
+LIMIT $1;
 
 -- name: PendingTitles :many
 SELECT * FROM titles WHERE wikidata_id = ANY(@qids::text[]) AND merged_into_id IS NULL ORDER BY id;
