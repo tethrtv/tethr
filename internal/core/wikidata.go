@@ -30,6 +30,8 @@ type WikidataTitle struct {
 	Genres     []string
 	Countries  []string
 	Languages  []string
+	Studios    []string
+	Networks   []string
 	Started    string
 	Ended      string
 	Sitelinks  int
@@ -105,7 +107,7 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 	}
 	err = q.SaveTitleFacts(ctx, store.SaveTitleFactsParams{
 		ID: titleID, InstanceOf: raw.InstanceOf, RawGenres: raw.Genres, RawCountries: raw.Countries, RawLanguages: raw.Languages,
-		Sitelinks: int32(w.Sitelinks), Started: text(w.Started), Ended: text(w.Ended),
+		Sitelinks: int32(w.Sitelinks), Started: text(w.Started), Ended: text(w.Ended), Studios: orEmpty(w.Studios), Networks: orEmpty(w.Networks),
 		Genres: orEmpty(facts.Genres), TypeFlags: orEmpty(facts.TypeFlags), Adult: facts.Adult, SexualContent: facts.SexualContent,
 		Countries: orEmpty(facts.Countries), Languages: orEmpty(facts.Languages), FactsVersion: version(facts),
 	})

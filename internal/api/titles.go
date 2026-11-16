@@ -245,7 +245,10 @@ func toFacts(f core.TitleFacts) *TitleFacts {
 		}
 		out.TypeFlags = &flags
 	}
-	if out == (TitleFacts{}) {
+	out.Studios = toCompanies(f.Studios)
+	out.Networks = toCompanies(f.Networks)
+	if out.Genres == nil && out.Countries == nil && out.Languages == nil && out.TypeFlags == nil && out.Started == nil && out.Ended == nil &&
+		out.Studios == nil && out.Networks == nil {
 		return nil
 	}
 	return &out
@@ -256,4 +259,15 @@ func some[T any](s []T) *[]T {
 		return nil
 	}
 	return &s
+}
+
+func toCompanies(cs []core.Company) *[]Company {
+	if len(cs) == 0 {
+		return nil
+	}
+	out := make([]Company, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, Company{Wikidata: c.QID, Name: c.Name})
+	}
+	return &out
 }
