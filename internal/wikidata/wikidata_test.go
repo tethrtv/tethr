@@ -75,6 +75,10 @@ func entities(t *testing.T) []byte {
 			"P136":  []any{claim("normal", item("Q24925")), claim("normal", item("Q24925"))},
 			"P495":  []any{claim("normal", item("Q145"))},
 			"P364":  []any{claim("normal", item("Q1860"))},
+			"P272":  []any{claim("normal", item("Q1376517")), claim("deprecated", item("Q1"))},
+			"P449": []any{claim("normal", item("Q1153124")), claim("deprecated", item("Q2")),
+				map[string]any{"rank": "preferred", "mainsnak": map[string]any{"snaktype": "value", "datavalue": map[string]any{"value": item("Q3")}},
+					"qualifiers": map[string]any{"P17": []any{map[string]any{"snaktype": "value", "datavalue": map[string]any{"value": item("Q36")}}}}}},
 			"P577":  []any{claim("deprecated", date("+1999-01-01T00:00:00Z", 11))},
 			"P2047": []any{claim("normal", map[string]string{"amount": "+44.5", "unit": "http://www.wikidata.org/entity/Q7727"}), claim("normal", map[string]string{"amount": "+3", "unit": "http://www.wikidata.org/entity/Q1"})},
 			"P4983": []any{claim("normal", "57243")},
@@ -149,6 +153,9 @@ func TestFetch(t *testing.T) {
 	}
 	if w := found["Q39243484"]; fmt.Sprintf("%v %v %v %v %s %s %v", w.InstanceOf, w.Genres, w.Countries, w.Languages, w.Started, w.Ended, w.OtherNames == nil) != "[Q5398426] [Q24925] [Q145] [Q1860] 2005-03-26 2022-10 true" {
 		t.Errorf("doctor who's facts = %v %v %v %v %q %q %v", w.InstanceOf, w.Genres, w.Countries, w.Languages, w.Started, w.Ended, w.OtherNames)
+	}
+	if w := found["Q39243484"]; fmt.Sprint(w.Studios, w.Networks) != "[Q1376517] [Q1153124]" {
+		t.Errorf("doctor who's studios and networks = %v %v", w.Studios, w.Networks)
 	}
 	if w := found["Q1"]; w.QID != "Q2" || w.Name != "Pride" || w.Year != 2014 || !w.Released.Equal(time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("a redirect should come back as its target, released once its year is over: %+v", w)
@@ -239,31 +246,39 @@ func TestReleaseDate(t *testing.T) {
 
 func TestFetchClasses(t *testing.T) {
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("languages") != "en" {
+		if r.URL.Query().Get("languages") != "en|mul" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		body, _ := json.Marshal(map[string]any{"entities": map[string]any{
-			"Q17":   map[string]any{"id": "Q17", "labels": map[string]any{"en": map[string]string{"value": "Japan"}}, "claims": map[string]any{"P297": []any{claim("normal", "JP")}}},
-			"Q5287": map[string]any{"id": "Q5287", "claims": map[string]any{"P218": []any{claim("normal", "ja")}}},
-			"Q9186": map[string]any{"id": "Q9186", "claims": map[string]any{"P218": []any{claim("normal", "zh")}, "P305": []any{claim("normal", "yue")}}},
-			"Q1":    map[string]any{"id": "Q2", "claims": map[string]any{"P279": []any{claim("normal", item("Q3")), claim("deprecated", item("Q4"))}}},
-			"Q5":    map[string]any{"id": "Q5", "missing": ""},
-			"Q6":    map[string]any{"id": "Q6", "claims": map[string]any{"P279": "not a list"}},
+			"Q17":    map[string]any{"id": "Q17", "labels": map[string]any{"en": map[string]string{"value": "Japan"}}, "claims": map[string]any{"P297": []any{claim("normal", "JP")}}},
+			"Q5287":  map[string]any{"id": "Q5287", "claims": map[string]any{"P218": []any{claim("normal", "ja")}}},
+			"Q9186":  map[string]any{"id": "Q9186", "claims": map[string]any{"P218": []any{claim("normal", "zh")}, "P305": []any{claim("normal", "yue")}}},
+			"Q1":     map[string]any{"id": "Q2", "claims": map[string]any{"P279": []any{claim("normal", item("Q3")), claim("deprecated", item("Q4"))}}},
+			"Q5":     map[string]any{"id": "Q5", "missing": ""},
+			"Q6":     map[string]any{"id": "Q6", "claims": map[string]any{"P279": "not a list"}},
+			"Q43994": map[string]any{"id": "Q43994", "labels": map[string]any{"en": map[string]string{"value": "Matt Groening"}}, "claims": map[string]any{"P31": []any{claim("normal", item("Q5"))}}},
+			"Q7":     map[string]any{"id": "Q7", "labels": map[string]any{"mul": map[string]string{"value": "A24"}}},
 		}})
 		_, _ = w.Write(body)
 	}))
 	defer fake.Close()
 
 	c := &Client{APIURL: fake.URL}
-	got, unreadable, err := c.FetchClasses(context.Background(), []string{"Q17", "Q5287", "Q9186", "Q1", "Q5", "Q6", "Q404", "Q17", "nonsense"})
+	got, unreadable, err := c.FetchClasses(context.Background(), []string{"Q17", "Q5287", "Q9186", "Q1", "Q5", "Q6", "Q404", "Q17", "nonsense", "Q43994", "Q7"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fmt.Sprint(unreadable) != "[Q6 Q404]" {
 		t.Errorf("unreadable = %v, want the broken and the missing-from-the-answer class, not the deleted one", unreadable)
 	}
-	if fmt.Sprint(got["Q17"], got["Q5287"], got["Q9186"]) != "{Q17 Japan JP  []} {Q5287   ja []} {Q9186   yue []}" {
+	if got["Q7"].Label != "A24" {
+		t.Errorf("a class with only a mul label = %+v", got["Q7"])
+	}
+	if !got["Q43994"].Human || got["Q17"].Human {
+		t.Errorf("only the person should be marked human: %+v %+v", got["Q43994"], got["Q17"])
+	}
+	if fmt.Sprint(got["Q17"], got["Q5287"], got["Q9186"]) != "{Q17 Japan JP  [] false} {Q5287   ja [] false} {Q9186   yue [] false}" {
 		t.Errorf("countries and languages = %v %v %v", got["Q17"], got["Q5287"], got["Q9186"])
 	}
 	if p := got["Q1"].Parents; fmt.Sprint(p) != "[Q2 Q3]" {

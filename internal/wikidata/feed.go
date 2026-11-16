@@ -94,7 +94,10 @@ func relevantEdit(comment string) bool {
 		return true
 	}
 	action := m[1]
-	for _, skip := range []string{"wbsetdescription", "wbsetaliases", "wbsetsitelink", "clientsitelink", "wblinktitles", "wbsetreference", "wbremovereferences", "wbsetqualifier", "wbremovequalifiers"} {
+	if strings.HasPrefix(action, "wbsetqualifier") || strings.HasPrefix(action, "wbremovequalifiers") {
+		return strings.Contains(comment, "[[Property:P17]]") || strings.Contains(comment, "[[Property:P3005]]")
+	}
+	for _, skip := range []string{"wbsetdescription", "wbsetaliases", "wbsetsitelink", "clientsitelink", "wblinktitles", "wbsetreference", "wbremovereferences"} {
 		if strings.HasPrefix(action, skip) {
 			return false
 		}

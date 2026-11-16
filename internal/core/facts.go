@@ -247,6 +247,10 @@ func ownLanguageName(names map[string]string, languages []string) string {
 	return ""
 }
 
+func NamesNeeded(ctx context.Context, db *pgxpool.Pool, limit int32) ([]string, error) {
+	return store.New(db).NamesNeeded(ctx, limit)
+}
+
 func ClassesNeeded(ctx context.Context, db *pgxpool.Pool, qids []string) ([]string, error) {
 	return store.New(db).MissingClasses(ctx, qids)
 }
@@ -257,12 +261,13 @@ type WikidataClass struct {
 	Country  string
 	Language string
 	Parents  []string
+	Human    bool
 }
 
 func SaveClasses(ctx context.Context, db *pgxpool.Pool, cs []WikidataClass) error {
 	q := store.New(db)
 	for _, c := range cs {
-		err := q.SaveClass(ctx, store.SaveClassParams{Qid: c.QID, Label: c.Label, Country: c.Country, Language: c.Language, Parents: append([]string{}, c.Parents...)})
+		err := q.SaveClass(ctx, store.SaveClassParams{Qid: c.QID, Label: c.Label, Country: c.Country, Language: c.Language, Parents: append([]string{}, c.Parents...), Human: c.Human})
 		if err != nil {
 			return err
 		}

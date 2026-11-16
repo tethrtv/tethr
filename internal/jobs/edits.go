@@ -77,11 +77,11 @@ func (j Titles) refetch(ctx context.Context, due []core.Pending) error {
 	if err := j.refetchClasses(ctx, classes); err != nil {
 		return err
 	}
-	var instanceOf []string
+	var used []string
 	for _, it := range found {
-		instanceOf = append(instanceOf, it.InstanceOf()...)
+		used = append(used, slices.Concat(it.InstanceOf(), it.Companies())...)
 	}
-	if err := fillClasses(ctx, j.DB, j.Wikidata, j.Log, instanceOf); err != nil {
+	if err := fillClasses(ctx, j.DB, j.Wikidata, j.Log, used); err != nil {
 		return err
 	}
 
