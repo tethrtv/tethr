@@ -121,5 +121,5 @@ ORDER BY a.id;
 UPDATE accounts SET weekly_sent_at = sqlc.narg(sent_at) WHERE id = $1;
 
 -- name: ClaimWeekly :execrows
-UPDATE accounts SET weekly_sent_at = now()
+UPDATE accounts SET weekly_sent_at = sqlc.arg(sent_at)::timestamptz
 WHERE id = $1 AND weekly_email AND (weekly_sent_at IS NULL OR weekly_sent_at < sqlc.arg(sent_before)::timestamptz);
