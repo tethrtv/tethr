@@ -47,7 +47,7 @@ func TestReadSnapshotClasses(t *testing.T) {
 	if false {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(got) != "[{Q17 Japan JP  []} {Q188473 action film   [Q1762165]}]" {
+	if fmt.Sprint(got) != "[{Q17 Japan JP  [] false} {Q188473 action film   [Q1762165] false}]" {
 		t.Errorf("classes = %v", got)
 	}
 }

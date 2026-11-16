@@ -3973,6 +3973,24 @@ components:
         ended:
           type: string
           description: When a show ended, in the same form. Left out when Wikidata has no end date, as while a show is running.
+        studios:
+          type: array
+          description: The companies that made it.
+          items:
+            $ref: '#/components/schemas/Company'
+        networks:
+          type: array
+          description: The channels or services it first aired on.
+          items:
+            $ref: '#/components/schemas/Company'
+    Company:
+      type: object
+      required: [wikidata, name]
+      properties:
+        wikidata:
+          type: string
+        name:
+          type: string
     TitleRating:
       type: object
       description: Your rating of the film or show itself.

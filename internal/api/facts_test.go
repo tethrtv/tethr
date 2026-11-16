@@ -29,7 +29,8 @@ func TestTitleFactsAndIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, sql := range []string{
-		fmt.Sprintf(`UPDATE titles SET genres = '{drama,crime}', countries = '{US}', languages = '{en,es}', type_flags = '{}', started = '2008-01-20', ended = '2013-09' WHERE id = %d`, show),
+		fmt.Sprintf(`UPDATE titles SET genres = '{drama,crime}', countries = '{US}', languages = '{en,es}', type_flags = '{}', started = '2008-01-20', ended = '2013-09', studios = '{Q1,Q2}', networks = '{Q3}' WHERE id = %d`, show),
+		`INSERT INTO wikidata_classes (qid, label) VALUES ('Q1', 'Sony Pictures Television'), ('Q2', ''), ('Q3', 'AMC')`,
 		fmt.Sprintf(`DELETE FROM external_ids WHERE title_id = %d`, show),
 		fmt.Sprintf(`UPDATE titles SET wikidata_deleted_at = now() WHERE id = %d`, bare.Title),
 		fmt.Sprintf(`INSERT INTO external_ids (title_id, provider, value, source) VALUES
@@ -50,6 +51,9 @@ func TestTitleFactsAndIDs(t *testing.T) {
 	f := detail.Facts
 	if f == nil || fmt.Sprintf("%v %v %v %s %s", value(f.Genres), value(f.Countries), value(f.Languages), value(f.Started), value(f.Ended)) != "[drama crime] [US] [en es] 2008-01-20 2013-09" || f.TypeFlags != nil {
 		t.Errorf("facts = %s", rec.Body)
+	}
+	if got := fmt.Sprint(value(f.Studios), value(f.Networks)); got != "[{Sony Pictures Television Q1}] [{AMC Q3}]" {
+		t.Errorf("studios and networks = %s", got)
 	}
 	ids := detail.Title.Ids
 	if value(ids.Wikidata) != "Q1079" || value(ids.Tvmaze) != 169 || value(ids.Netflix) != "70143836" || value(ids.Rottentomatoes) != "tv/breaking_bad" ||

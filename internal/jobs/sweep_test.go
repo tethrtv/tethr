@@ -32,7 +32,7 @@ func TestSweep(t *testing.T) {
 			return
 		}
 		ids := r.URL.Query().Get("ids")
-		if r.URL.Query().Get("languages") == "en" {
+		if r.URL.Query().Get("languages") == "en|mul" {
 			out := []string{}
 			for _, q := range strings.Split(ids, "|") {
 				out = append(out, fmt.Sprintf(`%q:{"id":%q,"claims":{}}`, q, q))

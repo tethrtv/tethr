@@ -36,7 +36,7 @@ func (f *fakeWikidata) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	ids := r.URL.Query().Get("ids")
-	classes := r.URL.Query().Get("languages") == "en"
+	classes := r.URL.Query().Get("languages") == "en|mul"
 	if !classes {
 		f.fetched = append(f.fetched, ids)
 	}

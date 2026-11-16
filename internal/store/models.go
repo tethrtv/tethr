@@ -429,6 +429,8 @@ type Title struct {
 	SexualContent      bool
 	SearchName         *string
 	SearchOriginal     *string
+	Studios            []string
+	Networks           []string
 }
 
 type UpNextList struct {
@@ -468,6 +470,7 @@ type WikidataClass struct {
 	Language  string
 	Parents   []string
 	CheckedAt time.Time
+	Human     bool
 }
 
 type WikidataFeed struct {

@@ -53,7 +53,7 @@ func TestRefreshTitles(t *testing.T) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
-		if r.Method == http.MethodGet && r.URL.Query().Get("languages") == "en" {
+		if r.Method == http.MethodGet && r.URL.Query().Get("languages") == "en|mul" {
 			ids := r.URL.Query().Get("ids")
 			classFetches = append(classFetches, ids)
 			out := map[string]any{}
