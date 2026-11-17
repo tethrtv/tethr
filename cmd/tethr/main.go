@@ -78,7 +78,7 @@ func migrate(log *slog.Logger) error {
 func review(*slog.Logger) error {
 	usage := errors.New("usage: tethr review [batch <batch> | accept <id or batch> | dismiss <id or batch> <reason>]")
 	ctx := context.Background()
-	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	db, err := connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -185,7 +185,7 @@ func seed(log *slog.Logger) error {
 		return errors.New("usage: tethr seed -taken <time> [-classes a.gz,b.gz] [-labels l.gz] [-names n.jsonl] <items.gz> [more.gz]")
 	}
 	ctx := context.Background()
-	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	db, err := connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -199,7 +199,7 @@ func seed(log *slog.Logger) error {
 
 func invite(*slog.Logger) error {
 	ctx := context.Background()
-	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	db, err := connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func app(*slog.Logger) error {
 		return errors.New("usage: tethr app <name> [redirect-uri...]")
 	}
 	ctx := context.Background()
-	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	db, err := connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func official(*slog.Logger) error {
 		return errors.New("usage: tethr official <email>")
 	}
 	ctx := context.Background()
-	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	db, err := connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func official(*slog.Logger) error {
 func report(*slog.Logger) error {
 	usage := errors.New("usage: tethr report [keep <list-id> | remove <list-id> <reason the owner will read>]")
 	ctx := context.Background()
-	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	db, err := connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ func serve(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	db, err := pgxpool.New(ctx, envOr("DATABASE_URL", localDatabase))
+	db, err := connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -455,6 +455,16 @@ func routes(v1 http.Handler, trakt *traktcompat.Server, media *hooks.Server, det
 		w.WriteHeader(http.StatusOK)
 	})
 	return mux
+}
+
+func connect(ctx context.Context) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(envOr("DATABASE_URL", localDatabase))
+	if err != nil {
+		return nil, err
+	}
+	// JIT compiling adds hundreds of milliseconds to catalogue-wide queries and never pays off for queries this short.
+	cfg.ConnConfig.RuntimeParams["jit"] = "off"
+	return pgxpool.NewWithConfig(ctx, cfg)
 }
 
 func envOr(key, fallback string) string {
