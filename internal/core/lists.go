@@ -60,6 +60,9 @@ type List struct {
 	Following   bool
 	Followers   int64
 	ItemCount   int64
+	Matched     int64
+	Rule        *Rule
+	RuleNames   map[string]string
 	Watched     *int64
 	CoverItemID *int64
 	Cover       []Item
@@ -75,6 +78,7 @@ type ListChanges struct {
 	SortBy      *string
 	SortHow     *string
 	Cover       *int64
+	Rule        *Rule
 }
 
 type ListQuery struct {
@@ -159,11 +163,16 @@ func visibleLists(ctx context.Context, q *store.Queries, viewer int64, params st
 }
 
 func loadLists(ctx context.Context, q *store.Queries, viewer int64, params store.VisibleListsParams, hide bool) ([]List, error) {
+	lists, _, err := loadListItems(ctx, q, viewer, params, hide)
+	return lists, err
+}
+
+func loadListItems(ctx context.Context, q *store.Queries, viewer int64, params store.VisibleListsParams, hide bool) ([]List, []store.ListItemsInRow, error) {
 	var viewerKind string
 	if viewer != 0 {
 		p, err := q.ProfileByID(ctx, viewer)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		viewerKind = p.Kind
 	}
@@ -171,19 +180,23 @@ func loadLists(ctx context.Context, q *store.Queries, viewer int64, params store
 	params.ForKids = hide && viewerKind == "kids"
 	rows, err := q.VisibleLists(ctx, params)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var latest time.Time
 	if viewer != 0 && len(rows) > 0 {
 		if latest, err = q.LatestActivity(ctx, viewer); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	lists := make([]List, 0, len(rows))
-	ids := make([]int64, 0, len(rows))
+	versions := make([]string, 0, len(rows))
 	for _, row := range rows {
 		l := row.List
-		version := sha256.Sum256(fmt.Appendf(nil, "%d %d %d %s %d", l.UpdatedAt.UnixMicro(), row.TitlesCheckedAt.UnixMicro(), latest.UnixMicro(), viewerKind, row.ItemCount))
+		rule, err := readRule(l.Rule)
+		if err != nil {
+			return nil, nil, err
+		}
+		versions = append(versions, fmt.Sprintf("%d %d %d %s %d", l.UpdatedAt.UnixMicro(), row.TitlesCheckedAt.UnixMicro(), latest.UnixMicro(), viewerKind, row.ItemCount))
 		owner := ListOwner{ID: l.ProfileID, Username: row.OwnerUsername, Name: row.OwnerName, Private: row.OwnerPrivate}
 		if row.Access == "public" && owner.Private {
 			owner.Name = ""
@@ -203,33 +216,57 @@ func loadLists(ctx context.Context, q *store.Queries, viewer int64, params store
 			Following:   row.Following,
 			Followers:   row.FollowerCount,
 			ItemCount:   row.ItemCount,
+			Rule:        rule,
 			CoverItemID: l.CoverItemID,
 			CreatedAt:   l.CreatedAt,
 			UpdatedAt:   l.UpdatedAt,
-			Version:     hex.EncodeToString(version[:12]),
 		})
-		ids = append(ids, l.ID)
 	}
-	if len(ids) == 0 {
-		return lists, nil
+	if len(lists) == 0 {
+		return lists, nil, nil
 	}
-	items, err := q.ListItemsIn(ctx, store.ListItemsInParams{ListIds: ids, ForKids: params.ForKids})
+	items, matched, err := listItemRows(ctx, q, viewer, lists, params.ForKids)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	var rules []Rule
+	for _, l := range lists {
+		if l.Rule != nil {
+			rules = append(rules, *l.Rule)
+		}
+	}
+	names, err := companyNames(ctx, q, rules)
+	if err != nil {
+		return nil, nil, err
+	}
+	byList := map[int64][]store.ListItemsInRow{}
+	for _, item := range items {
+		byList[item.ListID] = append(byList[item.ListID], item)
+	}
+	for i := range lists {
+		v := versions[i]
+		if lists[i].Rule != nil {
+			lists[i].ItemCount = int64(len(byList[lists[i].ID]))
+			lists[i].Matched = matched[lists[i].ID]
+			lists[i].RuleNames = names
+			v += " " + ruleVersion(byList[lists[i].ID])
+		}
+		sum := sha256.Sum256([]byte(v))
+		lists[i].Version = hex.EncodeToString(sum[:12])
 	}
 	if err := addCovers(ctx, q, viewer, lists, items); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if viewer == 0 {
-		return lists, nil
+		return lists, items, nil
 	}
 	progress, err := itemProgress(ctx, q, viewer, items)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	watched := map[int64]int64{}
 	for _, item := range items {
-		if progress[item.ID].Done() {
+		if progress[keyOf(item)].Done() {
 			watched[item.ListID]++
 		}
 	}
@@ -237,17 +274,17 @@ func loadLists(ctx context.Context, q *store.Queries, viewer int64, params store
 		n := watched[lists[i].ID]
 		lists[i].Watched = &n
 	}
-	return lists, nil
+	return lists, items, nil
 }
 
 func addCovers(ctx context.Context, q *store.Queries, viewer int64, lists []List, items []store.ListItemsInRow) error {
-	listed := map[int64]bool{}
+	listed := map[itemKey]bool{}
 	for _, item := range items {
-		listed[item.ID] = true
+		listed[keyOf(item)] = true
 	}
 	picked := map[int64]int64{}
 	for _, l := range lists {
-		if l.CoverItemID != nil && listed[*l.CoverItemID] {
+		if l.CoverItemID != nil && listed[itemKey{l.ID, *l.CoverItemID}] {
 			picked[l.ID] = *l.CoverItemID
 		}
 	}
@@ -285,23 +322,33 @@ func ListEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query 
 
 func listEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query ListQuery, hide bool) (List, []ListEntry, int, error) {
 	q := store.New(db)
-	list, err := getList(ctx, q, viewer, id)
+	lists, rows, err := loadListItems(ctx, q, viewer, store.VisibleListsParams{ListID: &id}, hide)
 	if err != nil {
 		return List{}, nil, 0, err
 	}
-	var kids bool
-	if hide {
-		if kids, err = isKids(ctx, q, viewer); err != nil {
+	if len(lists) == 0 {
+		return List{}, nil, 0, ErrNotFound
+	}
+	list := lists[0]
+	if hide && list.Rule == nil {
+		kids, err := isKids(ctx, q, viewer)
+		if err != nil {
 			return List{}, nil, 0, err
 		}
+		if kids {
+			for n := range rows {
+				rows[n].Rank = int32(n + 1)
+			}
+		}
 	}
-	rows, err := q.ListItemsIn(ctx, store.ListItemsInParams{ListIds: []int64{id}, ForKids: kids})
-	if err != nil {
-		return List{}, nil, 0, err
-	}
+	entries, total, err := entriesFor(ctx, q, viewer, rows, query, list.SortBy, list.SortHow)
+	return list, entries, total, err
+}
+
+func entriesFor(ctx context.Context, q *store.Queries, viewer int64, rows []store.ListItemsInRow, query ListQuery, sortBy, sortHow string) ([]ListEntry, int, error) {
 	progress, err := itemProgress(ctx, q, viewer, rows)
 	if err != nil {
-		return List{}, nil, 0, err
+		return nil, 0, err
 	}
 	var titleIDs, episodeIDs []int64
 	for _, row := range rows {
@@ -312,18 +359,15 @@ func listEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query 
 	}
 	c, err := loadCatalogue(ctx, q, viewer, titleIDs, episodeIDs)
 	if err != nil {
-		return List{}, nil, 0, err
+		return nil, 0, err
 	}
 	entries := make([]ListEntry, 0, len(rows))
-	for n, row := range rows {
-		if kids {
-			row.Rank = int32(n + 1)
-		}
+	for _, row := range rows {
 		e := ListEntry{Entry: Entry{ID: row.ID, At: row.ListedAt, Rank: row.Rank, Notes: row.Notes, Item: c.item(row.TitleID, seasonOf(row.TitleID, row.SeasonID, row.SeasonNumber), row.EpisodeID)}}
 		if query.Kind != "" && e.Item.Kind() != query.Kind {
 			continue
 		}
-		if p, ok := progress[row.ID]; ok {
+		if p, ok := progress[keyOf(row)]; ok {
 			if query.HideWatched && p.Done() {
 				continue
 			}
@@ -331,13 +375,13 @@ func listEntries(ctx context.Context, db *pgxpool.Pool, viewer, id int64, query 
 		}
 		entries = append(entries, e)
 	}
-	sortEntries(entries, cmp.Or(query.SortBy, list.SortBy), cmp.Or(query.SortHow, list.SortHow))
+	sortEntries(entries, cmp.Or(query.SortBy, sortBy), cmp.Or(query.SortHow, sortHow))
 	total := len(entries)
 	if query.Page.Limit > 0 {
 		start := min((max(query.Page.Page, 1)-1)*query.Page.Limit, total)
 		entries = entries[start:min(start+query.Page.Limit, total)]
 	}
-	return list, entries, total, nil
+	return entries, total, nil
 }
 
 func sortEntries(entries []ListEntry, by, how string) {
@@ -375,7 +419,11 @@ func sortEntries(entries []ListEntry, by, how string) {
 	})
 }
 
-func itemProgress(ctx context.Context, q *store.Queries, viewer int64, items []store.ListItemsInRow) (map[int64]ItemProgress, error) {
+type itemKey struct{ list, id int64 }
+
+func keyOf(row store.ListItemsInRow) itemKey { return itemKey{row.ListID, row.ID} }
+
+func itemProgress(ctx context.Context, q *store.Queries, viewer int64, items []store.ListItemsInRow) (map[itemKey]ItemProgress, error) {
 	if viewer == 0 || len(items) == 0 {
 		return nil, nil
 	}
@@ -404,7 +452,7 @@ func itemProgress(ctx context.Context, q *store.Queries, viewer int64, items []s
 		return nil, err
 	}
 	now := time.Now()
-	out := make(map[int64]ItemProgress, len(items))
+	out := make(map[itemKey]ItemProgress, len(items))
 	for _, item := range items {
 		p := ItemProgress{Total: 1}
 		count := func(at time.Time, ok bool) {
@@ -448,7 +496,7 @@ func itemProgress(ctx context.Context, q *store.Queries, viewer int64, items []s
 			}
 			p.Next = cmp.Or(afterLast, gap)
 		}
-		out[item.ID] = p
+		out[keyOf(item)] = p
 	}
 	return out, nil
 }
@@ -494,6 +542,7 @@ func createList(ctx context.Context, q *store.Queries, profileID int64, l store.
 		Privacy:     l.Privacy,
 		SortBy:      l.SortBy,
 		SortHow:     l.SortHow,
+		Rule:        l.Rule,
 	})
 	if err != nil {
 		return 0, err
@@ -504,6 +553,18 @@ func createList(ctx context.Context, q *store.Queries, profileID int64, l store.
 func UpdateList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, c ListChanges) (List, error) {
 	err := changeList(ctx, db, profileID, id, func(q *store.Queries, l store.List) error {
 		name := l.Name
+		if c.Rule != nil && l.Rule == nil || c.Cover != nil && l.Rule != nil {
+			return ErrRuleList
+		}
+		if c.Rule != nil && c.Rule.LeftOut == nil {
+			stored, err := readRule(l.Rule)
+			if err != nil {
+				return err
+			}
+			kept := *c.Rule
+			kept.LeftOut = stored.LeftOut
+			c.Rule = &kept
+		}
 		if err := c.apply(&l); err != nil {
 			return err
 		}
@@ -544,6 +605,7 @@ func UpdateList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, c Li
 			SortBy:      l.SortBy,
 			SortHow:     l.SortHow,
 			CoverItemID: l.CoverItemID,
+			Rule:        l.Rule,
 		})
 		return err
 	})
@@ -567,6 +629,9 @@ func AddToList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, items
 	}
 	var result SyncResult
 	err := changeItems(ctx, db, profileID, id, func(q *store.Queries, list store.List) error {
+		if list.Rule != nil {
+			return ErrRuleList
+		}
 		for _, l := range items {
 			r, err := resolve(ctx, q, l.Ref, true)
 			if errors.Is(err, ErrNotFound) {
@@ -607,6 +672,13 @@ func AddToList(ctx context.Context, db *pgxpool.Pool, profileID, id int64, items
 
 func RemoveFromList(ctx context.Context, db *pgxpool.Pool, profileID, listID, itemID int64) error {
 	return changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+		if l.Rule != nil {
+			n, err := leaveOut(ctx, q, profileID, l, []int64{itemID})
+			if err == nil && n == 0 {
+				return ErrNotFound
+			}
+			return err
+		}
 		n, err := q.RemoveListEntry(ctx, store.RemoveListEntryParams{ID: itemID, ListID: l.ID})
 		if err == nil && n == 0 {
 			return ErrNotFound
@@ -619,6 +691,10 @@ func RemoveManyFromList(ctx context.Context, db *pgxpool.Pool, profileID, listID
 	var removed int64
 	err := changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
 		var err error
+		if l.Rule != nil {
+			removed, err = leaveOut(ctx, q, profileID, l, itemIDs)
+			return err
+		}
 		removed, err = q.RemoveListEntries(ctx, store.RemoveListEntriesParams{ListID: l.ID, Ids: itemIDs})
 		return err
 	})
@@ -631,6 +707,9 @@ func SetListNotes(ctx context.Context, db *pgxpool.Pool, profileID, listID, item
 		return ErrListNotes
 	}
 	return changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+		if l.Rule != nil {
+			return ErrRuleList
+		}
 		n, err := q.SetListItemNotes(ctx, store.SetListItemNotesParams{ID: itemID, ListID: l.ID, Notes: optional(notes)})
 		if err == nil && n == 0 {
 			return ErrNotFound
@@ -641,6 +720,9 @@ func SetListNotes(ctx context.Context, db *pgxpool.Pool, profileID, listID, item
 
 func ReorderList(ctx context.Context, db *pgxpool.Pool, profileID, listID int64, order []int64) error {
 	return changeItems(ctx, db, profileID, listID, func(q *store.Queries, l store.List) error {
+		if l.Rule != nil {
+			return ErrRuleList
+		}
 		rows, err := q.ListEntryIDs(ctx, l.ID)
 		if err != nil {
 			return err
@@ -757,6 +839,19 @@ func (c ListChanges) apply(l *store.List) error {
 	}
 	if !slices.Contains([]string{"rank", "added", "title", "year"}, l.SortBy) || l.SortHow != "asc" && l.SortHow != "desc" {
 		return ErrListSort
+	}
+	if c.Rule != nil {
+		if err := c.Rule.check(); err != nil {
+			return err
+		}
+		raw, err := ruleJSON(c.Rule)
+		if err != nil {
+			return err
+		}
+		l.Rule = raw
+	}
+	if l.Rule != nil && l.SortBy == "added" {
+		return ErrRuleSort
 	}
 	return nil
 }

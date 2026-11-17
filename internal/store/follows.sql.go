@@ -44,7 +44,7 @@ JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN (SELECT list_id, count(*) AS n FROM list_follows GROUP BY list_id) f ON f.list_id = l.id
 LEFT JOIN (SELECT lf.list_id, count(*) AS n FROM list_follows lf WHERE lf.followed_at > $1 GROUP BY lf.list_id) recent ON recent.list_id = l.id
 WHERE l.kind = 'custom' AND l.privacy = 'public'
-  AND EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id)
+  AND (l.rule IS NOT NULL OR EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id))
   AND NOT EXISTS (SELECT 1 FROM hidden_lists h WHERE h.list_id = l.id)
   AND ($2::text IS NULL OR l.name ILIKE '%' || $2::text || '%')
   AND ($3::boolean IS NULL OR (o.username = $4::text) = $3::boolean)

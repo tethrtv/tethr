@@ -320,3 +320,23 @@
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }
+
+.rule {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.rule dt {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+
+.rule dd {
+  margin: 0;
+  font-weight: 600;
+}

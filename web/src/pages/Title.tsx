@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, type ReactNode, useEffect, useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
@@ -14,6 +14,7 @@ import { date, duration, ep, playedAgo, playedOn, plural } from '../format'
 import { type Details, type Group, type Season, useDetails, useGroup, useOrders, useSeason } from '../tmdb'
 import lists from './Lists.module.css'
 import { ownerName, privacyWords } from './MyLists'
+import type { RuleSearch } from './RuleList'
 import styles from './Title.module.css'
 import { SomethingWrong } from './TitleReport'
 
@@ -142,8 +143,53 @@ function useUnlog(profileID: number) {
   })
 }
 
-function Facts({ facts }: { facts: [string, string | undefined][] }) {
-  const shown = facts.filter((f): f is [string, string] => !!f[1])
+function ruleLinks(items: { name: string; search: RuleSearch }[], join: 'and' | 'comma' = 'and'): ReactNode {
+  if (!items.length) return undefined
+  const link = (i: { name: string; search: RuleSearch }, n: number) => (
+    <Link
+      to="/lists/rule"
+      search={i.search}
+      className={styles.factLink}
+      title="Start a list that fills itself from this"
+    >
+      {n === 0 ? i.name[0].toUpperCase() + i.name.slice(1) : i.name}
+    </Link>
+  )
+  if (join === 'comma') {
+    return items.map((i, n) => (
+      <Fragment key={i.name}>
+        {n > 0 && ', '}
+        {link(i, n)}
+      </Fragment>
+    ))
+  }
+  let n = 0
+  return new Intl.ListFormat('en-GB')
+    .formatToParts(items.map((i) => i.name))
+    .map((part) =>
+      part.type === 'element' ? <Fragment key={part.value}>{link(items[n], n++)}</Fragment> : part.value,
+    )
+}
+
+const companyLinks = (list: { wikidata: string; name: string }[] | undefined, key: 'studio' | 'network') =>
+  ruleLinks((list ?? []).map((c) => ({ name: c.name, search: { [key]: c.wikidata } })))
+
+const genreLinks = (kind: Kind, slugs?: string[]) =>
+  ruleLinks(
+    (slugs ?? []).map((g) => ({ name: genres([g])?.toLowerCase() ?? g, search: { kind, genre: g } })),
+    'comma',
+  )
+
+const typeLinks = (kind: Kind, flags?: string[]) =>
+  ruleLinks(
+    (flags ?? [])
+      .filter((f) => !(f === 'animated' && flags?.includes('anime')))
+      .map((f) => ({ name: types(kind, [f])?.toLowerCase() ?? f, search: { kind, type: f } })),
+    'comma',
+  )
+
+function Facts({ facts }: { facts: [string, ReactNode][] }) {
+  const shown = facts.filter((f) => !!f[1] && !(Array.isArray(f[1]) && f[1].length === 0))
   if (!shown.length) return null
   return (
     <dl className={styles.facts}>
@@ -272,10 +318,10 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
                     : undefined,
               ],
               ['Runtime', runtime ? `About ${duration(runtime)} each` : undefined],
-              ['Network', names(d.facts?.networks?.map((n) => n.name)) ?? names(meta?.networks)],
-              ['Studio', names(d.facts?.studios?.map((s) => s.name))],
-              ['Genre', genres(d.facts?.genres)],
-              ['Type', types('show', d.facts?.type_flags)],
+              ['Network', companyLinks(d.facts?.networks, 'network') ?? names(meta?.networks)],
+              ['Studio', companyLinks(d.facts?.studios, 'studio')],
+              ['Genre', genreLinks('show', d.facts?.genres)],
+              ['Type', typeLinks('show', d.facts?.type_flags)],
               ['Country', countries(d.facts?.countries)],
               ['Language', languages(d.facts?.languages)],
               ['Rated', rated(meta)],
@@ -683,9 +729,9 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
               ['Released', (d.title.year ?? meta?.year)?.toString()],
               ['Runtime', runtime ? duration(runtime) : undefined],
-              ['Studio', names(d.facts?.studios?.map((s) => s.name))],
-              ['Genre', genres(d.facts?.genres)],
-              ['Type', types('movie', d.facts?.type_flags)],
+              ['Studio', companyLinks(d.facts?.studios, 'studio')],
+              ['Genre', genreLinks('movie', d.facts?.genres)],
+              ['Type', typeLinks('movie', d.facts?.type_flags)],
               ['Country', countries(d.facts?.countries)],
               ['Language', languages(d.facts?.languages)],
               ['Rated', rated(meta)],
@@ -830,8 +876,9 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
     enabled: open || on.size > 0,
     queryFn: async () => (await api.GET('/v1/lists', { params })).data ?? [],
   })
-  const editable = all.data?.filter((l) => l.can_edit_items) ?? []
+  const editable = all.data?.filter((l) => l.can_edit_items && !l.rule) ?? []
   const listed = all.data?.filter((l) => on.has(l.id)).map((l) => l.name) ?? []
+  const byHand = editable.some((l) => on.has(l.id))
 
   const toggle = useMutation({
     mutationFn: async (l: { id: number; name: string }) => {
@@ -879,7 +926,7 @@ function OnLists({ detail: d, profileID }: { detail: Detail; profileID: number }
       <p className={lists.small}>
         {listed.length > 0 && <>On {names(listed)}. </>}
         <button type="button" className={lists.textButton} onClick={start}>
-          {listed.length ? 'Change lists' : 'Add to a list'}
+          {byHand ? 'Change lists' : 'Add to a list'}
         </button>
       </p>
       <Slip open={open} onClose={() => setOpen(false)} title={`Add ${d.title.name ?? 'this'} to a list`}>

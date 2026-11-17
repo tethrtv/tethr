@@ -381,3 +381,15 @@
 .wrong {
   margin-top: 48px;
 }
+
+.factLink {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-2);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.factLink:hover {
+  text-decoration-color: currentColor;
+}

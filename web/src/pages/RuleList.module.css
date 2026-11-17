@@ -1,0 +1,149 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 48px;
+}
+
+.form {
+  border-top: 1px solid var(--rule);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 8px 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.label {
+  margin: 0;
+  font-weight: 650;
+}
+
+.control {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chip button[aria-pressed] {
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+
+.chip button[aria-pressed="false"] {
+  background: transparent;
+}
+
+.chip button[aria-pressed="true"].left {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  background: var(--paper-2);
+}
+
+.chip .drop {
+  min-width: 24px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.drop:hover {
+  color: var(--ink);
+}
+
+.found {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.between {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.between input {
+  width: 6.5rem;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview {
+  display: grid;
+  gap: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 16px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  min-width: 0;
+}
+
+.tileLink {
+  display: grid;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tileName {
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tileLink:hover .tileName {
+  text-decoration: underline;
+}
+
+.save {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

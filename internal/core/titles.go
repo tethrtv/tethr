@@ -91,6 +91,12 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 	for _, l := range inLists {
 		s.Lists = append(s.Lists, InList{ListID: l.ListID, ItemID: l.ID})
 	}
+	byRule, err := ruleListsWith(ctx, q, profileID, t.ID)
+	if err != nil {
+		return s, err
+	}
+	s.Lists = append(s.Lists, byRule...)
+	slices.SortFunc(s.Lists, func(a, b InList) int { return cmp.Compare(a.ListID, b.ListID) })
 
 	watches, err := q.TitleWatches(ctx, store.TitleWatchesParams{ProfileID: profileID, TitleID: t.ID})
 	if err != nil {

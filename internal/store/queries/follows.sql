@@ -22,7 +22,7 @@ JOIN profiles o ON o.id = l.profile_id
 LEFT JOIN (SELECT list_id, count(*) AS n FROM list_follows GROUP BY list_id) f ON f.list_id = l.id
 LEFT JOIN (SELECT lf.list_id, count(*) AS n FROM list_follows lf WHERE lf.followed_at > sqlc.arg(since) GROUP BY lf.list_id) recent ON recent.list_id = l.id
 WHERE l.kind = 'custom' AND l.privacy = 'public'
-  AND EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id)
+  AND (l.rule IS NOT NULL OR EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id))
   AND NOT EXISTS (SELECT 1 FROM hidden_lists h WHERE h.list_id = l.id)
   AND (sqlc.narg(search)::text IS NULL OR l.name ILIKE '%' || sqlc.narg(search)::text || '%')
   AND (sqlc.narg(only_official)::boolean IS NULL OR (o.username = sqlc.arg(official)::text) = sqlc.narg(only_official)::boolean)

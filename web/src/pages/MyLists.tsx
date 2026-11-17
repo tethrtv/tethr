@@ -115,6 +115,13 @@ export function MyLists() {
             Make the list
           </Button>
         </form>
+        <p className={styles.small}>
+          Or{' '}
+          <Link to="/lists/rule" className={styles.titleLink}>
+            make one that fills itself
+          </Link>{' '}
+          from a rule, like everything from Pixar or comedies under 100 minutes you haven’t seen.
+        </p>
       </section>
 
       {!!auto.data?.length && (
@@ -219,7 +226,7 @@ export function ListRow({ list: l }: { list: List }) {
         </Link>
         <span className={styles.quiet}>
           {l.access === 'mine' ? (
-            privacyWords[l.privacy]
+            `${privacyWords[l.privacy]}${l.rule ? ', from a rule' : ''}`
           ) : l.access === 'household' ? (
             `From ${ownerName(l)}`
           ) : (
