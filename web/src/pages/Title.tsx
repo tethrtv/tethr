@@ -166,9 +166,7 @@ function ruleLinks(items: { name: string; search: RuleSearch }[], join: 'and' | 
   let n = 0
   return new Intl.ListFormat('en-GB')
     .formatToParts(items.map((i) => i.name))
-    .map((part) =>
-      part.type === 'element' ? <Fragment key={part.value}>{link(items[n], n++)}</Fragment> : part.value,
-    )
+    .map((part) => (part.type === 'element' ? <Fragment key={part.value}>{link(items[n], n++)}</Fragment> : part.value))
 }
 
 const companyLinks = (list: { wikidata: string; name: string }[] | undefined, key: 'studio' | 'network') =>
