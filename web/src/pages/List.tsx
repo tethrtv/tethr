@@ -12,6 +12,7 @@ import { TitleLink } from '../components/TitleLink'
 import { useToast } from '../components/Toast'
 import { MissingList } from '../components/Trouble'
 import { ep, plural } from '../format'
+import { describe } from '../rules'
 import { useDetails } from '../tmdb'
 import own from './List.module.css'
 import styles from './Lists.module.css'
@@ -38,6 +39,13 @@ const orders = [
   { label: 'Oldest', by: 'year', how: 'asc' },
 ] as const
 type Order = (typeof orders)[number]
+
+const ruleOrders = [
+  { label: 'Best known', by: 'rank', how: 'asc' },
+  { label: 'Title', by: 'title', how: 'asc' },
+  { label: 'Newest', by: 'year', how: 'desc' },
+  { label: 'Oldest', by: 'year', how: 'asc' },
+] as const
 
 export const kinds = [
   { value: 'all', label: 'Everything' },
@@ -92,7 +100,7 @@ function ListPage({ id, opened, profileID, profileKind }: { id: number; opened: 
   const queries = useQueryClient()
   const [kind, setKind] = useState<(typeof kinds)[number]['value']>('all')
   const [hideWatched, setHideWatched] = useState(false)
-  const [order, setOrder] = useState<Order | undefined>()
+  const [order, setOrder] = useState<Order | (typeof ruleOrders)[number] | undefined>()
   const [find, setFind] = useState('')
   const [view, setView] = useState(storedView)
   const query = profileID ? { profile_id: profileID } : {}
@@ -155,12 +163,14 @@ function ListPage({ id, opened, profileID, profileKind }: { id: number; opened: 
   const list = page.data.list
   const mine = list.access === 'mine' && !!profileID
   const editable = list.can_edit_items && !!profileID
-  const chosen = order ?? orders.find((o) => o.by === list.sort_by && o.how === list.sort_how) ?? orders[0]
+  const choices = list.rule ? ruleOrders : orders
+  const chosen = order ?? choices.find((o) => o.by === list.sort_by && o.how === list.sort_how) ?? choices[0]
   const words = find.trim().toLowerCase()
   const items = words
     ? page.data.items.filter((i) => (i.item.title.name ?? '').toLowerCase().includes(words))
     : page.data.items
-  const draggable = editable && chosen.by === 'rank' && chosen.how === 'asc' && kind === 'all' && !hideWatched && !words
+  const draggable =
+    editable && !list.rule && chosen.by === 'rank' && chosen.how === 'asc' && kind === 'all' && !hideWatched && !words
 
   return (
     <div className={styles.page}>
@@ -183,8 +193,8 @@ function ListPage({ id, opened, profileID, profileKind }: { id: number; opened: 
         )}
         <label className={own.select}>
           <span className={styles.faint}>Order</span>
-          <select value={chosen.label} onChange={(e) => setOrder(orders.find((o) => o.label === e.target.value))}>
-            {orders.map((o) => (
+          <select value={chosen.label} onChange={(e) => setOrder(choices.find((o) => o.label === e.target.value))}>
+            {choices.map((o) => (
               <option key={o.label}>{o.label}</option>
             ))}
           </select>
@@ -222,9 +232,11 @@ function ListPage({ id, opened, profileID, profileKind }: { id: number; opened: 
         {items.length === 0 ? (
           <p className={styles.quiet}>
             {page.data.total === 0 && kind === 'all' && !hideWatched
-              ? editable
-                ? 'Nothing on this list yet. Add films and shows from their pages.'
-                : 'Nothing on this list yet.'
+              ? list.rule
+                ? 'Nothing matches the rule yet.'
+                : editable
+                  ? 'Nothing on this list yet. Add films and shows from their pages.'
+                  : 'Nothing on this list yet.'
               : 'Nothing here matches.'}
           </p>
         ) : view === 'covers' ? (
@@ -234,7 +246,7 @@ function ListPage({ id, opened, profileID, profileKind }: { id: number; opened: 
                 key={i.id}
                 item={i}
                 isCover={i.id === list.cover_item_id}
-                onPick={mine && !cover.isPending ? cover.mutate : undefined}
+                onPick={mine && !list.rule && !cover.isPending ? cover.mutate : undefined}
               />
             ))}
           </ol>
@@ -313,6 +325,21 @@ function Head({
     },
     onSuccess: onChange,
   })
+  const navigate = useNavigate()
+  const copy = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST('/v1/lists/{id}/copy', {
+        params: { path: { id: list.id }, query: { profile_id: profileID } },
+        body: {},
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: (l) => {
+      queries.invalidateQueries({ queryKey: ['lists'] })
+      navigate({ to: '/@{$username}/lists/$slug', params: listParams(l) })
+    },
+  })
   const outsider = list.access === 'public' && !!profileID
   const canFollow = outsider && goesOutside(profileKind ?? '')
   const close = () => setSlip(null)
@@ -341,15 +368,24 @@ function Head({
         {list.description && <p className={styles.lead}>{list.description}</p>}
         <p className={styles.small}>
           {by}
-          {!mine && list.can_edit_items && profileID && 'You can add to it, take things off and change the order. '}
+          {list.rule
+            ? 'It fills itself from the rule below, best known first. '
+            : !mine && list.can_edit_items && profileID && 'You can add to it, take things off and change the order. '}
           {list.item_count === 0
-            ? 'Nothing on it yet.'
-            : `${plural(list.item_count, 'thing')}${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
+            ? list.rule
+              ? 'Nothing matches yet.'
+              : 'Nothing on it yet.'
+            : `${plural(list.item_count, 'thing')}${
+                list.matched_count && list.matched_count > list.item_count
+                  ? ` of the ${list.matched_count.toLocaleString('en-GB')} that match`
+                  : ''
+              }${list.watched_count !== undefined ? `, ${list.watched_count} watched` : ''}.`}
           {list.in_up_next && ' Up next shows what to watch from it next.'}
           {list.privacy === 'public' && list.follower_count > 0 && ` ${plural(list.follower_count, 'follower')}.`}
         </p>
-        {(upNext.isError || follow.isError) && (
-          <p className={styles.error}>{problemMessage(upNext.error ?? follow.error)}</p>
+        {list.rule && <RuleFacts rule={list.rule} />}
+        {(upNext.isError || follow.isError || copy.isError) && (
+          <p className={styles.error}>{problemMessage(upNext.error ?? follow.error ?? copy.error)}</p>
         )}
         <p className={own.actions}>
           {list.privacy === 'public' && (
@@ -371,6 +407,11 @@ function Head({
               <button type="button" className={styles.textButton} onClick={() => setSlip('details')}>
                 Change details
               </button>
+              {list.rule && (
+                <Link to="/lists/rule" search={{ list: list.id }} className={styles.textButton}>
+                  Change the rule
+                </Link>
+              )}
               <button type="button" className={`${styles.textButton} ${own.danger}`} onClick={() => setSlip('delete')}>
                 Delete the list
               </button>
@@ -384,6 +425,11 @@ function Head({
               disabled={follow.isPending}
             >
               {list.following ? 'Stop following' : 'Follow'}
+            </button>
+          )}
+          {list.rule && profileID && list.item_count > 0 && (
+            <button type="button" className={styles.textButton} onClick={() => copy.mutate()} disabled={copy.isPending}>
+              Keep a copy you can change by hand
             </button>
           )}
           {profileID && (
@@ -552,11 +598,13 @@ function ListDetails({
               public, they see your name too.
             </p>
           </div>
-          <p className={styles.small}>
-            {list.cover_item_id
-              ? 'To change the cover, switch to Covers and pick another.'
-              : 'The cover is the first four things on the list. To pick one instead, switch to Covers.'}
-          </p>
+          {!list.rule && (
+            <p className={styles.small}>
+              {list.cover_item_id
+                ? 'To change the cover, switch to Covers and pick another.'
+                : 'The cover is the first four things on the list. To pick one instead, switch to Covers.'}
+            </p>
+          )}
           {save.isError && <p className={styles.error}>{problemMessage(save.error)}</p>}
           <p>
             <button type="button" className={`${styles.textButton} ${own.danger}`} onClick={onDelete}>
@@ -798,7 +846,7 @@ function Row({
   const remove = () => {
     setGone(true)
     toast({
-      text: `Took ${name} off ${list.name}.`,
+      text: list.rule ? `Took ${name} out of ${list.name}. It stays out.` : `Took ${name} off ${list.name}.`,
       commit: async () => {
         const { error } = await api.DELETE('/v1/lists/{id}/items/{item}', { params })
         if (error) throw error
@@ -848,19 +896,21 @@ function Row({
       <span className={own.tools}>
         {editable && (
           <>
-            <button
-              type="button"
-              className={styles.textButton}
-              onClick={() => {
-                setNotes(i.notes ?? '')
-                note.reset()
-                setNoting(true)
-              }}
-            >
-              {i.notes ? 'Change note' : 'Add a note'}
-            </button>
+            {!list.rule && (
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={() => {
+                  setNotes(i.notes ?? '')
+                  note.reset()
+                  setNoting(true)
+                }}
+              >
+                {i.notes ? 'Change note' : 'Add a note'}
+              </button>
+            )}
             <button type="button" className={`${styles.textButton} ${styles.remove}`} onClick={remove}>
-              Remove
+              {list.rule ? 'Take out' : 'Remove'}
             </button>
           </>
         )}
@@ -1053,5 +1103,20 @@ function ReportForm({
         </Button>
       </SlipFoot>
     </>
+  )
+}
+
+function RuleFacts({ rule }: { rule: NonNullable<List['rule']> }) {
+  const shown = describe(rule, rule.names).filter((f): f is [string, string] => !!f[1])
+  if (!shown.length) return <p className={styles.small}>The rule takes the best known of everything.</p>
+  return (
+    <dl className={own.rule}>
+      {shown.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }

@@ -193,6 +193,7 @@ type List struct {
 	SortHow     string
 	CoverItemID *int64
 	KeptAt      *time.Time
+	Rule        []byte
 }
 
 type ListFollow struct {

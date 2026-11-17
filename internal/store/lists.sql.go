@@ -22,9 +22,9 @@ func (q *Queries) CountLists(ctx context.Context, profileID int64) (int64, error
 }
 
 const createList = `-- name: CreateList :one
-INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how)
-VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7)
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at
+INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how, rule)
+VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule
 `
 
 type CreateListParams struct {
@@ -35,6 +35,7 @@ type CreateListParams struct {
 	Privacy     string
 	SortBy      string
 	SortHow     string
+	Rule        []byte
 }
 
 func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, error) {
@@ -46,6 +47,7 @@ func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, e
 		arg.Privacy,
 		arg.SortBy,
 		arg.SortHow,
+		arg.Rule,
 	)
 	var i List
 	err := row.Scan(
@@ -62,6 +64,7 @@ func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, e
 		&i.SortHow,
 		&i.CoverItemID,
 		&i.KeptAt,
+		&i.Rule,
 	)
 	return i, err
 }
@@ -273,7 +276,7 @@ func (q *Queries) ListSlugs(ctx context.Context, arg ListSlugsParams) ([]string,
 }
 
 const lockList = `-- name: LockList :one
-SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at FROM lists WHERE id = $1 AND kind = 'custom' FOR UPDATE
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule FROM lists WHERE id = $1 AND kind = 'custom' FOR UPDATE
 `
 
 func (q *Queries) LockList(ctx context.Context, id int64) (List, error) {
@@ -293,6 +296,7 @@ func (q *Queries) LockList(ctx context.Context, id int64) (List, error) {
 		&i.SortHow,
 		&i.CoverItemID,
 		&i.KeptAt,
+		&i.Rule,
 	)
 	return i, err
 }
@@ -314,7 +318,7 @@ func (q *Queries) OnList(ctx context.Context, arg OnListParams) (bool, error) {
 }
 
 const ownedList = `-- name: OwnedList :one
-SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UPDATE
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UPDATE
 `
 
 type OwnedListParams struct {
@@ -339,6 +343,7 @@ func (q *Queries) OwnedList(ctx context.Context, arg OwnedListParams) (List, err
 		&i.SortHow,
 		&i.CoverItemID,
 		&i.KeptAt,
+		&i.Rule,
 	)
 	return i, err
 }
@@ -419,6 +424,169 @@ func (q *Queries) RemoveListEntry(ctx context.Context, arg RemoveListEntryParams
 	return result.RowsAffected(), nil
 }
 
+const ruleTitles = `-- name: RuleTitles :many
+SELECT t.id, t.kind, t.created_at, count(*) OVER ()::bigint AS matched
+FROM titles t
+WHERE t.merged_into_id IS NULL
+  AND ($1::text IS NULL OR t.kind = $1::text)
+  AND (cardinality($2::text[]) = 0 OR t.genres && $2::text[])
+  AND NOT t.genres && $3::text[]
+  AND (cardinality($4::text[]) = 0 OR t.type_flags && $4::text[])
+  AND NOT t.type_flags && $5::text[]
+  AND (cardinality($6::text[]) = 0 OR t.studios && $6::text[])
+  AND NOT t.studios && $7::text[]
+  AND (cardinality($8::text[]) = 0 OR t.networks && $8::text[])
+  AND NOT t.networks && $9::text[]
+  AND (cardinality($10::text[]) = 0 OR t.countries && $10::text[])
+  AND NOT t.countries && $11::text[]
+  AND (cardinality($12::text[]) = 0 OR t.languages && $12::text[])
+  AND NOT t.languages && $13::text[]
+  AND ($14::int IS NULL OR t.year >= $14::int)
+  AND ($15::int IS NULL OR t.year <= $15::int)
+  AND ($16::int IS NULL OR t.runtime_minutes >= $16::int)
+  AND ($17::int IS NULL OR t.runtime_minutes <= $17::int)
+  AND ($18::bool IS NULL OR $18::bool =
+    (t.id IN (SELECT w.title_id FROM watch_events w WHERE w.profile_id = $19::bigint)))
+  AND ($20::bool IS NULL OR $20::bool =
+    (t.id IN (SELECT r.title_id FROM ratings r WHERE r.profile_id = $19::bigint AND r.season_id IS NULL AND r.episode_id IS NULL)))
+  AND ($21::bool IS NULL OR $21::bool =
+    (t.id IN (SELECT i.title_id FROM list_items i JOIN lists l ON l.id = i.list_id
+              WHERE l.profile_id = $19::bigint AND l.kind = 'watchlist' AND i.season_id IS NULL AND i.episode_id IS NULL)))
+  AND NOT t.id = ANY($22::bigint[])
+  AND t.id NOT IN (SELECT m.merged_into_id FROM titles m WHERE m.id = ANY($22::bigint[]) AND m.merged_into_id IS NOT NULL)
+  AND NOT ($23::bool AND (t.adult OR t.sexual_content))
+ORDER BY t.sitelinks DESC NULLS LAST, t.id
+LIMIT 1000
+`
+
+type RuleTitlesParams struct {
+	Kind         *string
+	Genres       []string
+	NotGenres    []string
+	Types        []string
+	NotTypes     []string
+	Studios      []string
+	NotStudios   []string
+	Networks     []string
+	NotNetworks  []string
+	Countries    []string
+	NotCountries []string
+	Languages    []string
+	NotLanguages []string
+	YearFrom     *int32
+	YearTo       *int32
+	RuntimeFrom  *int32
+	RuntimeTo    *int32
+	Watched      *bool
+	Viewer       int64
+	Rated        *bool
+	Watchlist    *bool
+	LeftOut      []int64
+	ForKids      bool
+}
+
+type RuleTitlesRow struct {
+	ID        int64
+	Kind      string
+	CreatedAt time.Time
+	Matched   int64
+}
+
+func (q *Queries) RuleTitles(ctx context.Context, arg RuleTitlesParams) ([]RuleTitlesRow, error) {
+	rows, err := q.db.Query(ctx, ruleTitles,
+		arg.Kind,
+		arg.Genres,
+		arg.NotGenres,
+		arg.Types,
+		arg.NotTypes,
+		arg.Studios,
+		arg.NotStudios,
+		arg.Networks,
+		arg.NotNetworks,
+		arg.Countries,
+		arg.NotCountries,
+		arg.Languages,
+		arg.NotLanguages,
+		arg.YearFrom,
+		arg.YearTo,
+		arg.RuntimeFrom,
+		arg.RuntimeTo,
+		arg.Watched,
+		arg.Viewer,
+		arg.Rated,
+		arg.Watchlist,
+		arg.LeftOut,
+		arg.ForKids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RuleTitlesRow
+	for rows.Next() {
+		var i RuleTitlesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.CreatedAt,
+			&i.Matched,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchCompanies = `-- name: SearchCompanies :many
+SELECT qid, label, studio_of, network_of FROM (
+  SELECT c.qid, c.label,
+      (SELECT count(*) FROM titles t WHERE t.merged_into_id IS NULL AND t.studios @> ARRAY[c.qid])::bigint AS studio_of,
+      (SELECT count(*) FROM titles t WHERE t.merged_into_id IS NULL AND t.networks @> ARRAY[c.qid])::bigint AS network_of
+  FROM wikidata_classes c
+  WHERE NOT c.human AND c.label <> ''
+    AND (c.label ILIKE $1::text || '%' OR c.label ILIKE '% ' || $1::text || '%')
+) m
+WHERE studio_of + network_of > 0
+ORDER BY lower(label) = lower($1::text) DESC, studio_of + network_of DESC, label
+LIMIT 20
+`
+
+type SearchCompaniesRow struct {
+	Qid       string
+	Label     string
+	StudioOf  int64
+	NetworkOf int64
+}
+
+func (q *Queries) SearchCompanies(ctx context.Context, search string) ([]SearchCompaniesRow, error) {
+	rows, err := q.db.Query(ctx, searchCompanies, search)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchCompaniesRow
+	for rows.Next() {
+		var i SearchCompaniesRow
+		if err := rows.Scan(
+			&i.Qid,
+			&i.Label,
+			&i.StudioOf,
+			&i.NetworkOf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setListItemNotes = `-- name: SetListItemNotes :execrows
 UPDATE list_items SET notes = $3 WHERE id = $1 AND list_id = $2
 `
@@ -435,6 +603,20 @@ func (q *Queries) SetListItemNotes(ctx context.Context, arg SetListItemNotesPara
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setListRule = `-- name: SetListRule :exec
+UPDATE lists SET rule = $2 WHERE id = $1
+`
+
+type SetListRuleParams struct {
+	ID   int64
+	Rule []byte
+}
+
+func (q *Queries) SetListRule(ctx context.Context, arg SetListRuleParams) error {
+	_, err := q.db.Exec(ctx, setListRule, arg.ID, arg.Rule)
+	return err
 }
 
 const titleLists = `-- name: TitleLists :many
@@ -478,11 +660,45 @@ func (q *Queries) TitleLists(ctx context.Context, arg TitleListsParams) ([]Title
 	return items, nil
 }
 
+const titleRuleLists = `-- name: TitleRuleLists :many
+SELECT l.id, l.rule
+FROM lists l
+JOIN profiles o ON o.id = l.profile_id
+JOIN profiles v ON v.id = $1
+WHERE l.kind = 'custom' AND l.rule IS NOT NULL AND o.household_id = v.household_id AND (l.profile_id = v.id OR l.privacy <> 'private')
+ORDER BY l.id
+`
+
+type TitleRuleListsRow struct {
+	ID   int64
+	Rule []byte
+}
+
+func (q *Queries) TitleRuleLists(ctx context.Context, profileID int64) ([]TitleRuleListsRow, error) {
+	rows, err := q.db.Query(ctx, titleRuleLists, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TitleRuleListsRow
+	for rows.Next() {
+		var i TitleRuleListsRow
+		if err := rows.Scan(&i.ID, &i.Rule); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateList = `-- name: UpdateList :one
 UPDATE lists
-SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, cover_item_id = $8, updated_at = now()
+SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, cover_item_id = $8, rule = $9, updated_at = now()
 WHERE id = $1
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule
 `
 
 type UpdateListParams struct {
@@ -494,6 +710,7 @@ type UpdateListParams struct {
 	SortBy      string
 	SortHow     string
 	CoverItemID *int64
+	Rule        []byte
 }
 
 func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, error) {
@@ -506,6 +723,7 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 		arg.SortBy,
 		arg.SortHow,
 		arg.CoverItemID,
+		arg.Rule,
 	)
 	var i List
 	err := row.Scan(
@@ -522,12 +740,13 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 		&i.SortHow,
 		&i.CoverItemID,
 		&i.KeptAt,
+		&i.Rule,
 	)
 	return i, err
 }
 
 const visibleLists = `-- name: VisibleLists :many
-SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, l.cover_item_id, l.kept_at, o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
+SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, l.cover_item_id, l.kept_at, l.rule, o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
     CASE WHEN l.profile_id = $1::bigint THEN 'mine'
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
@@ -599,6 +818,7 @@ func (q *Queries) VisibleLists(ctx context.Context, arg VisibleListsParams) ([]V
 			&i.List.SortHow,
 			&i.List.CoverItemID,
 			&i.List.KeptAt,
+			&i.List.Rule,
 			&i.OwnerUsername,
 			&i.OwnerName,
 			&i.OwnerPrivate,

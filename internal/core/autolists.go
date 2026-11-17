@@ -118,7 +118,7 @@ func AutoListEntries(ctx context.Context, db *pgxpool.Pool, profileID int64, kin
 		if query.Kind != "" && item.Kind() != query.Kind {
 			continue
 		}
-		if p, ok := progress[row.ID]; ok {
+		if p, ok := progress[keyOf(row)]; ok {
 			if query.HideWatched && p.Done() {
 				continue
 			}

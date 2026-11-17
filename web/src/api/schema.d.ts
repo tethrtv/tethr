@@ -688,6 +688,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/lists/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Try out a rule
+         * @description The titles a rule list with this rule would show you, best known first. Each value in the query narrows it down, and repeating one, like `genre=comedy&genre=family`, matches any of them. A title only matches a value Wikidata gives it, so a film with no known runtime isn't under 100 minutes.
+         */
+        get: operations["previewRule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/lists/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep a copy of a rule list
+         * @description Makes a private list of your own with the titles the rule list shows you now, in the same order. The copy is an ordinary list that doesn't change by itself, so you can add, remove and reorder. Only rule lists can be copied.
+         */
+        post: operations["copyList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find a studio or network
+         * @description Studios and networks whose name has a word starting with `q`, with how many titles each made or first aired. Use their Wikidata IDs in a rule.
+         */
+        get: operations["searchCompanies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/lists/{id}": {
         parameters: {
             query?: never;
@@ -747,7 +807,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Take an item off a list */
+        /**
+         * Take an item off a list
+         * @description On a rule list, the title stays out even while it still matches. A rule list can have up to 1,000 titles taken out.
+         */
         delete: operations["removeFromList"];
         options?: never;
         head?: never;
@@ -1973,6 +2036,12 @@ export interface components {
             follower_count: number;
             /** Format: int64 */
             item_count: number;
+            rule?: components["schemas"]["ListRule"];
+            /**
+             * Format: int64
+             * @description On a rule list, how many titles match the rule for you. It can be more than the 1,000 the list shows.
+             */
+            matched_count?: number;
             /**
              * Format: int64
              * @description How many items the profile reading the list has finished. Left out when signed out.
@@ -1991,7 +2060,7 @@ export interface components {
             created_at: string;
             /**
              * Format: date-time
-             * @description Changes when the list's details change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on. Your watched progress, a title's name or year, and an episode's number can change without it.
+             * @description Changes when the list's details or rule change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on, except rule lists, whose titles change without it. Your watched progress, a title's name or year, and an episode's number can change without it.
              */
             updated_at: string;
         };
@@ -2057,6 +2126,7 @@ export interface components {
             privacy?: components["schemas"]["ListPrivacy"];
             sort_by?: components["schemas"]["ListSortBy"];
             sort_how?: components["schemas"]["ListSortHow"];
+            rule?: components["schemas"]["ListRule"];
         };
         ListChanges: {
             name?: string;
@@ -2067,9 +2137,77 @@ export interface components {
             sort_how?: components["schemas"]["ListSortHow"];
             /**
              * Format: int64
-             * @description An item on the list to use as its cover. 0 goes back to the first four items.
+             * @description An item on the list to use as its cover. 0 goes back to the first four items. Rule lists always use their first four.
              */
             cover_item_id?: number;
+            rule?: components["schemas"]["ListRule"];
+        };
+        /** @description Makes a rule list: its titles are worked out each time it's read, up to 1,000, best known first, and each item's ID is the title's own. Every part given has to match. Watched, rated and watchlist use the data of whoever reads the list and are ignored for anyone signed out. A list made by hand can't be given a rule later. A rule list's titles can be taken out but not added, reordered or given notes. A rule list sorts by rank, title or year. */
+        ListRule: {
+            /** @enum {string} */
+            kind?: "movie" | "show";
+            genres?: components["schemas"]["RuleValues"];
+            types?: components["schemas"]["RuleValues"];
+            studios?: components["schemas"]["RuleValues"];
+            networks?: components["schemas"]["RuleValues"];
+            countries?: components["schemas"]["RuleValues"];
+            languages?: components["schemas"]["RuleValues"];
+            year?: components["schemas"]["RuleRange"];
+            runtime?: components["schemas"]["RuleRange"];
+            /** @description Whether you've played it, any episode for a show. */
+            watched?: boolean;
+            /** @description Whether you've rated the whole film or show. */
+            rated?: boolean;
+            /** @description Whether it's on your watchlist. */
+            watchlist?: boolean;
+            /** @description The names of the studios and networks in the rule, by Wikidata ID, for showing it. Sent back, it's ignored. */
+            readonly names?: {
+                [key: string]: string;
+            };
+            /** @description Titles taken out of the list, by ID. Taking a title out of a rule list adds it here. Saving the rule without this keeps them out, and saving it with fewer, or none, puts the rest back. */
+            left_out?: number[];
+        };
+        /** @description Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way. */
+        RuleValues: {
+            /** @description The title has at least one of these. */
+            any?: string[];
+            /** @description The title has none of these. */
+            none?: string[];
+        };
+        /** @description A year, or a runtime in minutes. Both ends are included. */
+        RuleRange: {
+            from?: number;
+            to?: number;
+        };
+        RulePreview: {
+            items: components["schemas"]["ListItem"][];
+            /**
+             * Format: int64
+             * @description How many titles match, which can be more than the 1,000 a list shows.
+             */
+            matched_count: number;
+            /** @description The names of the studios and networks asked for, by Wikidata ID. */
+            names?: {
+                [key: string]: string;
+            };
+            /** @description How many of the shown titles there are, across every page. */
+            total: number;
+            page: number;
+            limit: number;
+        };
+        CompanyMatch: {
+            wikidata: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description How many titles it made.
+             */
+            studio_of: number;
+            /**
+             * Format: int64
+             * @description How many titles first aired on it.
+             */
+            network_of: number;
         };
         ListItem: {
             /** Format: int64 */
@@ -2353,7 +2491,7 @@ export interface components {
             resume?: components["schemas"]["Resume"];
             rating?: components["schemas"]["TitleRating"];
             listing?: components["schemas"]["TitleListing"];
-            /** @description Lists in your household that you can see and that the film or show itself is on. */
+            /** @description Lists in your household that you can see and that the film or show itself is on, including rule lists that show it now. On a rule list, `item_id` is the title's own ID. */
             lists?: components["schemas"]["TitleInList"][];
             /** @description The TMDB episode group the show follows for this profile. Left out, it's aired order. */
             episode_order?: string;
@@ -3758,6 +3896,136 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    previewRule: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+                kind?: "movie" | "show";
+                /** @description Any of these genres. */
+                genre?: ("drama" | "comedy" | "documentary" | "crime" | "romance" | "action" | "thriller" | "horror" | "adventure" | "fantasy" | "science-fiction" | "music" | "mystery" | "kids" | "history" | "biography" | "western" | "family" | "war" | "soap" | "reality" | "talk-and-game" | "sport" | "news")[];
+                /** @description None of these genres. */
+                not_genre?: ("drama" | "comedy" | "documentary" | "crime" | "romance" | "action" | "thriller" | "horror" | "adventure" | "fantasy" | "science-fiction" | "music" | "mystery" | "kids" | "history" | "biography" | "western" | "family" | "war" | "soap" | "reality" | "talk-and-game" | "sport" | "news")[];
+                /** @description Any of these types. */
+                type?: ("animated" | "anime" | "event" | "miniseries" | "short" | "silent" | "special" | "tv-film" | "web")[];
+                /** @description None of these types. */
+                not_type?: ("animated" | "anime" | "event" | "miniseries" | "short" | "silent" | "special" | "tv-film" | "web")[];
+                /** @description Any of these studios, as Wikidata IDs. */
+                studio?: string[];
+                /** @description None of these studios. */
+                not_studio?: string[];
+                /** @description Any of these original networks, as Wikidata IDs. */
+                network?: string[];
+                /** @description None of these networks. */
+                not_network?: string[];
+                /** @description Any of these countries of origin, as ISO 3166 codes. */
+                country?: string[];
+                /** @description None of these countries. */
+                not_country?: string[];
+                /** @description Any of these original languages, as IETF tags. */
+                language?: string[];
+                /** @description None of these languages. */
+                not_language?: string[];
+                /** @description From this year. */
+                year_from?: number;
+                /** @description Up to and including this year. */
+                year_to?: number;
+                /** @description At least this many minutes long. */
+                runtime_from?: number;
+                /** @description At most this many minutes long. */
+                runtime_to?: number;
+                /** @description Whether you've played it, any episode for a show. Ignored when signed out. */
+                watched?: boolean;
+                /** @description Whether you've rated the whole film or show. Ignored when signed out. */
+                rated?: boolean;
+                /** @description Whether it's on your watchlist. Ignored when signed out. */
+                watchlist?: boolean;
+                /** @description A rule list you can see. The titles taken out of it stay out here too. */
+                list?: number;
+                sort_by?: "rank" | "title" | "year";
+                sort_how?: components["schemas"]["ListSortHow"];
+                page?: number;
+                /** @description 100 by default, and up to 1,000. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The matching titles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulePreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    copyList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Up to 100 characters. Without one, the copy takes the rule list's name. */
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Made */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["List"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    searchCompanies: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 20, an exact name first, then those with the most titles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyMatch"][];
+                };
+            };
+        };
+    };
     getList: {
         parameters: {
             query?: {
@@ -3954,6 +4222,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
@@ -4026,6 +4295,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

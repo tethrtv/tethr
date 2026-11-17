@@ -89,3 +89,32 @@ func TestLists(t *testing.T) {
 		t.Errorf("limits = %v", settings["limits"])
 	}
 }
+
+func TestRuleListThroughTrakt(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	c, _ := signIn(t, db)
+	var profile int64
+	if err := db.QueryRow(ctx, "SELECT id FROM profiles").Scan(&profile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO titles (id, kind, slug, name, year, sitelinks, studios)
+		SELECT n, 'movie', 't-' || n, 'Toy Story', 1995, 120, '{Q127552}' FROM nextval('catalogue_id') AS n`); err != nil {
+		t.Fatal(err)
+	}
+	name := "Pixar"
+	l, err := core.CreateList(ctx, db, profile, core.ListChanges{Name: &name, Rule: &core.Rule{Studios: core.Values{Any: []string{"Q127552"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine := c.list("GET", "/users/me/lists", nil)
+	if len(mine) != 1 || mine[0]["item_count"] != 1.0 || mine[0]["sort_by"] != "rank" {
+		t.Errorf("lists = %v", mine)
+	}
+	rec := c.do("GET", "/users/me/lists/"+strconv.FormatInt(l.ID+listOffset, 10)+"/items", nil)
+	var items []map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &items)
+	if rec.Code != http.StatusOK || len(items) != 1 || items[0]["movie"].(map[string]any)["title"] != "Toy Story" || items[0]["rank"] != 1.0 {
+		t.Errorf("items = %v", items)
+	}
+}

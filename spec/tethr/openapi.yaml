@@ -1038,6 +1038,278 @@ paths:
           $ref: '#/components/responses/Problem'
         '422':
           $ref: '#/components/responses/Problem'
+  /v1/lists/preview:
+    get:
+      operationId: previewRule
+      summary: Try out a rule
+      description: The titles a rule list with this rule would show you, best known first. Each value in the query narrows it down, and repeating one, like `genre=comedy&genre=family`, matches any of them. A title only matches a value Wikidata gives it, so a film with no known runtime isn't under 100 minutes.
+      security:
+        - session: []
+        - bearer: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [movie, show]
+        - name: genre
+          in: query
+          description: Any of these genres.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+              enum: [drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news]
+        - name: not_genre
+          in: query
+          description: None of these genres.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+              enum: [drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news]
+        - name: type
+          in: query
+          description: Any of these types.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+              enum: [animated, anime, event, miniseries, short, silent, special, tv-film, web]
+        - name: not_type
+          in: query
+          description: None of these types.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+              enum: [animated, anime, event, miniseries, short, silent, special, tv-film, web]
+        - name: studio
+          in: query
+          description: Any of these studios, as Wikidata IDs.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: not_studio
+          in: query
+          description: None of these studios.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: network
+          in: query
+          description: Any of these original networks, as Wikidata IDs.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: not_network
+          in: query
+          description: None of these networks.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: country
+          in: query
+          description: Any of these countries of origin, as ISO 3166 codes.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: not_country
+          in: query
+          description: None of these countries.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: language
+          in: query
+          description: Any of these original languages, as IETF tags.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: not_language
+          in: query
+          description: None of these languages.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              type: string
+        - name: year_from
+          in: query
+          description: From this year.
+          schema:
+            type: integer
+        - name: year_to
+          in: query
+          description: Up to and including this year.
+          schema:
+            type: integer
+        - name: runtime_from
+          in: query
+          description: At least this many minutes long.
+          schema:
+            type: integer
+        - name: runtime_to
+          in: query
+          description: At most this many minutes long.
+          schema:
+            type: integer
+        - name: watched
+          in: query
+          description: Whether you've played it, any episode for a show. Ignored when signed out.
+          schema:
+            type: boolean
+        - name: rated
+          in: query
+          description: Whether you've rated the whole film or show. Ignored when signed out.
+          schema:
+            type: boolean
+        - name: watchlist
+          in: query
+          description: Whether it's on your watchlist. Ignored when signed out.
+          schema:
+            type: boolean
+        - name: list
+          in: query
+          description: A rule list you can see. The titles taken out of it stay out here too.
+          schema:
+            type: integer
+            format: int64
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [rank, title, year]
+        - name: sort_how
+          in: query
+          schema:
+            $ref: '#/components/schemas/ListSortHow'
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: 100 by default, and up to 1,000.
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The matching titles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RulePreview'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/lists/{id}/copy:
+    post:
+      operationId: copyList
+      summary: Keep a copy of a rule list
+      description: Makes a private list of your own with the titles the rule list shows you now, in the same order. The copy is an ordinary list that doesn't change by itself, so you can add, remove and reorder. Only rule lists can be copied.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Up to 100 characters. Without one, the copy takes the rule list's name.
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/List'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/companies:
+    get:
+      operationId: searchCompanies
+      summary: Find a studio or network
+      description: Studios and networks whose name has a word starting with `q`, with how many titles each made or first aired. Use their Wikidata IDs in a rule.
+      security:
+        - session: []
+        - bearer: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        '200':
+          description: Up to 20, an exact name first, then those with the most titles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CompanyMatch'
   /v1/lists/{id}:
     get:
       operationId: getList
@@ -1241,6 +1513,7 @@ paths:
     delete:
       operationId: removeFromList
       summary: Take an item off a list
+      description: On a rule list, the title stays out even while it still matches. A rule list can have up to 1,000 titles taken out.
       security:
         - session: []
         - bearer: []
@@ -1251,6 +1524,8 @@ paths:
       responses:
         '204':
           description: Removed
+        '400':
+          $ref: '#/components/responses/Problem'
         '401':
           $ref: '#/components/responses/Problem'
         '403':
@@ -1294,6 +1569,8 @@ paths:
                   removed:
                     type: integer
                     format: int64
+        '400':
+          $ref: '#/components/responses/Problem'
         '401':
           $ref: '#/components/responses/Problem'
         '403':
@@ -3303,6 +3580,12 @@ components:
         item_count:
           type: integer
           format: int64
+        rule:
+          $ref: '#/components/schemas/ListRule'
+        matched_count:
+          type: integer
+          format: int64
+          description: On a rule list, how many titles match the rule for you. It can be more than the 1,000 the list shows.
         watched_count:
           type: integer
           format: int64
@@ -3325,7 +3608,7 @@ components:
         updated_at:
           type: string
           format: date-time
-          description: Changes when the list's details change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on. Your watched progress, a title's name or year, and an episode's number can change without it.
+          description: Changes when the list's details or rule change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on, except rule lists, whose titles change without it. Your watched progress, a title's name or year, and an episode's number can change without it.
     ListOwner:
       type: object
       required: [username, official]
@@ -3426,6 +3709,8 @@ components:
           $ref: '#/components/schemas/ListSortBy'
         sort_how:
           $ref: '#/components/schemas/ListSortHow'
+        rule:
+          $ref: '#/components/schemas/ListRule'
     ListChanges:
       type: object
       properties:
@@ -3443,7 +3728,116 @@ components:
         cover_item_id:
           type: integer
           format: int64
-          description: An item on the list to use as its cover. 0 goes back to the first four items.
+          description: An item on the list to use as its cover. 0 goes back to the first four items. Rule lists always use their first four.
+        rule:
+          $ref: '#/components/schemas/ListRule'
+    ListRule:
+      type: object
+      description: "Makes a rule list: its titles are worked out each time it's read, up to 1,000, best known first, and each item's ID is the title's own. Every part given has to match. Watched, rated and watchlist use the data of whoever reads the list and are ignored for anyone signed out. A list made by hand can't be given a rule later. A rule list's titles can be taken out but not added, reordered or given notes. A rule list sorts by rank, title or year."
+      properties:
+        kind:
+          type: string
+          enum: [movie, show]
+        genres:
+          $ref: '#/components/schemas/RuleValues'
+        types:
+          $ref: '#/components/schemas/RuleValues'
+        studios:
+          $ref: '#/components/schemas/RuleValues'
+        networks:
+          $ref: '#/components/schemas/RuleValues'
+        countries:
+          $ref: '#/components/schemas/RuleValues'
+        languages:
+          $ref: '#/components/schemas/RuleValues'
+        year:
+          $ref: '#/components/schemas/RuleRange'
+        runtime:
+          $ref: '#/components/schemas/RuleRange'
+        watched:
+          type: boolean
+          description: Whether you've played it, any episode for a show.
+        rated:
+          type: boolean
+          description: Whether you've rated the whole film or show.
+        watchlist:
+          type: boolean
+          description: Whether it's on your watchlist.
+        names:
+          type: object
+          readOnly: true
+          description: The names of the studios and networks in the rule, by Wikidata ID, for showing it. Sent back, it's ignored.
+          additionalProperties:
+            type: string
+        left_out:
+          type: array
+          description: Titles taken out of the list, by ID. Taking a title out of a rule list adds it here. Saving the rule without this keeps them out, and saving it with fewer, or none, puts the rest back.
+          maxItems: 1000
+          items:
+            type: integer
+            format: int64
+    RuleValues:
+      type: object
+      description: "Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way."
+      properties:
+        any:
+          type: array
+          description: The title has at least one of these.
+          items:
+            type: string
+        none:
+          type: array
+          description: The title has none of these.
+          items:
+            type: string
+    RuleRange:
+      type: object
+      description: A year, or a runtime in minutes. Both ends are included.
+      properties:
+        from:
+          type: integer
+        to:
+          type: integer
+    RulePreview:
+      type: object
+      required: [items, matched_count, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListItem'
+        matched_count:
+          type: integer
+          format: int64
+          description: How many titles match, which can be more than the 1,000 a list shows.
+        names:
+          type: object
+          description: The names of the studios and networks asked for, by Wikidata ID.
+          additionalProperties:
+            type: string
+        total:
+          type: integer
+          description: How many of the shown titles there are, across every page.
+        page:
+          type: integer
+        limit:
+          type: integer
+    CompanyMatch:
+      type: object
+      required: [wikidata, name, studio_of, network_of]
+      properties:
+        wikidata:
+          type: string
+        name:
+          type: string
+        studio_of:
+          type: integer
+          format: int64
+          description: How many titles it made.
+        network_of:
+          type: integer
+          format: int64
+          description: How many titles first aired on it.
     ListItem:
       type: object
       required: [id, rank, listed_at, item]
@@ -3926,7 +4320,7 @@ components:
           $ref: '#/components/schemas/TitleListing'
         lists:
           type: array
-          description: Lists in your household that you can see and that the film or show itself is on.
+          description: Lists in your household that you can see and that the film or show itself is on, including rule lists that show it now. On a rule list, `item_id` is the title's own ID.
           items:
             $ref: '#/components/schemas/TitleInList'
         episode_order:

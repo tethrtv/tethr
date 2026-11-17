@@ -37,6 +37,9 @@ func listProblem(err error) (ProblemJSONResponse, int, bool) {
 	case errors.Is(err, core.ErrListFull):
 		return problem("list_full", "A list holds up to 1,000 items."), 422, true
 	}
+	if p, ok := ruleProblem(err); ok {
+		return p, 400, true
+	}
 	return ProblemJSONResponse{}, 0, false
 }
 
@@ -61,7 +64,12 @@ func (s *Server) toList(l core.List) List {
 	for _, i := range l.Cover {
 		cover = append(cover, toItem(i))
 	}
+	var matched *int64
+	if l.Rule != nil {
+		matched = &l.Matched
+	}
 	return List{
+		MatchedCount:  matched,
 		Id:            l.ID,
 		Name:          l.Name,
 		Slug:          l.Slug,
@@ -76,6 +84,7 @@ func (s *Server) toList(l core.List) List {
 		Following:     l.Following,
 		FollowerCount: l.Followers,
 		ItemCount:     l.ItemCount,
+		Rule:          toRule(l.Rule, l.RuleNames),
 		WatchedCount:  l.Watched,
 		CoverItemId:   l.CoverItemID,
 		Cover:         cover,
@@ -136,6 +145,7 @@ func (s *Server) CreateList(ctx context.Context, req CreateListRequestObject) (C
 		Privacy:     (*string)(b.Privacy),
 		SortBy:      (*string)(b.SortBy),
 		SortHow:     (*string)(b.SortHow),
+		Rule:        fromRule(b.Rule),
 	})
 	if p, status, ok := listProblem(err); ok {
 		switch status {
@@ -190,6 +200,7 @@ func (s *Server) UpdateList(ctx context.Context, req UpdateListRequestObject) (U
 		SortBy:      (*string)(b.SortBy),
 		SortHow:     (*string)(b.SortHow),
 		Cover:       b.CoverItemId,
+		Rule:        fromRule(b.Rule),
 	})
 	if p, status, ok := listProblem(err); ok {
 		switch status {
@@ -328,12 +339,15 @@ func (s *Server) RemoveFromList(ctx context.Context, req RemoveFromListRequestOb
 		return RemoveFromList404JSONResponse(noSuchProfile), nil
 	}
 	if !ok {
-		return RemoveFromList401JSONResponse{notConnected}, err
+		return RemoveFromList401JSONResponse(notConnected), err
 	}
 	err = core.RemoveFromList(ctx, s.DB, c.ProfileID, req.Id, req.Item)
 	if errors.Is(err, core.ErrListReadOnly) {
 		p, _, _ := listProblem(err)
 		return RemoveFromList403JSONResponse(p), nil
+	}
+	if p, ok := ruleProblem(err); ok {
+		return RemoveFromList400JSONResponse{p}, nil
 	}
 	if errors.Is(err, core.ErrNotFound) {
 		return RemoveFromList404JSONResponse(problem("not_found", "That isn’t on the list.")), nil
@@ -374,12 +388,15 @@ func (s *Server) RemoveManyFromList(ctx context.Context, req RemoveManyFromListR
 		return RemoveManyFromList404JSONResponse(noSuchProfile), nil
 	}
 	if !ok {
-		return RemoveManyFromList401JSONResponse{notConnected}, err
+		return RemoveManyFromList401JSONResponse(notConnected), err
 	}
 	removed, err := core.RemoveManyFromList(ctx, s.DB, c.ProfileID, req.Id, req.Body.Ids)
 	if errors.Is(err, core.ErrListReadOnly) {
 		p, _, _ := listProblem(err)
 		return RemoveManyFromList403JSONResponse(p), nil
+	}
+	if p, ok := ruleProblem(err); ok {
+		return RemoveManyFromList400JSONResponse{p}, nil
 	}
 	if errors.Is(err, core.ErrNotFound) {
 		return RemoveManyFromList404JSONResponse(noSuchList), nil

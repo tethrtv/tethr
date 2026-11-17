@@ -230,6 +230,24 @@ func (e ListPrivacy) Valid() bool {
 	}
 }
 
+// Defines values for ListRuleKind.
+const (
+	ListRuleKindMovie ListRuleKind = "movie"
+	ListRuleKindShow  ListRuleKind = "show"
+)
+
+// Valid indicates whether the value is a known member of the ListRuleKind enum.
+func (e ListRuleKind) Valid() bool {
+	switch e {
+	case ListRuleKindMovie:
+		return true
+	case ListRuleKindShow:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListSortBy.
 const (
 	ListSortByAdded ListSortBy = "added"
@@ -673,37 +691,37 @@ func (e TitleFactsGenres) Valid() bool {
 
 // Defines values for TitleFactsTypeFlags.
 const (
-	Animated   TitleFactsTypeFlags = "animated"
-	Anime      TitleFactsTypeFlags = "anime"
-	Event      TitleFactsTypeFlags = "event"
-	Miniseries TitleFactsTypeFlags = "miniseries"
-	Short      TitleFactsTypeFlags = "short"
-	Silent     TitleFactsTypeFlags = "silent"
-	Special    TitleFactsTypeFlags = "special"
-	TvFilm     TitleFactsTypeFlags = "tv-film"
-	Web        TitleFactsTypeFlags = "web"
+	TitleFactsTypeFlagsAnimated   TitleFactsTypeFlags = "animated"
+	TitleFactsTypeFlagsAnime      TitleFactsTypeFlags = "anime"
+	TitleFactsTypeFlagsEvent      TitleFactsTypeFlags = "event"
+	TitleFactsTypeFlagsMiniseries TitleFactsTypeFlags = "miniseries"
+	TitleFactsTypeFlagsShort      TitleFactsTypeFlags = "short"
+	TitleFactsTypeFlagsSilent     TitleFactsTypeFlags = "silent"
+	TitleFactsTypeFlagsSpecial    TitleFactsTypeFlags = "special"
+	TitleFactsTypeFlagsTvFilm     TitleFactsTypeFlags = "tv-film"
+	TitleFactsTypeFlagsWeb        TitleFactsTypeFlags = "web"
 )
 
 // Valid indicates whether the value is a known member of the TitleFactsTypeFlags enum.
 func (e TitleFactsTypeFlags) Valid() bool {
 	switch e {
-	case Animated:
+	case TitleFactsTypeFlagsAnimated:
 		return true
-	case Anime:
+	case TitleFactsTypeFlagsAnime:
 		return true
-	case Event:
+	case TitleFactsTypeFlagsEvent:
 		return true
-	case Miniseries:
+	case TitleFactsTypeFlagsMiniseries:
 		return true
-	case Short:
+	case TitleFactsTypeFlagsShort:
 		return true
-	case Silent:
+	case TitleFactsTypeFlagsSilent:
 		return true
-	case Special:
+	case TitleFactsTypeFlagsSpecial:
 		return true
-	case TvFilm:
+	case TitleFactsTypeFlagsTvFilm:
 		return true
-	case Web:
+	case TitleFactsTypeFlagsWeb:
 		return true
 	default:
 		return false
@@ -800,6 +818,291 @@ func (e ListHistoryParamsType) Valid() bool {
 	case ListHistoryParamsTypeEpisode:
 		return true
 	case ListHistoryParamsTypeMovie:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewRuleParamsKind.
+const (
+	PreviewRuleParamsKindMovie PreviewRuleParamsKind = "movie"
+	PreviewRuleParamsKindShow  PreviewRuleParamsKind = "show"
+)
+
+// Valid indicates whether the value is a known member of the PreviewRuleParamsKind enum.
+func (e PreviewRuleParamsKind) Valid() bool {
+	switch e {
+	case PreviewRuleParamsKindMovie:
+		return true
+	case PreviewRuleParamsKindShow:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewRuleParamsGenre.
+const (
+	PreviewRuleParamsGenreAction         PreviewRuleParamsGenre = "action"
+	PreviewRuleParamsGenreAdventure      PreviewRuleParamsGenre = "adventure"
+	PreviewRuleParamsGenreBiography      PreviewRuleParamsGenre = "biography"
+	PreviewRuleParamsGenreComedy         PreviewRuleParamsGenre = "comedy"
+	PreviewRuleParamsGenreCrime          PreviewRuleParamsGenre = "crime"
+	PreviewRuleParamsGenreDocumentary    PreviewRuleParamsGenre = "documentary"
+	PreviewRuleParamsGenreDrama          PreviewRuleParamsGenre = "drama"
+	PreviewRuleParamsGenreFamily         PreviewRuleParamsGenre = "family"
+	PreviewRuleParamsGenreFantasy        PreviewRuleParamsGenre = "fantasy"
+	PreviewRuleParamsGenreHistory        PreviewRuleParamsGenre = "history"
+	PreviewRuleParamsGenreHorror         PreviewRuleParamsGenre = "horror"
+	PreviewRuleParamsGenreKids           PreviewRuleParamsGenre = "kids"
+	PreviewRuleParamsGenreMusic          PreviewRuleParamsGenre = "music"
+	PreviewRuleParamsGenreMystery        PreviewRuleParamsGenre = "mystery"
+	PreviewRuleParamsGenreNews           PreviewRuleParamsGenre = "news"
+	PreviewRuleParamsGenreReality        PreviewRuleParamsGenre = "reality"
+	PreviewRuleParamsGenreRomance        PreviewRuleParamsGenre = "romance"
+	PreviewRuleParamsGenreScienceFiction PreviewRuleParamsGenre = "science-fiction"
+	PreviewRuleParamsGenreSoap           PreviewRuleParamsGenre = "soap"
+	PreviewRuleParamsGenreSport          PreviewRuleParamsGenre = "sport"
+	PreviewRuleParamsGenreTalkAndGame    PreviewRuleParamsGenre = "talk-and-game"
+	PreviewRuleParamsGenreThriller       PreviewRuleParamsGenre = "thriller"
+	PreviewRuleParamsGenreWar            PreviewRuleParamsGenre = "war"
+	PreviewRuleParamsGenreWestern        PreviewRuleParamsGenre = "western"
+)
+
+// Valid indicates whether the value is a known member of the PreviewRuleParamsGenre enum.
+func (e PreviewRuleParamsGenre) Valid() bool {
+	switch e {
+	case PreviewRuleParamsGenreAction:
+		return true
+	case PreviewRuleParamsGenreAdventure:
+		return true
+	case PreviewRuleParamsGenreBiography:
+		return true
+	case PreviewRuleParamsGenreComedy:
+		return true
+	case PreviewRuleParamsGenreCrime:
+		return true
+	case PreviewRuleParamsGenreDocumentary:
+		return true
+	case PreviewRuleParamsGenreDrama:
+		return true
+	case PreviewRuleParamsGenreFamily:
+		return true
+	case PreviewRuleParamsGenreFantasy:
+		return true
+	case PreviewRuleParamsGenreHistory:
+		return true
+	case PreviewRuleParamsGenreHorror:
+		return true
+	case PreviewRuleParamsGenreKids:
+		return true
+	case PreviewRuleParamsGenreMusic:
+		return true
+	case PreviewRuleParamsGenreMystery:
+		return true
+	case PreviewRuleParamsGenreNews:
+		return true
+	case PreviewRuleParamsGenreReality:
+		return true
+	case PreviewRuleParamsGenreRomance:
+		return true
+	case PreviewRuleParamsGenreScienceFiction:
+		return true
+	case PreviewRuleParamsGenreSoap:
+		return true
+	case PreviewRuleParamsGenreSport:
+		return true
+	case PreviewRuleParamsGenreTalkAndGame:
+		return true
+	case PreviewRuleParamsGenreThriller:
+		return true
+	case PreviewRuleParamsGenreWar:
+		return true
+	case PreviewRuleParamsGenreWestern:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewRuleParamsNotGenre.
+const (
+	PreviewRuleParamsNotGenreAction         PreviewRuleParamsNotGenre = "action"
+	PreviewRuleParamsNotGenreAdventure      PreviewRuleParamsNotGenre = "adventure"
+	PreviewRuleParamsNotGenreBiography      PreviewRuleParamsNotGenre = "biography"
+	PreviewRuleParamsNotGenreComedy         PreviewRuleParamsNotGenre = "comedy"
+	PreviewRuleParamsNotGenreCrime          PreviewRuleParamsNotGenre = "crime"
+	PreviewRuleParamsNotGenreDocumentary    PreviewRuleParamsNotGenre = "documentary"
+	PreviewRuleParamsNotGenreDrama          PreviewRuleParamsNotGenre = "drama"
+	PreviewRuleParamsNotGenreFamily         PreviewRuleParamsNotGenre = "family"
+	PreviewRuleParamsNotGenreFantasy        PreviewRuleParamsNotGenre = "fantasy"
+	PreviewRuleParamsNotGenreHistory        PreviewRuleParamsNotGenre = "history"
+	PreviewRuleParamsNotGenreHorror         PreviewRuleParamsNotGenre = "horror"
+	PreviewRuleParamsNotGenreKids           PreviewRuleParamsNotGenre = "kids"
+	PreviewRuleParamsNotGenreMusic          PreviewRuleParamsNotGenre = "music"
+	PreviewRuleParamsNotGenreMystery        PreviewRuleParamsNotGenre = "mystery"
+	PreviewRuleParamsNotGenreNews           PreviewRuleParamsNotGenre = "news"
+	PreviewRuleParamsNotGenreReality        PreviewRuleParamsNotGenre = "reality"
+	PreviewRuleParamsNotGenreRomance        PreviewRuleParamsNotGenre = "romance"
+	PreviewRuleParamsNotGenreScienceFiction PreviewRuleParamsNotGenre = "science-fiction"
+	PreviewRuleParamsNotGenreSoap           PreviewRuleParamsNotGenre = "soap"
+	PreviewRuleParamsNotGenreSport          PreviewRuleParamsNotGenre = "sport"
+	PreviewRuleParamsNotGenreTalkAndGame    PreviewRuleParamsNotGenre = "talk-and-game"
+	PreviewRuleParamsNotGenreThriller       PreviewRuleParamsNotGenre = "thriller"
+	PreviewRuleParamsNotGenreWar            PreviewRuleParamsNotGenre = "war"
+	PreviewRuleParamsNotGenreWestern        PreviewRuleParamsNotGenre = "western"
+)
+
+// Valid indicates whether the value is a known member of the PreviewRuleParamsNotGenre enum.
+func (e PreviewRuleParamsNotGenre) Valid() bool {
+	switch e {
+	case PreviewRuleParamsNotGenreAction:
+		return true
+	case PreviewRuleParamsNotGenreAdventure:
+		return true
+	case PreviewRuleParamsNotGenreBiography:
+		return true
+	case PreviewRuleParamsNotGenreComedy:
+		return true
+	case PreviewRuleParamsNotGenreCrime:
+		return true
+	case PreviewRuleParamsNotGenreDocumentary:
+		return true
+	case PreviewRuleParamsNotGenreDrama:
+		return true
+	case PreviewRuleParamsNotGenreFamily:
+		return true
+	case PreviewRuleParamsNotGenreFantasy:
+		return true
+	case PreviewRuleParamsNotGenreHistory:
+		return true
+	case PreviewRuleParamsNotGenreHorror:
+		return true
+	case PreviewRuleParamsNotGenreKids:
+		return true
+	case PreviewRuleParamsNotGenreMusic:
+		return true
+	case PreviewRuleParamsNotGenreMystery:
+		return true
+	case PreviewRuleParamsNotGenreNews:
+		return true
+	case PreviewRuleParamsNotGenreReality:
+		return true
+	case PreviewRuleParamsNotGenreRomance:
+		return true
+	case PreviewRuleParamsNotGenreScienceFiction:
+		return true
+	case PreviewRuleParamsNotGenreSoap:
+		return true
+	case PreviewRuleParamsNotGenreSport:
+		return true
+	case PreviewRuleParamsNotGenreTalkAndGame:
+		return true
+	case PreviewRuleParamsNotGenreThriller:
+		return true
+	case PreviewRuleParamsNotGenreWar:
+		return true
+	case PreviewRuleParamsNotGenreWestern:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewRuleParamsType.
+const (
+	PreviewRuleParamsTypeAnimated   PreviewRuleParamsType = "animated"
+	PreviewRuleParamsTypeAnime      PreviewRuleParamsType = "anime"
+	PreviewRuleParamsTypeEvent      PreviewRuleParamsType = "event"
+	PreviewRuleParamsTypeMiniseries PreviewRuleParamsType = "miniseries"
+	PreviewRuleParamsTypeShort      PreviewRuleParamsType = "short"
+	PreviewRuleParamsTypeSilent     PreviewRuleParamsType = "silent"
+	PreviewRuleParamsTypeSpecial    PreviewRuleParamsType = "special"
+	PreviewRuleParamsTypeTvFilm     PreviewRuleParamsType = "tv-film"
+	PreviewRuleParamsTypeWeb        PreviewRuleParamsType = "web"
+)
+
+// Valid indicates whether the value is a known member of the PreviewRuleParamsType enum.
+func (e PreviewRuleParamsType) Valid() bool {
+	switch e {
+	case PreviewRuleParamsTypeAnimated:
+		return true
+	case PreviewRuleParamsTypeAnime:
+		return true
+	case PreviewRuleParamsTypeEvent:
+		return true
+	case PreviewRuleParamsTypeMiniseries:
+		return true
+	case PreviewRuleParamsTypeShort:
+		return true
+	case PreviewRuleParamsTypeSilent:
+		return true
+	case PreviewRuleParamsTypeSpecial:
+		return true
+	case PreviewRuleParamsTypeTvFilm:
+		return true
+	case PreviewRuleParamsTypeWeb:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewRuleParamsNotType.
+const (
+	PreviewRuleParamsNotTypeAnimated   PreviewRuleParamsNotType = "animated"
+	PreviewRuleParamsNotTypeAnime      PreviewRuleParamsNotType = "anime"
+	PreviewRuleParamsNotTypeEvent      PreviewRuleParamsNotType = "event"
+	PreviewRuleParamsNotTypeMiniseries PreviewRuleParamsNotType = "miniseries"
+	PreviewRuleParamsNotTypeShort      PreviewRuleParamsNotType = "short"
+	PreviewRuleParamsNotTypeSilent     PreviewRuleParamsNotType = "silent"
+	PreviewRuleParamsNotTypeSpecial    PreviewRuleParamsNotType = "special"
+	PreviewRuleParamsNotTypeTvFilm     PreviewRuleParamsNotType = "tv-film"
+	PreviewRuleParamsNotTypeWeb        PreviewRuleParamsNotType = "web"
+)
+
+// Valid indicates whether the value is a known member of the PreviewRuleParamsNotType enum.
+func (e PreviewRuleParamsNotType) Valid() bool {
+	switch e {
+	case PreviewRuleParamsNotTypeAnimated:
+		return true
+	case PreviewRuleParamsNotTypeAnime:
+		return true
+	case PreviewRuleParamsNotTypeEvent:
+		return true
+	case PreviewRuleParamsNotTypeMiniseries:
+		return true
+	case PreviewRuleParamsNotTypeShort:
+		return true
+	case PreviewRuleParamsNotTypeSilent:
+		return true
+	case PreviewRuleParamsNotTypeSpecial:
+		return true
+	case PreviewRuleParamsNotTypeTvFilm:
+		return true
+	case PreviewRuleParamsNotTypeWeb:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewRuleParamsSortBy.
+const (
+	PreviewRuleParamsSortByRank  PreviewRuleParamsSortBy = "rank"
+	PreviewRuleParamsSortByTitle PreviewRuleParamsSortBy = "title"
+	PreviewRuleParamsSortByYear  PreviewRuleParamsSortBy = "year"
+)
+
+// Valid indicates whether the value is a known member of the PreviewRuleParamsSortBy enum.
+func (e PreviewRuleParamsSortBy) Valid() bool {
+	switch e {
+	case PreviewRuleParamsSortByRank:
+		return true
+	case PreviewRuleParamsSortByTitle:
+		return true
+	case PreviewRuleParamsSortByYear:
 		return true
 	default:
 		return false
@@ -1095,6 +1398,18 @@ type BusiestDay struct {
 // Company defines model for Company.
 type Company struct {
 	Name     string `json:"name"`
+	Wikidata string `json:"wikidata"`
+}
+
+// CompanyMatch defines model for CompanyMatch.
+type CompanyMatch struct {
+	Name string `json:"name"`
+
+	// NetworkOf How many titles first aired on it.
+	NetworkOf int64 `json:"network_of"`
+
+	// StudioOf How many titles it made.
+	StudioOf int64  `json:"studio_of"`
 	Wikidata string `json:"wikidata"`
 }
 
@@ -1421,20 +1736,26 @@ type List struct {
 	Id        int64 `json:"id"`
 
 	// InUpNext Whether the profile reading it watches the list in order in Up next.
-	InUpNext  bool      `json:"in_up_next"`
-	ItemCount int64     `json:"item_count"`
-	Name      string    `json:"name"`
-	Owner     ListOwner `json:"owner"`
+	InUpNext  bool  `json:"in_up_next"`
+	ItemCount int64 `json:"item_count"`
+
+	// MatchedCount On a rule list, how many titles match the rule for you. It can be more than the 1,000 the list shows.
+	MatchedCount *int64    `json:"matched_count,omitempty"`
+	Name         string    `json:"name"`
+	Owner        ListOwner `json:"owner"`
 
 	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
 	Privacy ListPrivacy `json:"privacy"`
+
+	// Rule Makes a rule list: its titles are worked out each time it's read, up to 1,000, best known first, and each item's ID is the title's own. Every part given has to match. Watched, rated and watchlist use the data of whoever reads the list and are ignored for anyone signed out. A list made by hand can't be given a rule later. A rule list's titles can be taken out but not added, reordered or given notes. A rule list sorts by rank, title or year.
+	Rule *ListRule `json:"rule,omitempty"`
 
 	// Slug Made from the name, and changes with it.
 	Slug    string      `json:"slug"`
 	SortBy  ListSortBy  `json:"sort_by"`
 	SortHow ListSortHow `json:"sort_how"`
 
-	// UpdatedAt Changes when the list's details change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on. Your watched progress, a title's name or year, and an episode's number can change without it.
+	// UpdatedAt Changes when the list's details or rule change, when items are added, removed, reordered or given notes, and when a title or episode on it is merged with another. An app can keep a copy and only fetch the items of lists that have moved on, except rule lists, whose titles change without it. Your watched progress, a title's name or year, and an episode's number can change without it.
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// Url The list's page on the website, made from its owner's username and its slug.
@@ -1449,7 +1770,7 @@ type ListAccess string
 
 // ListChanges defines model for ListChanges.
 type ListChanges struct {
-	// CoverItemId An item on the list to use as its cover. 0 goes back to the first four items.
+	// CoverItemId An item on the list to use as its cover. 0 goes back to the first four items. Rule lists always use their first four.
 	CoverItemId *int64 `json:"cover_item_id,omitempty"`
 
 	// Description Empty clears it.
@@ -1458,6 +1779,9 @@ type ListChanges struct {
 
 	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
 	Privacy *ListPrivacy `json:"privacy,omitempty"`
+
+	// Rule Makes a rule list: its titles are worked out each time it's read, up to 1,000, best known first, and each item's ID is the title's own. Every part given has to match. Watched, rated and watchlist use the data of whoever reads the list and are ignored for anyone signed out. A list made by hand can't be given a rule later. A rule list's titles can be taken out but not added, reordered or given notes. A rule list sorts by rank, title or year.
+	Rule    *ListRule    `json:"rule,omitempty"`
 	SortBy  *ListSortBy  `json:"sort_by,omitempty"`
 	SortHow *ListSortHow `json:"sort_how,omitempty"`
 }
@@ -1504,6 +1828,52 @@ type ListOwner struct {
 
 // ListPrivacy `household` lets every profile in the household read it. `public` lets anyone with the link.
 type ListPrivacy string
+
+// ListRule Makes a rule list: its titles are worked out each time it's read, up to 1,000, best known first, and each item's ID is the title's own. Every part given has to match. Watched, rated and watchlist use the data of whoever reads the list and are ignored for anyone signed out. A list made by hand can't be given a rule later. A rule list's titles can be taken out but not added, reordered or given notes. A rule list sorts by rank, title or year.
+type ListRule struct {
+	// Countries Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way.
+	Countries *RuleValues `json:"countries,omitempty"`
+
+	// Genres Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way.
+	Genres *RuleValues   `json:"genres,omitempty"`
+	Kind   *ListRuleKind `json:"kind,omitempty"`
+
+	// Languages Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way.
+	Languages *RuleValues `json:"languages,omitempty"`
+
+	// LeftOut Titles taken out of the list, by ID. Taking a title out of a rule list adds it here. Saving the rule without this keeps them out, and saving it with fewer, or none, puts the rest back.
+	LeftOut *[]int64 `json:"left_out,omitempty"`
+
+	// Names The names of the studios and networks in the rule, by Wikidata ID, for showing it. Sent back, it's ignored.
+	Names *map[string]string `json:"names,omitempty"`
+
+	// Networks Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way.
+	Networks *RuleValues `json:"networks,omitempty"`
+
+	// Rated Whether you've rated the whole film or show.
+	Rated *bool `json:"rated,omitempty"`
+
+	// Runtime A year, or a runtime in minutes. Both ends are included.
+	Runtime *RuleRange `json:"runtime,omitempty"`
+
+	// Studios Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way.
+	Studios *RuleValues `json:"studios,omitempty"`
+
+	// Types Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way.
+	Types *RuleValues `json:"types,omitempty"`
+
+	// Watched Whether you've played it, any episode for a show.
+	Watched *bool `json:"watched,omitempty"`
+
+	// Watchlist Whether it's on your watchlist.
+	Watchlist *bool `json:"watchlist,omitempty"`
+
+	// Year A year, or a runtime in minutes. Both ends are included.
+	Year *RuleRange `json:"year,omitempty"`
+}
+
+// ListRuleKind defines model for ListRule.Kind.
+type ListRuleKind string
 
 // ListSortBy defines model for ListSortBy.
 type ListSortBy string
@@ -1601,6 +1971,9 @@ type NewList struct {
 
 	// Privacy `household` lets every profile in the household read it. `public` lets anyone with the link.
 	Privacy *ListPrivacy `json:"privacy,omitempty"`
+
+	// Rule Makes a rule list: its titles are worked out each time it's read, up to 1,000, best known first, and each item's ID is the title's own. Every part given has to match. Watched, rated and watchlist use the data of whoever reads the list and are ignored for anyone signed out. A list made by hand can't be given a rule later. A rule list's titles can be taken out but not added, reordered or given notes. A rule list sorts by rank, title or year.
+	Rule    *ListRule    `json:"rule,omitempty"`
 	SortBy  *ListSortBy  `json:"sort_by,omitempty"`
 	SortHow *ListSortHow `json:"sort_how,omitempty"`
 }
@@ -1821,6 +2194,37 @@ type ResumePoint struct {
 	Progress float64   `json:"progress"`
 }
 
+// RulePreview defines model for RulePreview.
+type RulePreview struct {
+	Items []ListItem `json:"items"`
+	Limit int        `json:"limit"`
+
+	// MatchedCount How many titles match, which can be more than the 1,000 a list shows.
+	MatchedCount int64 `json:"matched_count"`
+
+	// Names The names of the studios and networks asked for, by Wikidata ID.
+	Names *map[string]string `json:"names,omitempty"`
+	Page  int                `json:"page"`
+
+	// Total How many of the shown titles there are, across every page.
+	Total int `json:"total"`
+}
+
+// RuleRange A year, or a runtime in minutes. Both ends are included.
+type RuleRange struct {
+	From *int `json:"from,omitempty"`
+	To   *int `json:"to,omitempty"`
+}
+
+// RuleValues Genres (drama, comedy, documentary, crime, romance, action, thriller, horror, adventure, fantasy, science-fiction, music, mystery, kids, history, biography, western, family, war, soap, reality, talk-and-game, sport, news), types (animated, anime, event, miniseries, short, silent, special, tv-film, web), studios and networks as Wikidata IDs, countries as ISO 3166 codes, or languages as IETF tags. Up to 50 each way.
+type RuleValues struct {
+	// Any The title has at least one of these.
+	Any *[]string `json:"any,omitempty"`
+
+	// None The title has none of these.
+	None *[]string `json:"none,omitempty"`
+}
+
 // ScrobbleRequest defines model for ScrobbleRequest.
 type ScrobbleRequest struct {
 	// DurationSeconds The file's length, if you know it.
@@ -1930,7 +2334,7 @@ type TitleDetail struct {
 	// Listing Set when the film or show itself is on your watchlist.
 	Listing *TitleListing `json:"listing,omitempty"`
 
-	// Lists Lists in your household that you can see and that the film or show itself is on.
+	// Lists Lists in your household that you can see and that the film or show itself is on, including rule lists that show it now. On a rule list, `item_id` is the title's own ID.
 	Lists *[]TitleInList `json:"lists,omitempty"`
 
 	// Rating Your rating of the film or show itself.
@@ -2245,6 +2649,11 @@ type CopyAutoListParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// SearchCompaniesParams defines parameters for SearchCompanies.
+type SearchCompaniesParams struct {
+	Q string `form:"q" json:"q"`
+}
+
 // ListFollowedListsParams defines parameters for ListFollowedLists.
 type ListFollowedListsParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -2333,6 +2742,97 @@ type CreateListParams struct {
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
 
+// PreviewRuleParams defines parameters for PreviewRule.
+type PreviewRuleParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId             `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+	Kind      *PreviewRuleParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Genre Any of these genres.
+	Genre *[]PreviewRuleParamsGenre `form:"genre,omitempty" json:"genre,omitempty"`
+
+	// NotGenre None of these genres.
+	NotGenre *[]PreviewRuleParamsNotGenre `form:"not_genre,omitempty" json:"not_genre,omitempty"`
+
+	// Type Any of these types.
+	Type *[]PreviewRuleParamsType `form:"type,omitempty" json:"type,omitempty"`
+
+	// NotType None of these types.
+	NotType *[]PreviewRuleParamsNotType `form:"not_type,omitempty" json:"not_type,omitempty"`
+
+	// Studio Any of these studios, as Wikidata IDs.
+	Studio *[]string `form:"studio,omitempty" json:"studio,omitempty"`
+
+	// NotStudio None of these studios.
+	NotStudio *[]string `form:"not_studio,omitempty" json:"not_studio,omitempty"`
+
+	// Network Any of these original networks, as Wikidata IDs.
+	Network *[]string `form:"network,omitempty" json:"network,omitempty"`
+
+	// NotNetwork None of these networks.
+	NotNetwork *[]string `form:"not_network,omitempty" json:"not_network,omitempty"`
+
+	// Country Any of these countries of origin, as ISO 3166 codes.
+	Country *[]string `form:"country,omitempty" json:"country,omitempty"`
+
+	// NotCountry None of these countries.
+	NotCountry *[]string `form:"not_country,omitempty" json:"not_country,omitempty"`
+
+	// Language Any of these original languages, as IETF tags.
+	Language *[]string `form:"language,omitempty" json:"language,omitempty"`
+
+	// NotLanguage None of these languages.
+	NotLanguage *[]string `form:"not_language,omitempty" json:"not_language,omitempty"`
+
+	// YearFrom From this year.
+	YearFrom *int `form:"year_from,omitempty" json:"year_from,omitempty"`
+
+	// YearTo Up to and including this year.
+	YearTo *int `form:"year_to,omitempty" json:"year_to,omitempty"`
+
+	// RuntimeFrom At least this many minutes long.
+	RuntimeFrom *int `form:"runtime_from,omitempty" json:"runtime_from,omitempty"`
+
+	// RuntimeTo At most this many minutes long.
+	RuntimeTo *int `form:"runtime_to,omitempty" json:"runtime_to,omitempty"`
+
+	// Watched Whether you've played it, any episode for a show. Ignored when signed out.
+	Watched *bool `form:"watched,omitempty" json:"watched,omitempty"`
+
+	// Rated Whether you've rated the whole film or show. Ignored when signed out.
+	Rated *bool `form:"rated,omitempty" json:"rated,omitempty"`
+
+	// Watchlist Whether it's on your watchlist. Ignored when signed out.
+	Watchlist *bool `form:"watchlist,omitempty" json:"watchlist,omitempty"`
+
+	// List A rule list you can see. The titles taken out of it stay out here too.
+	List    *int64                   `form:"list,omitempty" json:"list,omitempty"`
+	SortBy  *PreviewRuleParamsSortBy `form:"sort_by,omitempty" json:"sort_by,omitempty"`
+	SortHow *ListSortHow             `form:"sort_how,omitempty" json:"sort_how,omitempty"`
+	Page    *int                     `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit 100 by default, and up to 1,000.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// PreviewRuleParamsKind defines parameters for PreviewRule.
+type PreviewRuleParamsKind string
+
+// PreviewRuleParamsGenre defines parameters for PreviewRule.
+type PreviewRuleParamsGenre string
+
+// PreviewRuleParamsNotGenre defines parameters for PreviewRule.
+type PreviewRuleParamsNotGenre string
+
+// PreviewRuleParamsType defines parameters for PreviewRule.
+type PreviewRuleParamsType string
+
+// PreviewRuleParamsNotType defines parameters for PreviewRule.
+type PreviewRuleParamsNotType string
+
+// PreviewRuleParamsSortBy defines parameters for PreviewRule.
+type PreviewRuleParamsSortBy string
+
 // DeleteListParams defines parameters for DeleteList.
 type DeleteListParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -2348,6 +2848,18 @@ type GetListParams struct {
 
 // UpdateListParams defines parameters for UpdateList.
 type UpdateListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
+// CopyListJSONBody defines parameters for CopyList.
+type CopyListJSONBody struct {
+	// Name Up to 100 characters. Without one, the copy takes the rule list's name.
+	Name *string `json:"name,omitempty"`
+}
+
+// CopyListParams defines parameters for CopyList.
+type CopyListParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
 	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
 }
@@ -2684,6 +3196,9 @@ type CreateListJSONRequestBody = NewList
 // UpdateListJSONRequestBody defines body for UpdateList for application/json ContentType.
 type UpdateListJSONRequestBody = ListChanges
 
+// CopyListJSONRequestBody defines body for CopyList for application/json ContentType.
+type CopyListJSONRequestBody CopyListJSONBody
+
 // AddToListJSONRequestBody defines body for AddToList for application/json ContentType.
 type AddToListJSONRequestBody = NewListings
 
@@ -2791,6 +3306,9 @@ type ServerInterface interface {
 	// CopyAutoList Keep a copy as a list of your own
 	// (POST /v1/auto-lists/{kind}/copy)
 	CopyAutoList(w http.ResponseWriter, r *http.Request, kind AutoListKind, params CopyAutoListParams)
+	// SearchCompanies Find a studio or network
+	// (GET /v1/companies)
+	SearchCompanies(w http.ResponseWriter, r *http.Request, params SearchCompaniesParams)
 	// ListConnections List the apps connected to your household
 	// (GET /v1/connections)
 	ListConnections(w http.ResponseWriter, r *http.Request)
@@ -2860,6 +3378,9 @@ type ServerInterface interface {
 	// CreateList Make a list
 	// (POST /v1/lists)
 	CreateList(w http.ResponseWriter, r *http.Request, params CreateListParams)
+	// PreviewRule Try out a rule
+	// (GET /v1/lists/preview)
+	PreviewRule(w http.ResponseWriter, r *http.Request, params PreviewRuleParams)
 	// DeleteList Delete a list
 	// (DELETE /v1/lists/{id})
 	DeleteList(w http.ResponseWriter, r *http.Request, id Id, params DeleteListParams)
@@ -2869,6 +3390,9 @@ type ServerInterface interface {
 	// UpdateList Rename a list, or change its description, privacy or order
 	// (PATCH /v1/lists/{id})
 	UpdateList(w http.ResponseWriter, r *http.Request, id Id, params UpdateListParams)
+	// CopyList Keep a copy of a rule list
+	// (POST /v1/lists/{id}/copy)
+	CopyList(w http.ResponseWriter, r *http.Request, id Id, params CopyListParams)
 	// ListFollowers Who follows your list
 	// (GET /v1/lists/{id}/followers)
 	ListFollowers(w http.ResponseWriter, r *http.Request, id Id, params ListFollowersParams)
@@ -3520,6 +4044,39 @@ func (siw *ServerInterfaceWrapper) CopyAutoList(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CopyAutoList(w, r, kind, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchCompanies operation middleware
+func (siw *ServerInterfaceWrapper) SearchCompanies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchCompaniesParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchCompanies(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4289,6 +4846,364 @@ func (siw *ServerInterfaceWrapper) CreateList(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewRule operation middleware
+func (siw *ServerInterfaceWrapper) PreviewRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewRuleParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "genre" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "genre", r.URL.Query(), &params.Genre, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "genre"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "genre", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "not_genre" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "not_genre", r.URL.Query(), &params.NotGenre, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "not_genre"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "not_genre", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "not_type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "not_type", r.URL.Query(), &params.NotType, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "not_type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "not_type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "studio" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "studio", r.URL.Query(), &params.Studio, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "studio"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "studio", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "not_studio" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "not_studio", r.URL.Query(), &params.NotStudio, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "not_studio"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "not_studio", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "network" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "network", r.URL.Query(), &params.Network, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "network"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "network", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "not_network" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "not_network", r.URL.Query(), &params.NotNetwork, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "not_network"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "not_network", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "country" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "country", r.URL.Query(), &params.Country, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "country"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "country", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "not_country" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "not_country", r.URL.Query(), &params.NotCountry, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "not_country"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "not_country", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "language" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "language", r.URL.Query(), &params.Language, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "language"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "language", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "not_language" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "not_language", r.URL.Query(), &params.NotLanguage, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "not_language"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "not_language", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "year_from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "year_from", r.URL.Query(), &params.YearFrom, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year_from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year_from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "year_to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "year_to", r.URL.Query(), &params.YearTo, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year_to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year_to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "runtime_from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runtime_from", r.URL.Query(), &params.RuntimeFrom, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runtime_from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runtime_from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "runtime_to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runtime_to", r.URL.Query(), &params.RuntimeTo, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runtime_to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runtime_to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "watched" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "watched", r.URL.Query(), &params.Watched, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "watched"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "watched", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "rated" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "rated", r.URL.Query(), &params.Rated, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rated"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rated", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "watchlist" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "watchlist", r.URL.Query(), &params.Watchlist, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "watchlist"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "watchlist", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "list" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "list", r.URL.Query(), &params.List, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "list"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "list", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_by" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_by", r.URL.Query(), &params.SortBy, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_by"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_by", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_how" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_how", r.URL.Query(), &params.SortHow, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_how"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_how", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewRule(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteList operation middleware
 func (siw *ServerInterfaceWrapper) DeleteList(w http.ResponseWriter, r *http.Request) {
 
@@ -4427,6 +5342,48 @@ func (siw *ServerInterfaceWrapper) UpdateList(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CopyList operation middleware
+func (siw *ServerInterfaceWrapper) CopyList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CopyListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CopyList(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6670,6 +7627,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/auto-lists/{kind}/copy", wrapper.CopyAutoList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists", wrapper.ListLists)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists", wrapper.CreateList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists/preview", wrapper.PreviewRule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/lists/{id}/copy", wrapper.CopyList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/companies", wrapper.SearchCompanies)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/lists/{id}", wrapper.DeleteList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/lists/{id}", wrapper.GetList)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/lists/{id}", wrapper.UpdateList)
@@ -7584,6 +8544,28 @@ func (response CopyAutoList422JSONResponse) VisitCopyAutoListResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchCompaniesRequestObject struct {
+	Params SearchCompaniesParams
+}
+
+type SearchCompaniesResponseObject interface {
+	VisitSearchCompaniesResponse(w http.ResponseWriter) error
+}
+
+type SearchCompanies200JSONResponse []CompanyMatch
+
+func (response SearchCompanies200JSONResponse) VisitSearchCompaniesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8808,6 +9790,70 @@ func (response CreateList422JSONResponse) VisitCreateListResponse(w http.Respons
 	return err
 }
 
+type PreviewRuleRequestObject struct {
+	Params PreviewRuleParams
+}
+
+type PreviewRuleResponseObject interface {
+	VisitPreviewRuleResponse(w http.ResponseWriter) error
+}
+
+type PreviewRule200JSONResponse RulePreview
+
+func (response PreviewRule200JSONResponse) VisitPreviewRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewRule400JSONResponse struct{ ProblemJSONResponse }
+
+func (response PreviewRule400JSONResponse) VisitPreviewRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewRule401JSONResponse Problem
+
+func (response PreviewRule401JSONResponse) VisitPreviewRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewRule404JSONResponse Problem
+
+func (response PreviewRule404JSONResponse) VisitPreviewRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteListRequestObject struct {
 	Id     Id `json:"id"`
 	Params DeleteListParams
@@ -8998,6 +10044,86 @@ func (response UpdateList404JSONResponse) VisitUpdateListResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyListRequestObject struct {
+	Id     Id `json:"id"`
+	Params CopyListParams
+	Body   *CopyListJSONRequestBody
+}
+
+type CopyListResponseObject interface {
+	VisitCopyListResponse(w http.ResponseWriter) error
+}
+
+type CopyList201JSONResponse List
+
+func (response CopyList201JSONResponse) VisitCopyListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response CopyList400JSONResponse) VisitCopyListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyList401JSONResponse Problem
+
+func (response CopyList401JSONResponse) VisitCopyListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyList404JSONResponse Problem
+
+func (response CopyList404JSONResponse) VisitCopyListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CopyList422JSONResponse Problem
+
+func (response CopyList422JSONResponse) VisitCopyListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9256,7 +10382,21 @@ func (response RemoveManyFromList200JSONResponse) VisitRemoveManyFromListRespons
 	return err
 }
 
-type RemoveManyFromList401JSONResponse struct{ ProblemJSONResponse }
+type RemoveManyFromList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response RemoveManyFromList400JSONResponse) VisitRemoveManyFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveManyFromList401JSONResponse Problem
 
 func (response RemoveManyFromList401JSONResponse) VisitRemoveManyFromListResponse(w http.ResponseWriter) error {
 
@@ -9316,7 +10456,21 @@ func (response RemoveFromList204Response) VisitRemoveFromListResponse(w http.Res
 	return nil
 }
 
-type RemoveFromList401JSONResponse struct{ ProblemJSONResponse }
+type RemoveFromList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response RemoveFromList400JSONResponse) VisitRemoveFromListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveFromList401JSONResponse Problem
 
 func (response RemoveFromList401JSONResponse) VisitRemoveFromListResponse(w http.ResponseWriter) error {
 
@@ -12171,6 +13325,9 @@ type StrictServerInterface interface {
 	// CopyAutoList Keep a copy as a list of your own
 	// (POST /v1/auto-lists/{kind}/copy)
 	CopyAutoList(ctx context.Context, request CopyAutoListRequestObject) (CopyAutoListResponseObject, error)
+	// SearchCompanies Find a studio or network
+	// (GET /v1/companies)
+	SearchCompanies(ctx context.Context, request SearchCompaniesRequestObject) (SearchCompaniesResponseObject, error)
 	// ListConnections List the apps connected to your household
 	// (GET /v1/connections)
 	ListConnections(ctx context.Context, request ListConnectionsRequestObject) (ListConnectionsResponseObject, error)
@@ -12240,6 +13397,9 @@ type StrictServerInterface interface {
 	// CreateList Make a list
 	// (POST /v1/lists)
 	CreateList(ctx context.Context, request CreateListRequestObject) (CreateListResponseObject, error)
+	// PreviewRule Try out a rule
+	// (GET /v1/lists/preview)
+	PreviewRule(ctx context.Context, request PreviewRuleRequestObject) (PreviewRuleResponseObject, error)
 	// DeleteList Delete a list
 	// (DELETE /v1/lists/{id})
 	DeleteList(ctx context.Context, request DeleteListRequestObject) (DeleteListResponseObject, error)
@@ -12249,6 +13409,9 @@ type StrictServerInterface interface {
 	// UpdateList Rename a list, or change its description, privacy or order
 	// (PATCH /v1/lists/{id})
 	UpdateList(ctx context.Context, request UpdateListRequestObject) (UpdateListResponseObject, error)
+	// CopyList Keep a copy of a rule list
+	// (POST /v1/lists/{id}/copy)
+	CopyList(ctx context.Context, request CopyListRequestObject) (CopyListResponseObject, error)
 	// ListFollowers Who follows your list
 	// (GET /v1/lists/{id}/followers)
 	ListFollowers(ctx context.Context, request ListFollowersRequestObject) (ListFollowersResponseObject, error)
@@ -12936,6 +14099,32 @@ func (sh *strictHandler) CopyAutoList(w http.ResponseWriter, r *http.Request, ki
 	}
 }
 
+// SearchCompanies operation middleware
+func (sh *strictHandler) SearchCompanies(w http.ResponseWriter, r *http.Request, params SearchCompaniesParams) {
+	var request SearchCompaniesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchCompanies(ctx, request.(SearchCompaniesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchCompanies")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchCompaniesResponseObject); ok {
+		if err := validResponse.VisitSearchCompaniesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListConnections operation middleware
 func (sh *strictHandler) ListConnections(w http.ResponseWriter, r *http.Request) {
 	var request ListConnectionsRequestObject
@@ -13573,6 +14762,32 @@ func (sh *strictHandler) CreateList(w http.ResponseWriter, r *http.Request, para
 	}
 }
 
+// PreviewRule operation middleware
+func (sh *strictHandler) PreviewRule(w http.ResponseWriter, r *http.Request, params PreviewRuleParams) {
+	var request PreviewRuleRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewRule(ctx, request.(PreviewRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewRuleResponseObject); ok {
+		if err := validResponse.VisitPreviewRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteList operation middleware
 func (sh *strictHandler) DeleteList(w http.ResponseWriter, r *http.Request, id Id, params DeleteListParams) {
 	var request DeleteListRequestObject
@@ -13654,6 +14869,43 @@ func (sh *strictHandler) UpdateList(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateListResponseObject); ok {
 		if err := validResponse.VisitUpdateListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CopyList operation middleware
+func (sh *strictHandler) CopyList(w http.ResponseWriter, r *http.Request, id Id, params CopyListParams) {
+	var request CopyListRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body CopyListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CopyList(ctx, request.(CopyListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CopyList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CopyListResponseObject); ok {
+		if err := validResponse.VisitCopyListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

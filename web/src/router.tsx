@@ -1,4 +1,12 @@
-import { createRootRoute, createRoute, createRouter, Outlet, useLocation, useParams } from '@tanstack/react-router'
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  useLocation,
+  useParams,
+  useSearch,
+} from '@tanstack/react-router'
 import { ComingSoon } from './ComingSoon'
 import { cleanCode } from './components/CodeInput'
 import { Plain } from './components/Plain'
@@ -20,6 +28,7 @@ import { DeveloperTerms, Privacy, Terms } from './pages/Legal'
 import { ListAt } from './pages/List'
 import { MediaServers } from './pages/MediaServers'
 import { MyLists } from './pages/MyLists'
+import { RuleListPage, type RuleSearch } from './pages/RuleList'
 import { SignIn } from './pages/SignIn'
 import { TitlePage } from './pages/Title'
 import { Today } from './pages/Today'
@@ -170,6 +179,31 @@ const routes = [
         <MyLists />
       </Shell>
     ),
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/lists/rule',
+    validateSearch: (search: Record<string, unknown>): RuleSearch => {
+      const text = (key: string) =>
+        typeof search[key] === 'string' && search[key] ? (search[key] as string) : undefined
+      const list = Number(search.list)
+      return {
+        list: Number.isInteger(list) && list > 0 ? list : undefined,
+        kind: search.kind === 'movie' || search.kind === 'show' ? search.kind : undefined,
+        genre: text('genre'),
+        type: text('type'),
+        studio: text('studio'),
+        network: text('network'),
+      }
+    },
+    component: function Rule() {
+      const search = useSearch({ from: '/lists/rule' })
+      return (
+        <Shell>
+          <RuleListPage key={search.list ?? JSON.stringify(search)} search={search} />
+        </Shell>
+      )
+    },
   }),
   createRoute({
     getParentRoute: () => root,

@@ -1,6 +1,6 @@
 -- name: CreateList :one
-INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how)
-VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7)
+INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how, rule)
+VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: CountLists :one
@@ -18,7 +18,7 @@ SELECT * FROM lists WHERE id = $1 AND kind = 'custom' FOR UPDATE;
 
 -- name: UpdateList :one
 UPDATE lists
-SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, cover_item_id = $8, updated_at = now()
+SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, cover_item_id = $8, rule = $9, updated_at = now()
 WHERE id = $1
 RETURNING *;
 
@@ -106,7 +106,65 @@ WHERE l.kind = 'custom' AND o.household_id = v.household_id AND (l.profile_id = 
   AND i.title_id = sqlc.arg(title_id) AND i.season_id IS NULL AND i.episode_id IS NULL
 ORDER BY i.list_id;
 
+-- name: TitleRuleLists :many
+SELECT l.id, l.rule
+FROM lists l
+JOIN profiles o ON o.id = l.profile_id
+JOIN profiles v ON v.id = sqlc.arg(profile_id)
+WHERE l.kind = 'custom' AND l.rule IS NOT NULL AND o.household_id = v.household_id AND (l.profile_id = v.id OR l.privacy <> 'private')
+ORDER BY l.id;
+
 -- name: ListItemsAddedSince :many
 SELECT list_id, title_id FROM list_items
 WHERE list_id = ANY(sqlc.arg(list_ids)::bigint[]) AND listed_at >= sqlc.arg(since)
 ORDER BY list_id, listed_at DESC, id DESC;
+
+-- name: RuleTitles :many
+SELECT t.id, t.kind, t.created_at, count(*) OVER ()::bigint AS matched
+FROM titles t
+WHERE t.merged_into_id IS NULL
+  AND (sqlc.narg(kind)::text IS NULL OR t.kind = sqlc.narg(kind)::text)
+  AND (cardinality(sqlc.arg(genres)::text[]) = 0 OR t.genres && sqlc.arg(genres)::text[])
+  AND NOT t.genres && sqlc.arg(not_genres)::text[]
+  AND (cardinality(sqlc.arg(types)::text[]) = 0 OR t.type_flags && sqlc.arg(types)::text[])
+  AND NOT t.type_flags && sqlc.arg(not_types)::text[]
+  AND (cardinality(sqlc.arg(studios)::text[]) = 0 OR t.studios && sqlc.arg(studios)::text[])
+  AND NOT t.studios && sqlc.arg(not_studios)::text[]
+  AND (cardinality(sqlc.arg(networks)::text[]) = 0 OR t.networks && sqlc.arg(networks)::text[])
+  AND NOT t.networks && sqlc.arg(not_networks)::text[]
+  AND (cardinality(sqlc.arg(countries)::text[]) = 0 OR t.countries && sqlc.arg(countries)::text[])
+  AND NOT t.countries && sqlc.arg(not_countries)::text[]
+  AND (cardinality(sqlc.arg(languages)::text[]) = 0 OR t.languages && sqlc.arg(languages)::text[])
+  AND NOT t.languages && sqlc.arg(not_languages)::text[]
+  AND (sqlc.narg(year_from)::int IS NULL OR t.year >= sqlc.narg(year_from)::int)
+  AND (sqlc.narg(year_to)::int IS NULL OR t.year <= sqlc.narg(year_to)::int)
+  AND (sqlc.narg(runtime_from)::int IS NULL OR t.runtime_minutes >= sqlc.narg(runtime_from)::int)
+  AND (sqlc.narg(runtime_to)::int IS NULL OR t.runtime_minutes <= sqlc.narg(runtime_to)::int)
+  AND (sqlc.narg(watched)::bool IS NULL OR sqlc.narg(watched)::bool =
+    (t.id IN (SELECT w.title_id FROM watch_events w WHERE w.profile_id = sqlc.arg(viewer)::bigint)))
+  AND (sqlc.narg(rated)::bool IS NULL OR sqlc.narg(rated)::bool =
+    (t.id IN (SELECT r.title_id FROM ratings r WHERE r.profile_id = sqlc.arg(viewer)::bigint AND r.season_id IS NULL AND r.episode_id IS NULL)))
+  AND (sqlc.narg(watchlist)::bool IS NULL OR sqlc.narg(watchlist)::bool =
+    (t.id IN (SELECT i.title_id FROM list_items i JOIN lists l ON l.id = i.list_id
+              WHERE l.profile_id = sqlc.arg(viewer)::bigint AND l.kind = 'watchlist' AND i.season_id IS NULL AND i.episode_id IS NULL)))
+  AND NOT t.id = ANY(sqlc.arg(left_out)::bigint[])
+  AND t.id NOT IN (SELECT m.merged_into_id FROM titles m WHERE m.id = ANY(sqlc.arg(left_out)::bigint[]) AND m.merged_into_id IS NOT NULL)
+  AND NOT (sqlc.arg(for_kids)::bool AND (t.adult OR t.sexual_content))
+ORDER BY t.sitelinks DESC NULLS LAST, t.id
+LIMIT 1000;
+
+-- name: SearchCompanies :many
+SELECT qid, label, studio_of, network_of FROM (
+  SELECT c.qid, c.label,
+      (SELECT count(*) FROM titles t WHERE t.merged_into_id IS NULL AND t.studios @> ARRAY[c.qid])::bigint AS studio_of,
+      (SELECT count(*) FROM titles t WHERE t.merged_into_id IS NULL AND t.networks @> ARRAY[c.qid])::bigint AS network_of
+  FROM wikidata_classes c
+  WHERE NOT c.human AND c.label <> ''
+    AND (c.label ILIKE sqlc.arg(search)::text || '%' OR c.label ILIKE '% ' || sqlc.arg(search)::text || '%')
+) m
+WHERE studio_of + network_of > 0
+ORDER BY lower(label) = lower(sqlc.arg(search)::text) DESC, studio_of + network_of DESC, label
+LIMIT 20;
+
+-- name: SetListRule :exec
+UPDATE lists SET rule = $2 WHERE id = $1;

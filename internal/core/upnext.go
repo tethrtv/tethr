@@ -171,15 +171,7 @@ func UpNextLists(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNe
 		ids = append(ids, r.ListID)
 		added[r.ListID] = r.AddedAt
 	}
-	lists, err := visibleLists(ctx, q, profileID, store.VisibleListsParams{ListIds: ids})
-	if err != nil {
-		return nil, err
-	}
-	kids, err := isKids(ctx, q, profileID)
-	if err != nil {
-		return nil, err
-	}
-	items, err := q.ListItemsIn(ctx, store.ListItemsInParams{ListIds: ids, ForKids: kids})
+	lists, items, err := loadListItems(ctx, q, profileID, store.VisibleListsParams{ListIds: ids}, true)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +185,7 @@ func UpNextLists(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNe
 		if item.EpisodeID != nil {
 			episodeIDs = append(episodeIDs, *item.EpisodeID)
 		}
-		if next := progress[item.ID].Next; next != nil {
+		if next := progress[keyOf(item)].Next; next != nil {
 			episodeIDs = append(episodeIDs, next.ID)
 		}
 	}
@@ -203,7 +195,7 @@ func UpNextLists(ctx context.Context, db *pgxpool.Pool, profileID int64) ([]UpNe
 	}
 	entries := map[int64][]ListEntry{}
 	for _, item := range items {
-		p := progress[item.ID]
+		p := progress[keyOf(item)]
 		e := Entry{ID: item.ID, At: item.ListedAt, Rank: item.Rank, Item: c.item(item.TitleID, seasonOf(item.TitleID, item.SeasonID, item.SeasonNumber), item.EpisodeID)}
 		entries[item.ListID] = append(entries[item.ListID], ListEntry{Entry: e, Progress: &p})
 	}
