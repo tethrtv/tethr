@@ -538,3 +538,42 @@ FROM titles t, q
 WHERE q.f <> '' AND t.kind = 'movie' AND t.merged_into_id IS NULL AND NOT t.adult
   AND (t.search_name = q.f OR t.search_original = q.f)
 ORDER BY t.sitelinks DESC, t.id;
+
+-- name: LockTitle :one
+SELECT * FROM titles WHERE id = $1 FOR UPDATE;
+
+-- name: TitleInUse :one
+SELECT (EXISTS (SELECT 1 FROM watch_events WHERE title_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM playback WHERE title_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM watching WHERE title_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM list_items WHERE title_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM hidden_items WHERE title_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM ratings WHERE title_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM held_plays WHERE title_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM episode_orders WHERE show_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM profile_show_settings WHERE show_id = @id::bigint)
+    OR EXISTS (SELECT 1 FROM titles WHERE merged_into_id = @id::bigint))::bool AS in_use;
+
+-- name: DetachTitleReview :exec
+UPDATE review_entries SET title_id = NULL, cleared_at = coalesce(cleared_at, now()), outcome = coalesce(outcome, 'fixed')
+WHERE title_id = $1;
+
+-- name: DeleteTitleEpisodes :exec
+DELETE FROM episodes WHERE show_id = $1;
+
+-- name: DeleteTitleSeasons :exec
+DELETE FROM seasons WHERE show_id = $1;
+
+-- name: DeleteTitleExternalIDs :exec
+DELETE FROM external_ids WHERE title_id = $1;
+
+-- name: DeleteTitle :exec
+DELETE FROM titles WHERE id = $1;
+
+-- name: SetTitleTMDBFromWikidata :execrows
+UPDATE titles t SET tmdb_id = sqlc.narg(tmdb_id), outline_refreshed_at = NULL, tmdb_missing_at = NULL, updated_at = now()
+WHERE t.id = sqlc.arg(id)
+  AND NOT EXISTS (SELECT 1 FROM titles o WHERE o.kind = t.kind AND o.tmdb_id = sqlc.narg(tmdb_id) AND o.id <> t.id);
+
+-- name: ForgetEpisodeTMDB :exec
+UPDATE episodes SET tmdb_episode_id = NULL WHERE show_id = $1;

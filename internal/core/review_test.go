@@ -167,13 +167,126 @@ func TestDismissAndAccept(t *testing.T) {
 	}
 }
 
+func TestAcceptFixesFromWikidata(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	account, _, err := CreateAccount(ctx, db, SignUp{Email: "viewer@example.com", Name: "Viewer", Username: "viewer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller, err := AccountCaller(ctx, db, account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := reviewTitle(t, db, "movie", WikidataTitle{QID: "Q1", Name: "Moved", Year: 2001, TMDB: 1})
+	taken := reviewTitle(t, db, "movie", WikidataTitle{QID: "Q2", Name: "Taken", Year: 2002, TMDB: 2})
+	reviewTitle(t, db, "movie", WikidataTitle{QID: "Q3", Name: "Holder", Year: 2003, TMDB: 33})
+	show := reviewTitle(t, db, "show", WikidataTitle{QID: "Q4", Name: "Renumbered", Year: 2004, TMDB: 4})
+	if err := SaveOutline(ctx, db, show, []OutlineEpisode{{TMDBID: 401, Season: 1, Number: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	season, number := int32(1), int32(1)
+	if _, err := ScrobbleStop(ctx, db, caller, Scrobble{Ref: Ref{Kind: "episode", Show: IDs{TMDB: 4}, Season: &season, Number: &number}, Progress: 100}); err != nil {
+		t.Fatal(err)
+	}
+	twin := reviewTitle(t, db, "show", WikidataTitle{QID: "Q5", Name: "Twin", Year: 2005, TMDB: 5})
+	watched := reviewTitle(t, db, "show", WikidataTitle{QID: "Q6", Name: "Watched", Year: 2006, TMDB: 6})
+	if _, err := ScrobbleStop(ctx, db, caller, Scrobble{Ref: Ref{Kind: "episode", Show: IDs{TMDB: 6}, Season: &season, Number: &number}, Progress: 100}); err != nil {
+		t.Fatal(err)
+	}
+	gone := reviewTitle(t, db, "movie", WikidataTitle{QID: "Q7", Name: "Gone", Year: 2007, TMDB: 7})
+	flags := []ReviewFlag{
+		{Kind: TMDBDiffers, QID: "Q1", Title: moved, Subject: "tmdb", Wikidata: "11"},
+		{Kind: TMDBDiffers, QID: "Q2", Title: taken, Subject: "tmdb", Wikidata: "33"},
+		{Kind: TMDBDiffers, QID: "Q4", Title: show, Subject: "tmdb", Wikidata: "44"},
+		{Kind: KindChange, QID: "Q5", Title: twin, Tethr: "show", Wikidata: "movie"},
+		{Kind: KindChange, QID: "Q6", Title: watched, Tethr: "show", Wikidata: "movie"},
+		{Kind: DeletedItem, QID: "Q7", Title: gone},
+		{Kind: FilmAndShow, QID: "Q5", Title: twin},
+	}
+	if err := FlagForReview(ctx, db, flags); err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]int64{}
+	for _, e := range openReview(t, db) {
+		ids[e.Kind+" "+e.QID] = e.ID
+	}
+	accept := func(key string) error {
+		t.Helper()
+		_, err := AcceptReview(ctx, db, strconv.FormatInt(ids[key], 10))
+		return err
+	}
+	tmdbOf := func(id int64) int32 {
+		t.Helper()
+		var tmdb *int32
+		if err := db.QueryRow(ctx, `SELECT tmdb_id FROM titles WHERE id = $1`, id).Scan(&tmdb); err != nil {
+			t.Fatal(err)
+		}
+		return deref(tmdb)
+	}
+	exists := func(id int64) bool {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(ctx, `SELECT count(*) FROM titles WHERE id = $1`, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n == 1
+	}
+
+	if err := accept("tmdb_differs Q1"); err != nil || tmdbOf(moved) != 11 {
+		t.Errorf("accepting a TMDB disagreement = %v, TMDB %d, want Wikidata's 11", err, tmdbOf(moved))
+	}
+	if err := accept("tmdb_differs Q2"); !errors.Is(err, ErrTMDBTaken) || tmdbOf(taken) != 2 {
+		t.Errorf("accepting a TMDB ID another title has = %v, TMDB %d, want it refused", err, tmdbOf(taken))
+	}
+	if err := accept("tmdb_differs Q4"); err != nil || tmdbOf(show) != 44 {
+		t.Errorf("accepting a show's TMDB disagreement = %v, TMDB %d", err, tmdbOf(show))
+	}
+	var episodeTMDB *int32
+	var watches int
+	if err := db.QueryRow(ctx, `SELECT e.tmdb_episode_id, (SELECT count(*) FROM watch_events w WHERE w.episode_id = e.id) FROM episodes e WHERE e.show_id = $1`, show).Scan(&episodeTMDB, &watches); err != nil {
+		t.Fatal(err)
+	}
+	if episodeTMDB != nil || watches != 1 {
+		t.Errorf("episode after a new show ID: TMDB %v, %d watches, want the old ID forgotten and the watch kept", episodeTMDB, watches)
+	}
+	if err := SaveOutline(ctx, db, show, []OutlineEpisode{{TMDBID: 4401, Season: 1, Number: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM watch_events w JOIN episodes e ON e.id = w.episode_id WHERE e.show_id = $1 AND e.tmdb_episode_id = 4401 AND e.removed_at IS NULL`, show).Scan(&watches); err != nil || watches != 1 {
+		t.Errorf("watches on the new show's episode = %d, %v, want the outline to match it by number", watches, err)
+	}
+
+	if err := accept("kind_change Q6"); !errors.Is(err, ErrTitleInUse) || !exists(watched) {
+		t.Errorf("accepting a kind change on a watched title = %v, want it refused and the title kept", err)
+	}
+	if err := accept("kind_change Q5"); err != nil || exists(twin) {
+		t.Errorf("accepting a kind change = %v, exists %v, want the unused title retired", err, exists(twin))
+	}
+	if err := accept("deleted_item Q7"); err != nil || exists(gone) {
+		t.Errorf("accepting a deleted item = %v, exists %v, want the unused title retired", err, exists(gone))
+	}
+	var kept, closed int
+	if err := db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE cleared_at IS NOT NULL) FROM review_entries WHERE qid = 'Q5'`).Scan(&kept, &closed); err != nil || kept != 2 || closed != 2 {
+		t.Errorf("Q5's entries after retiring its title: %d kept, %d closed, %v, want both kept as history", kept, closed, err)
+	}
+
+	var open []string
+	for _, e := range openReview(t, db) {
+		open = append(open, e.Kind+" "+e.QID)
+	}
+	if fmt.Sprint(open) != "[kind_change Q6 tmdb_differs Q2]" {
+		t.Errorf("open = %v", open)
+	}
+}
+
 func TestCatalogueChecks(t *testing.T) {
 	db := dbtest.New(t)
 	ctx := context.Background()
 	if err := SaveClasses(ctx, db, []WikidataClass{
 		{QID: "Q11424", Label: "film"},
 		{QID: "Q130232", Label: "drama film", Parents: []string{"Q25372"}},
-		{QID: "Q62132", Label: "Sápmi"},
+		{QID: "Q99062", Label: "Doggerland"},
 		{QID: "Q183", Label: "Germany", Country: "DE"},
 		{QID: "Q99001", Label: "mumblecore", Parents: []string{"Q99002"}},
 		{QID: "Q99002", Label: "style"},
@@ -182,7 +295,7 @@ func TestCatalogueChecks(t *testing.T) {
 	}
 	for i := range reviewThreshold {
 		reviewTitle(t, db, "movie", WikidataTitle{QID: fmt.Sprintf("Q%d", 500+i), Name: fmt.Sprintf("Film %d", i), Year: 2001, TMDB: int32(500 + i),
-			InstanceOf: []string{"Q11424"}, Genres: []string{"Q130232", "Q99001"}, Countries: []string{"Q62132", "Q183"}})
+			InstanceOf: []string{"Q11424"}, Genres: []string{"Q130232", "Q99001"}, Countries: []string{"Q99062", "Q183"}})
 	}
 	reviewTitle(t, db, "movie", WikidataTitle{QID: "Q600", Name: "Twin", Year: 1965, TMDB: 600, InstanceOf: []string{"Q11424"}, Countries: []string{"Q99003"}})
 	reviewTitle(t, db, "show", WikidataTitle{QID: "Q600", Name: "Twin", Year: 1965})
@@ -196,14 +309,14 @@ func TestCatalogueChecks(t *testing.T) {
 	}
 	want := map[string]bool{
 		"film_and_show  Q600":           true,
-		"unmapped_value country Q62132": true,
+		"unmapped_value country Q99062": true,
 		"unmapped_value genre Q99001":   true,
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("open = %v, want %v (mapped values, rare values and the drama map left alone)", got, want)
 	}
 
-	if _, err := db.Exec(ctx, `UPDATE titles SET wikidata_countries = '{}' WHERE wikidata_countries @> '{Q62132}'`); err != nil {
+	if _, err := db.Exec(ctx, `UPDATE titles SET wikidata_countries = '{}' WHERE wikidata_countries @> '{Q99062}'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(ctx, `UPDATE titles SET wikidata_id = 'Q601' WHERE kind = 'show' AND wikidata_id = 'Q600'`); err != nil {

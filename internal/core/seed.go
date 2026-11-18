@@ -20,22 +20,24 @@ func SeedKinds(ctx context.Context, db *pgxpool.Pool, tmdbKinds, instanceOf []st
 		return nil, false, err
 	}
 	tags, complete := cs.tags(kindMap, instanceOf)
-	if len(tmdbKinds) > 0 {
-		if slices.Equal(tags, []string{"none"}) {
-			return nil, complete, nil
-		}
-		return tmdbKinds, complete, nil
+	if len(tmdbKinds) > 0 && slices.Equal(tags, []string{"none"}) {
+		return nil, complete, nil
 	}
 	if len(tags) > 1 {
 		tags = slices.DeleteFunc(tags, func(t string) bool { return t == "none" })
 	}
+	var kinds []string
 	switch {
 	case slices.Equal(tags, []string{"film"}):
-		return []string{"movie"}, complete, nil
+		kinds = []string{"movie"}
 	case slices.Equal(tags, []string{"show"}):
-		return []string{"show"}, complete, nil
+		kinds = []string{"show"}
 	}
-	return nil, complete, nil
+	// TMDB often lists a TV film's broadcast as a series, or gives a series the ID of a compilation, so with both IDs the classes decide.
+	if len(tmdbKinds) == 1 || len(tmdbKinds) > 1 && kinds == nil {
+		return tmdbKinds, complete, nil
+	}
+	return kinds, complete, nil
 }
 
 func AddMissingClass(ctx context.Context, db *pgxpool.Pool, qid string) error {

@@ -147,10 +147,20 @@ func (j Titles) refetchItem(ctx context.Context, p core.Pending, it wikidata.Ite
 			if len(kinds) == 0 {
 				held.Kinds = []string{"none"}
 			}
+			continue
+		}
+		if t.TmdbID != nil && it.Title(t.Kind).TMDB == 0 {
+			used, err := core.TitleInUse(ctx, j.DB, t.ID)
+			if err != nil {
+				return false, err
+			}
+			if !used {
+				held.TMDB = append(held.TMDB, fmt.Sprintf("%s %d", t.Kind, *t.TmdbID))
+			}
 		}
 	}
 	if !held.Empty() && !held.Within(p.Held) {
-		j.Log.Warn("holding a wikidata edit for a week", "item", p.QID, "name", held.Name, "year", held.Year, "kinds", held.Kinds)
+		j.Log.Warn("holding a wikidata edit for a week", "item", p.QID, "name", held.Name, "year", held.Year, "kinds", held.Kinds, "tmdb", held.TMDB)
 		return true, core.HoldWikidata(ctx, j.DB, p.QID, held)
 	}
 
@@ -164,6 +174,16 @@ func (j Titles) refetchItem(ctx context.Context, p core.Pending, it wikidata.Ite
 	for _, t := range titles {
 		have[t.Kind] = true
 		if complete && !slices.Contains(kinds, t.Kind) {
+			if twin(t, titles, kinds) {
+				retired, err := core.RetireTitle(ctx, j.DB, t.ID)
+				if err != nil {
+					return false, fmt.Errorf("title %d: %w", t.ID, err)
+				}
+				if retired {
+					j.Log.Warn("retired an unused title whose item is now only its other kind", "title", t.ID, "item", p.QID, "kind", t.Kind, "now", kinds)
+					continue
+				}
+			}
 			kept = append(kept, t.ID)
 			j.Log.Warn("wikidata item is no longer this kind, kept the title as it was", "title", t.ID, "item", p.QID, "kind", t.Kind, "now", kinds)
 			if err := core.WikidataMissing(ctx, j.DB, t.ID); err != nil {
@@ -177,6 +197,17 @@ func (j Titles) refetchItem(ctx context.Context, p core.Pending, it wikidata.Ite
 			continue
 		}
 		refreshed = append(refreshed, t.ID)
+		if t.TmdbID != nil && slices.Contains(p.Held.TMDB, fmt.Sprintf("%s %d", t.Kind, *t.TmdbID)) && it.Title(t.Kind).TMDB == 0 {
+			dropped, err := core.DropTitleTMDB(ctx, j.DB, t.ID, *t.TmdbID)
+			if err != nil {
+				return false, fmt.Errorf("title %d: %w", t.ID, err)
+			}
+			if dropped {
+				j.Log.Warn("dropped an unused title's TMDB ID its item no longer has", "title", t.ID, "item", p.QID, "tmdb", *t.TmdbID)
+			} else {
+				j.Log.Info("kept a TMDB ID its item no longer has, the title is in use now", "title", t.ID, "item", p.QID, "tmdb", *t.TmdbID)
+			}
+		}
 		res, err := core.RefreshWikidata(ctx, j.DB, t.ID, t.Kind, core.WikidataTitle(it.Title(t.Kind)), p.LoggedOut)
 		if err != nil {
 			return false, fmt.Errorf("title %d: %w", t.ID, err)
@@ -307,4 +338,8 @@ func (j Titles) refetchClasses(ctx context.Context, before []store.WikidataClass
 		j.Log.Info("wikidata class changed, working its titles out again", "class", q, "titles", n)
 	}
 	return nil
+}
+
+func twin(t store.Title, titles []store.Title, kinds []string) bool {
+	return slices.ContainsFunc(titles, func(o store.Title) bool { return o.ID != t.ID && slices.Contains(kinds, o.Kind) })
 }

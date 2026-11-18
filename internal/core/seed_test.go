@@ -26,6 +26,14 @@ func TestSeed(t *testing.T) {
 		{nil, []string{"Q11424", "Q5398426"}, "[]"},
 		{nil, []string{"Q11424", "Q24856"}, "[movie]"},
 		{nil, nil, "[]"},
+		{[]string{"movie", "show"}, []string{"Q11424"}, "[movie]"},
+		{[]string{"movie", "show"}, []string{"Q99"}, "[movie]"},
+		{[]string{"movie", "show"}, []string{"Q5398426"}, "[show]"},
+		{[]string{"movie", "show"}, []string{"Q11424", "Q24856"}, "[movie]"},
+		{[]string{"movie", "show"}, []string{"Q11424", "Q5398426"}, "[movie show]"},
+		{[]string{"movie", "show"}, nil, "[movie show]"},
+		{[]string{"movie", "show"}, []string{"Q24856"}, "[]"},
+		{[]string{"show"}, []string{"Q11424"}, "[show]"},
 	} {
 		got, _, err := SeedKinds(ctx, db, c.tmdb, c.p31)
 		if err != nil || fmt.Sprint(got) != c.want {
