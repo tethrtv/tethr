@@ -186,12 +186,13 @@ func TestRefreshEditedItems(t *testing.T) {
 func TestFilmAndShowItemIsNotAMove(t *testing.T) {
 	db, fake, job := editsSetup(t)
 	ctx := context.Background()
-	w := core.WikidataTitle{QID: "Q12", Name: "War and Peace", Year: 1965, IDs: map[string][]string{"imdb": {"tt0063794"}}, InstanceOf: []string{"Q11424"}}
+	w := core.WikidataTitle{QID: "Q12", Name: "War and Peace", Year: 1965, IDs: map[string][]string{"imdb": {"tt0063794"}}, InstanceOf: []string{"Q11424", "Q5398426"}}
 	w.TMDB = 12
 	seedTitle(t, db, "movie", w)
 	w.TMDB = 1212
 	seedTitle(t, db, "show", w)
-	fake.set("Q12", "War and Peace", itemClaim("P31", "Q11424"), stringClaim("P4947", "12"), stringClaim("P4983", "1212"), stringClaim("P345", "tt0063794"))
+	both := `"P31":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q11424"}}}},{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q5398426"}}}}]`
+	fake.set("Q12", "War and Peace", both, stringClaim("P4947", "12"), stringClaim("P4983", "1212"), stringClaim("P345", "tt0063794"))
 	edited(t, db, "Q12")
 	if err := job.Refresh(ctx); err != nil {
 		t.Fatal(err)

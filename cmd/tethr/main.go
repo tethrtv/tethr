@@ -104,7 +104,7 @@ func review(*slog.Logger) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Took Wikidata's name for %d %s.\n", n, plural(n, "title", "titles"))
+		fmt.Printf("Accepted %d %s.\n", n, plural(n, "entry", "entries"))
 	case args[0] == "dismiss" && len(args) > 2:
 		n, err := core.DismissReview(ctx, db, args[1], strings.Join(args[2:], " "))
 		if err != nil {

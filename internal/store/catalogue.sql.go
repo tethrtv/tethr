@@ -429,6 +429,42 @@ func (q *Queries) DeleteEpisode(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteTitle = `-- name: DeleteTitle :exec
+DELETE FROM titles WHERE id = $1
+`
+
+func (q *Queries) DeleteTitle(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteTitle, id)
+	return err
+}
+
+const deleteTitleEpisodes = `-- name: DeleteTitleEpisodes :exec
+DELETE FROM episodes WHERE show_id = $1
+`
+
+func (q *Queries) DeleteTitleEpisodes(ctx context.Context, showID int64) error {
+	_, err := q.db.Exec(ctx, deleteTitleEpisodes, showID)
+	return err
+}
+
+const deleteTitleExternalIDs = `-- name: DeleteTitleExternalIDs :exec
+DELETE FROM external_ids WHERE title_id = $1
+`
+
+func (q *Queries) DeleteTitleExternalIDs(ctx context.Context, titleID int64) error {
+	_, err := q.db.Exec(ctx, deleteTitleExternalIDs, titleID)
+	return err
+}
+
+const deleteTitleSeasons = `-- name: DeleteTitleSeasons :exec
+DELETE FROM seasons WHERE show_id = $1
+`
+
+func (q *Queries) DeleteTitleSeasons(ctx context.Context, showID int64) error {
+	_, err := q.db.Exec(ctx, deleteTitleSeasons, showID)
+	return err
+}
+
 const deriveTitleFacts = `-- name: DeriveTitleFacts :exec
 UPDATE titles
 SET genres = $1::text[], type_flags = $2::text[], adult = $3, sexual_content = $4, countries = $5::text[], languages = $6::text[],
@@ -458,6 +494,16 @@ func (q *Queries) DeriveTitleFacts(ctx context.Context, arg DeriveTitleFactsPara
 		arg.FactsVersion,
 		arg.ID,
 	)
+	return err
+}
+
+const detachTitleReview = `-- name: DetachTitleReview :exec
+UPDATE review_entries SET title_id = NULL, cleared_at = coalesce(cleared_at, now()), outcome = coalesce(outcome, 'fixed')
+WHERE title_id = $1
+`
+
+func (q *Queries) DetachTitleReview(ctx context.Context, titleID *int64) error {
+	_, err := q.db.Exec(ctx, detachTitleReview, titleID)
 	return err
 }
 
@@ -887,6 +933,15 @@ func (q *Queries) FilmsNamed(ctx context.Context, name string) ([]FilmsNamedRow,
 	return items, nil
 }
 
+const forgetEpisodeTMDB = `-- name: ForgetEpisodeTMDB :exec
+UPDATE episodes SET tmdb_episode_id = NULL WHERE show_id = $1
+`
+
+func (q *Queries) ForgetEpisodeTMDB(ctx context.Context, showID int64) error {
+	_, err := q.db.Exec(ctx, forgetEpisodeTMDB, showID)
+	return err
+}
+
 const forgetFactsUnder = `-- name: ForgetFactsUnder :execrows
 WITH RECURSIVE down (qid, depth) AS (
     SELECT $1::text, 0
@@ -988,6 +1043,52 @@ type LeaveOutWikidataParams struct {
 func (q *Queries) LeaveOutWikidata(ctx context.Context, arg LeaveOutWikidataParams) error {
 	_, err := q.db.Exec(ctx, leaveOutWikidata, arg.Qid, arg.Reason)
 	return err
+}
+
+const lockTitle = `-- name: LockTitle :one
+SELECT id, kind, slug, name, year, tmdb_id, created_at, updated_at, outline_refreshed_at, tmdb_missing_at, original_name, runtime_minutes, wikidata_id, wikidata_checked_at, merged_into_id, wikidata_deleted_at, wikidata_instance_of, wikidata_genres, wikidata_countries, wikidata_languages, sitelinks, started, ended, genres, type_flags, adult, countries, languages, facts_version, sexual_content, search_name, search_original, studios, networks FROM titles WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockTitle(ctx context.Context, id int64) (Title, error) {
+	row := q.db.QueryRow(ctx, lockTitle, id)
+	var i Title
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Slug,
+		&i.Name,
+		&i.Year,
+		&i.TmdbID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OutlineRefreshedAt,
+		&i.TmdbMissingAt,
+		&i.OriginalName,
+		&i.RuntimeMinutes,
+		&i.WikidataID,
+		&i.WikidataCheckedAt,
+		&i.MergedIntoID,
+		&i.WikidataDeletedAt,
+		&i.WikidataInstanceOf,
+		&i.WikidataGenres,
+		&i.WikidataCountries,
+		&i.WikidataLanguages,
+		&i.Sitelinks,
+		&i.Started,
+		&i.Ended,
+		&i.Genres,
+		&i.TypeFlags,
+		&i.Adult,
+		&i.Countries,
+		&i.Languages,
+		&i.FactsVersion,
+		&i.SexualContent,
+		&i.SearchName,
+		&i.SearchOriginal,
+		&i.Studios,
+		&i.Networks,
+	)
+	return i, err
 }
 
 const markJobRanAt = `-- name: MarkJobRanAt :exec
@@ -1894,6 +1995,25 @@ func (q *Queries) SetTitleTMDB(ctx context.Context, arg SetTitleTMDBParams) erro
 	return err
 }
 
+const setTitleTMDBFromWikidata = `-- name: SetTitleTMDBFromWikidata :execrows
+UPDATE titles t SET tmdb_id = $1, outline_refreshed_at = NULL, tmdb_missing_at = NULL, updated_at = now()
+WHERE t.id = $2
+  AND NOT EXISTS (SELECT 1 FROM titles o WHERE o.kind = t.kind AND o.tmdb_id = $1 AND o.id <> t.id)
+`
+
+type SetTitleTMDBFromWikidataParams struct {
+	TmdbID *int32
+	ID     int64
+}
+
+func (q *Queries) SetTitleTMDBFromWikidata(ctx context.Context, arg SetTitleTMDBFromWikidataParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTitleTMDBFromWikidata, arg.TmdbID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const showEpisodes = `-- name: ShowEpisodes :many
 SELECT id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at FROM episodes WHERE show_id = $1 FOR UPDATE
 `
@@ -2261,6 +2381,26 @@ func (q *Queries) TitleExternalIDs(ctx context.Context, titleID int64) ([]TitleE
 		return nil, err
 	}
 	return items, nil
+}
+
+const titleInUse = `-- name: TitleInUse :one
+SELECT (EXISTS (SELECT 1 FROM watch_events WHERE title_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM playback WHERE title_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM watching WHERE title_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM list_items WHERE title_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM hidden_items WHERE title_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM ratings WHERE title_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM held_plays WHERE title_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM episode_orders WHERE show_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM profile_show_settings WHERE show_id = $1::bigint)
+    OR EXISTS (SELECT 1 FROM titles WHERE merged_into_id = $1::bigint))::bool AS in_use
+`
+
+func (q *Queries) TitleInUse(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, titleInUse, id)
+	var in_use bool
+	err := row.Scan(&in_use)
+	return in_use, err
 }
 
 const titleSharingWikidata = `-- name: TitleSharingWikidata :one

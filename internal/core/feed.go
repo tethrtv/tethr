@@ -138,15 +138,20 @@ type Held struct {
 	Year  int      `json:"year,omitempty"`
 	Kinds []string `json:"kinds,omitempty"`
 	IDs   []string `json:"ids,omitempty"`
+	TMDB  []string `json:"tmdb,omitempty"`
 }
 
 func (h Held) Empty() bool {
-	return h.Name == "" && h.Year == 0 && len(h.Kinds) == 0 && len(h.IDs) == 0
+	return h.Name == "" && h.Year == 0 && len(h.Kinds) == 0 && len(h.IDs) == 0 && len(h.TMDB) == 0
 }
 
 func (h Held) Within(before Held) bool {
 	return (h.Name == "" || h.Name == before.Name) && (h.Year == 0 || h.Year == before.Year) &&
-		(len(h.Kinds) == 0 || slices.Equal(h.Kinds, before.Kinds)) && !slices.ContainsFunc(h.IDs, func(id string) bool { return !slices.Contains(before.IDs, id) })
+		(len(h.Kinds) == 0 || slices.Equal(h.Kinds, before.Kinds)) && subset(h.IDs, before.IDs) && subset(h.TMDB, before.TMDB)
+}
+
+func subset(some, all []string) bool {
+	return !slices.ContainsFunc(some, func(s string) bool { return !slices.Contains(all, s) })
 }
 
 const wellKnown = 30

@@ -33,7 +33,7 @@ var ItemKinds = []string{KeptName, HeldChange, KindChange, SharedID, TMDBDiffers
 const reviewThreshold = 5
 
 var (
-	ErrReviewAccept = errors.New("only a kept-back name can be accepted")
+	ErrReviewAccept = errors.New("only kept names, TMDB disagreements, kind changes and deleted items can be accepted")
 	ErrReviewReason = errors.New("say why it's being dismissed")
 )
 
@@ -268,21 +268,50 @@ func AcceptReview(ctx context.Context, db *pgxpool.Pool, target string) (int, er
 		if err != nil {
 			return err
 		}
+		var retire []int64
 		for _, r := range rows {
-			if r.Kind != KeptName || r.TitleID == nil {
+			if r.TitleID == nil {
 				continue
 			}
-			if err := q.SetTitleName(ctx, store.SetTitleNameParams{ID: *r.TitleID, Name: &r.WikidataValue}); err != nil {
-				return err
+			var err error
+			switch r.Kind {
+			case KeptName:
+				err = q.SetTitleName(ctx, store.SetTitleNameParams{ID: *r.TitleID, Name: &r.WikidataValue})
+			case TMDBDiffers:
+				tmdb, perr := strconv.ParseInt(r.WikidataValue, 10, 32)
+				if perr != nil {
+					return fmt.Errorf("entry %d: TMDB ID %q: %w", r.ID, r.WikidataValue, perr)
+				}
+				err = takeWikidataTMDB(ctx, q, *r.TitleID, int32(tmdb))
+			case KindChange, DeletedItem:
+				if err = unusedTitle(ctx, q, *r.TitleID); err == nil && !slices.Contains(retire, *r.TitleID) {
+					retire = append(retire, *r.TitleID)
+				}
+			default:
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("entry %d: %w", r.ID, err)
 			}
 			accepted = append(accepted, r.ID)
 		}
 		if len(accepted) == 0 {
 			return ErrReviewAccept
 		}
-		return q.CloseReview(ctx, store.CloseReviewParams{Ids: accepted, Outcome: optional("accepted")})
+		if err := q.CloseReview(ctx, store.CloseReviewParams{Ids: accepted, Outcome: optional("accepted")}); err != nil {
+			return err
+		}
+		for _, id := range retire {
+			if err := retireTitle(ctx, q, id); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
-	return len(accepted), err
+	if err != nil {
+		return 0, err
+	}
+	return len(accepted), nil
 }
 
 func DismissReview(ctx context.Context, db *pgxpool.Pool, target, reason string) (int, error) {
