@@ -190,3 +190,66 @@
 .further:hover {
   color: var(--ink);
 }
+
+.lists {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lists legend {
+  padding: 0 0 6px;
+  font-weight: 750;
+}
+
+.lists ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ink);
+}
+
+.listRow {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+.listRow:hover {
+  background: var(--paper-2);
+}
+
+.listRow input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.listRow input:focus-visible + span {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.listRow:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.listRow:has(input:disabled):hover {
+  background: none;
+}
+
+.listName {
+  display: block;
+  font-weight: 700;
+}
+
+.listNote {
+  display: block;
+  color: var(--ink-3);
+  font-size: 0.9375rem;
+}

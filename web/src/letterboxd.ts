@@ -7,6 +7,13 @@ export type Film = {
   listedAt?: string
 }
 
+export type FilmList = {
+  name: string
+  description: string
+  at?: string
+  entries: { film: number; notes: string }[]
+}
+
 export async function unzip(blob: Blob): Promise<Map<string, string>> {
   const bytes = new Uint8Array(await blob.arrayBuffer())
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -79,14 +86,36 @@ export function parseCSV(text: string): string[][] {
 function table(files: Map<string, string>, name: string) {
   const [head, ...rows] = parseCSV(files.get(name) ?? '')
   if (!head) return []
-  return rows.map((r) => Object.fromEntries(head.map((h, i) => [h.replace(/^﻿/, ''), r[i] ?? ''])))
+  return rows.map((r) => record(head, r))
+}
+
+const record = (head: string[], r: string[]) => Object.fromEntries(head.map((h, i) => [h.replace(/^﻿/, ''), r[i] ?? '']))
+
+function listFile(text: string) {
+  const rows = parseCSV(text)
+  const meta = rows.findIndex((r) => r[0].replace(/^﻿/, '') === 'Date' && r.includes('Name'))
+  const head = rows.findIndex((r) => r[0] === 'Position')
+  if (meta < 0 || !rows[meta + 1]) return null
+  const films = head < 0 ? [] : rows.slice(head + 1).map((r) => record(rows[head], r))
+  return {
+    list: record(rows[meta], rows[meta + 1]),
+    films: films
+      .filter((r) => r.Name)
+      .map((r, i) => ({ r, position: Number.parseInt(r.Position, 10) || i + 1 }))
+      .sort((a, b) => a.position - b.position)
+      .map(({ r }) => r),
+  }
 }
 
 const day = (date: string) => (/^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T12:00:00Z` : undefined)
 
 export const isLetterboxd = (files: Map<string, string>) => files.has('watched.csv') || files.has('diary.csv')
 
-export function readLetterboxd(files: Map<string, string>): Film[] {
+export function readLetterboxd(files: Map<string, string>): {
+  films: Film[]
+  lists: FilmList[]
+  unreadable: string[]
+} {
   const films = new Map<string, Film>()
   const film = (row: Record<string, string>) => {
     const name = row.Name.trim()
@@ -118,7 +147,32 @@ export function readLetterboxd(files: Map<string, string>): Film[] {
   for (const row of table(files, 'watchlist.csv')) {
     if (row.Name) film(row).listedAt = day(row.Date) ?? new Date().toISOString()
   }
-  return [...films.values()]
+
+  const unreadable: string[] = []
+  const read = [...files.keys()]
+    .filter((path) => /^lists\/[^/]+\.csv$/i.test(path))
+    .sort()
+    .flatMap((path) => {
+      const file = listFile(files.get(path) ?? '')
+      if (!file) {
+        unreadable.push(path.slice('lists/'.length))
+        return []
+      }
+      return [{ list: file.list, entries: file.films.map((r) => ({ film: film(r), notes: r.Description ?? '' })) }]
+    })
+
+  const all = [...films.values()]
+  const index = new Map(all.map((f, i) => [f, i]))
+  return {
+    films: all,
+    unreadable,
+    lists: read.map(({ list, entries }) => ({
+      name: list.Name ?? '',
+      description: list.Description ?? '',
+      at: day(list.Date ?? ''),
+      entries: entries.map((e) => ({ film: index.get(e.film) ?? 0, notes: e.notes })),
+    })),
+  }
 }
 
 export const label = (f: Pick<Film, 'name' | 'year'>) => (f.year ? `${f.name} (${f.year})` : f.name)

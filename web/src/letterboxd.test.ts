@@ -25,7 +25,7 @@ test('turns an export into films with their plays, ratings and watchlist', () =>
     ['profile.csv', 'Date Joined,Username,Email Address\n2026-11-09,someone,someone@example.com\n'],
   ])
   expect(isLetterboxd(files)).toBe(true)
-  expect(readLetterboxd(files)).toEqual([
+  expect(readLetterboxd(files).films).toEqual([
     {
       name: 'Heat',
       year: 1995,
@@ -35,6 +35,47 @@ test('turns an export into films with their plays, ratings and watchlist', () =>
     },
     { name: 'Crouching Tiger, Hidden Dragon', year: 2000, plays: [{}] },
     { name: 'Lola', year: 2023, plays: [], listedAt: '2026-10-01T12:00:00Z' },
+  ])
+})
+
+test('reads lists in their order with their notes, and leaves deleted lists out', () => {
+  const list = (name: string, description: string, films: string) =>
+    'Letterboxd list export v7\r\nDate,Name,Tags,URL,Description\r\n' +
+    `2022-08-14,${name},"2010s, top",https://boxd.it/hQq0E,${description}\r\n\r\n` +
+    `Position,Name,Year,URL,Description\r\n${films}`
+  const files = new Map([
+    ['watched.csv', 'Date,Name,Year,Letterboxd URI\r\n2026-11-09,Heat,1995,https://boxd.it/x\r\n'],
+    [
+      'lists/heists-ranked.csv',
+      list(
+        '"Heists, ranked"',
+        '"<p>The best <a href=""https://boxd.it/a"">jobs</a>.</p>\r\n<p>Second line</p>"',
+        '2,Heat,1995,https://boxd.it/x,\r\n1,Rififi,1955,https://boxd.it/y,"The silent bit, 30 minutes"\r\n',
+      ),
+    ],
+    [
+      'lists/empty.csv',
+      'Letterboxd list export v7\r\nDate,Name,Tags,URL,Description\r\n2023-01-01,Empty,,https://boxd.it/e,\r\n',
+    ],
+    ['lists/broken.csv', 'Something else entirely\r\n'],
+    ['deleted/lists/old.csv', list('Old', '', '1,Gone,2001,https://boxd.it/g,\r\n')],
+    ['likes/lists.csv', 'Date,Name,URL\r\n2023-01-01,Someone else’s,https://boxd.it/l\r\n'],
+  ])
+  const { films, lists, unreadable } = readLetterboxd(files)
+  expect(unreadable).toEqual(['broken.csv'])
+  expect(films.map((f) => f.name)).toEqual(['Heat', 'Rififi'])
+  expect(films[1].plays).toEqual([])
+  expect(lists).toEqual([
+    { name: 'Empty', description: '', at: '2023-01-01T12:00:00Z', entries: [] },
+    {
+      name: 'Heists, ranked',
+      description: '<p>The best <a href="https://boxd.it/a">jobs</a>.</p>\r\n<p>Second line</p>',
+      at: '2022-08-14T12:00:00Z',
+      entries: [
+        { film: 1, notes: 'The silent bit, 30 minutes' },
+        { film: 0, notes: '' },
+      ],
+    },
   ])
 })
 

@@ -5,7 +5,7 @@ import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Cover } from '../components/Cover'
 import { plural } from '../format'
-import { type Film, label } from '../letterboxd'
+import { type Film, type FilmList, label } from '../letterboxd'
 import { type Found, useFind } from '../tmdb'
 import home from './Home.module.css'
 import styles from './Import.module.css'
@@ -56,12 +56,16 @@ async function matchFilms(films: Film[], signal: AbortSignal, onWait: (waiting: 
 
 export function MatchFilms({
   films,
+  lists,
+  unreadable,
   filename,
   profileID,
   onDone,
   onAnother,
 }: {
   films: Film[]
+  lists: FilmList[]
+  unreadable: string[]
   filename: string
   profileID: number
   onDone: () => void
@@ -92,16 +96,23 @@ export function MatchFilms({
       const history: Item[] = []
       const watchlist: Item[] = []
       const ratings: Item[] = []
-      films.forEach((f, i) => {
+      const base = films.map((f, i) => {
         const pick = i in picks ? picks[i] : matched[i]?.match
-        const base = { type: 'movie' as const, tethr: pick?.tethr, tmdb: pick?.tmdb, label: label(f) }
-        for (const p of f.plays) history.push({ ...base, at: p.at, precision: p.at ? 'day' : undefined })
-        if (f.rating) ratings.push({ ...base, rating: f.rating, at: f.ratedAt })
-        if (f.listedAt) watchlist.push({ ...base, at: f.listedAt })
+        return { type: 'movie' as const, tethr: pick?.tethr, tmdb: pick?.tmdb, label: label(f) }
       })
+      films.forEach((f, i) => {
+        for (const p of f.plays) history.push({ ...base[i], at: p.at, precision: p.at ? 'day' : undefined })
+        if (f.rating) ratings.push({ ...base[i], rating: f.rating, at: f.ratedAt })
+        if (f.listedAt) watchlist.push({ ...base[i], at: f.listedAt })
+      })
+      const imported = lists.map((l) => ({
+        name: l.name,
+        description: l.description || undefined,
+        items: l.entries.map((e) => ({ ...base[e.film], at: l.at, notes: e.notes || undefined })),
+      }))
       const { error } = await api.POST('/v1/imports', {
         params: { query: { profile_id: profileID, filename } },
-        body: { source: 'letterboxd', history, watchlist, ratings },
+        body: { source: 'letterboxd', history, watchlist, ratings, lists: imported },
       })
       if (error) throw error
     },
@@ -161,6 +172,14 @@ export function MatchFilms({
             />
           ))}
         </ol>
+      )}
+      {unreadable.length > 0 && (
+        <p className={home.error}>
+          {unreadable.length === 1
+            ? 'One list in the file couldn’t be read'
+            : `${unreadable.length} lists in the file couldn’t be read`}
+          , so {unreadable.length === 1 ? 'it won’t' : 'they won’t'} come across: {unreadable.join(', ')}.
+        </p>
       )}
       <p className={home.note}>Nothing is saved yet. Next you’ll see what will come across before anything is added.</p>
       <div className={styles.actions}>
