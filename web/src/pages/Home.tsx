@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import { api, type Me, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
 import { Made } from '../components/Mark'
-import { Plain } from '../components/Plain'
+import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { describeDevice } from '../device'
 import { addPasskey, passkeysSupported } from '../passkeys'
 import { returnTo } from '../returnTo'
-import { useTimeZone } from './connect'
+import layout from './Account.module.css'
 import styles from './Home.module.css'
+import { ImportSection } from './Import'
 
 type Profile = components['schemas']['Profile']
 type Connection = components['schemas']['Connection']
@@ -20,19 +21,29 @@ const kinds = { owner: 'You', person: 'Person', kids: 'Kids', guest: 'Guest' } a
 const when = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'never'
 
-export function Home() {
+const sections = [
+  { key: 'household', label: 'Household' },
+  { key: 'import', label: 'Import and export' },
+  { key: 'apps', label: 'Connected apps' },
+  { key: 'email', label: 'Weekly email' },
+  { key: 'signing-in', label: 'Signing in' },
+  { key: 'delete', label: 'Delete the account' },
+] as const
+
+export type AccountSection = (typeof sections)[number]['key']
+
+export const isAccountSection = (s: string): s is AccountSection => sections.some((x) => x.key === s)
+
+const groups: AccountSection[][] = [['household'], ['import', 'apps'], ['email', 'signing-in', 'delete']]
+
+export function Home({ section }: { section?: AccountSection }) {
   const navigate = useNavigate()
   const queries = useQueryClient()
-  const me = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const { data, response } = await api.GET('/v1/me')
-      if (response.status === 401) return null
-      if (!data) throw new Error('could not load your account')
-      return data
-    },
+  const { me } = useWatching()
+  const connections = useQuery({
+    queryKey: ['connections'],
+    queryFn: async () => (await api.GET('/v1/connections')).data ?? [],
   })
-
   const signOut = useMutation({
     mutationFn: () => api.POST('/v1/auth/sign-out'),
     onSuccess: () => {
@@ -41,43 +52,67 @@ export function Home() {
     },
   })
 
-  useEffect(() => {
-    if (me.data === null) navigate({ to: '/sign-in', replace: true })
-  }, [me.data, navigate])
-  useTimeZone(me.data)
+  const shown = section ?? 'household'
+  const counts: Partial<Record<AccountSection, number>> = {
+    household: me.profiles.length,
+    apps: connections.data?.length,
+  }
 
-  if (!me.data) return <Plain>{me.isError ? <p>Couldn’t reach Tethr. Try again in a moment.</p> : null}</Plain>
-
-  const { account } = me.data
   return (
-    <Plain
-      wide
-      end={
-        <Button variant="text" onClick={() => signOut.mutate()}>
-          Sign out
-        </Button>
-      }
-    >
-      <div className={styles.page}>
-        <header className={styles.head}>
-          <h1 className={styles.title}>{account.name}</h1>
-          <p className={styles.lead}>
-            Signed in as <strong>{account.email}</strong>. Moving from another tracker?{' '}
-            <Link to="/import" className={styles.inline}>
-              Import your history
-            </Link>
-            .
-          </p>
-        </header>
-        <Household me={me.data} />
-        <WeeklyEmail me={me.data} />
-        <Invites />
-        <ConnectedApps />
-        <SigningIn />
-        <YourData />
-        <DeleteAccount me={me.data} />
+    <div className={section ? layout.settings : `${layout.settings} ${layout.index}`}>
+      <nav className={layout.side} aria-label="Account">
+        <div className={layout.who}>
+          <strong>{me.account.name}</strong>
+          <span>{me.account.email}</span>
+          <Button variant="text" className={layout.signOut} onClick={() => signOut.mutate()}>
+            Sign out
+          </Button>
+        </div>
+        {groups.map((group) => (
+          <ul key={group[0]} className={layout.group}>
+            {group.map((key) => {
+              const s = sections.find((x) => x.key === key)
+              const classes = [layout.link, key === shown && layout.on, key === 'delete' && layout.danger]
+              return (
+                <li key={key}>
+                  <Link
+                    to="/account/$section"
+                    params={{ section: key }}
+                    className={classes.filter(Boolean).join(' ')}
+                    aria-current={key === section ? 'page' : undefined}
+                  >
+                    <span>{s?.label}</span>
+                    {counts[key] ? <span className={layout.count}>{counts[key]}</span> : null}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        ))}
+      </nav>
+      <div className={layout.pane}>
+        <Link to="/account" className={layout.back}>
+          Account
+        </Link>
+        <h1 className={layout.title}>{sections.find((x) => x.key === shown)?.label}</h1>
+        {shown === 'household' && (
+          <>
+            <Household me={me} />
+            <Invites />
+          </>
+        )}
+        {shown === 'import' && (
+          <>
+            <ImportSection />
+            <YourData />
+          </>
+        )}
+        {shown === 'apps' && <ConnectedApps />}
+        {shown === 'email' && <WeeklyEmail me={me} />}
+        {shown === 'signing-in' && <SigningIn />}
+        {shown === 'delete' && <DeleteAccount me={me} />}
       </div>
-    </Plain>
+    </div>
   )
 }
 
@@ -105,8 +140,7 @@ function Household({ me }: { me: Me }) {
   }
 
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Household</h2>
+    <section className={styles.block}>
       <p className={styles.note}>Everyone gets their own history. Approving a TV picks which profile it logs to.</p>
       <ul className={styles.rows}>
         {me.profiles.map((p) => (
@@ -307,8 +341,7 @@ function ConnectedApps() {
     queryFn: async () => (await api.GET('/v1/connections')).data ?? [],
   })
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Connected apps</h2>
+    <section className={styles.block}>
       <p className={styles.note}>
         Open the app, choose Tethr, and it will show a short code.{' '}
         <Link to="/activate" className={styles.inline}>
@@ -506,9 +539,7 @@ function SigningIn() {
   })
 
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Signing in</h2>
-
+    <section className={styles.block}>
       <div className={styles.group}>
         <div className={styles.groupHead}>
           <h3>Passkeys</h3>
@@ -603,8 +634,7 @@ function Invites() {
   const data = invites.data
   if (!data || data.open) return null
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Invites</h2>
+    <section className={styles.block}>
       <div className={styles.group}>
         <div className={styles.groupHead}>
           <h3>
@@ -662,8 +692,7 @@ function WeeklyEmail({ me }: { me: Me }) {
   const zone = account.time_zone ?? 'Europe/London'
 
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Weekly email</h2>
+    <section className={styles.block}>
       <label className={styles.check}>
         <input
           type="checkbox"
@@ -714,8 +743,10 @@ function YourData() {
     download.error && typeof download.error === 'object' && 'code' in download.error ? download.error.code : ''
 
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Your data</h2>
+    <section className={styles.block}>
+      <div className={styles.groupHead}>
+        <h3>Your data</h3>
+      </div>
       <p className={styles.note}>
         A zip of everything in the household: every profile’s history, ratings, watchlist and resume points, plus the
         account and connected apps. It holds a JSON file and a spreadsheet of your history. You can download it twice a
@@ -726,7 +757,7 @@ function YourData() {
           <p className={styles.note}>{problemMessage(download.error)}</p>
           <Button
             onClick={() => {
-              returnTo.set('/account')
+              returnTo.set('/account/import')
               navigate({ to: '/sign-in' })
             }}
           >
@@ -750,8 +781,7 @@ function YourData() {
 function DeleteAccount({ me }: { me: Me }) {
   const [open, setOpen] = useState(false)
   return (
-    <section>
-      <h2 className={styles.sectionTitle}>Delete the account</h2>
+    <section className={styles.block}>
       <p className={styles.note}>
         This removes you, everyone in the household and all of your history. Backups roll off within 30 days.
       </p>

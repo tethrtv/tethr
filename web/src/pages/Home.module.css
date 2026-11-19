@@ -227,3 +227,24 @@
     justify-self: start;
   }
 }
+
+.crumb {
+  justify-self: start;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-2);
+  text-underline-offset: 0.22em;
+}
+
+.crumb:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+.block {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}

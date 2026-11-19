@@ -389,7 +389,7 @@ function GetStarted() {
       <ol className={styles.steps}>
         <li>
           <strong>Bring your history.</strong> Tethr reads the export file from your old tracker.{' '}
-          <Link to="/import" className={styles.inline}>
+          <Link to="/account/$section" params={{ section: 'import' }} className={styles.inline}>
             Import a file
           </Link>
         </li>

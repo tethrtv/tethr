@@ -38,7 +38,9 @@ const section = (path: string) =>
     ? '/year'
     : path === '/watchlist' || path.startsWith('/lists/') || /^\/@[^/]+\/lists\//.test(path)
       ? '/lists'
-      : path
+      : path.startsWith('/account/') || path === '/media-servers'
+        ? '/account'
+        : path
 
 export function Shell({ children }: { children: ReactNode }) {
   const me = useSignedIn()
