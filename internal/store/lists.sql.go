@@ -24,7 +24,7 @@ func (q *Queries) CountLists(ctx context.Context, profileID int64) (int64, error
 const createList = `-- name: CreateList :one
 INSERT INTO lists (profile_id, kind, name, slug, description, privacy, sort_by, sort_how, rule)
 VALUES ($1, 'custom', $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id
 `
 
 type CreateListParams struct {
@@ -65,6 +65,7 @@ func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, e
 		&i.CoverItemID,
 		&i.KeptAt,
 		&i.Rule,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -276,7 +277,7 @@ func (q *Queries) ListSlugs(ctx context.Context, arg ListSlugsParams) ([]string,
 }
 
 const lockList = `-- name: LockList :one
-SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule FROM lists WHERE id = $1 AND kind = 'custom' FOR UPDATE
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id FROM lists WHERE id = $1 AND kind = 'custom' FOR UPDATE
 `
 
 func (q *Queries) LockList(ctx context.Context, id int64) (List, error) {
@@ -297,6 +298,7 @@ func (q *Queries) LockList(ctx context.Context, id int64) (List, error) {
 		&i.CoverItemID,
 		&i.KeptAt,
 		&i.Rule,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -318,7 +320,7 @@ func (q *Queries) OnList(ctx context.Context, arg OnListParams) (bool, error) {
 }
 
 const ownedList = `-- name: OwnedList :one
-SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UPDATE
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id FROM lists WHERE id = $1 AND profile_id = $2 AND kind = 'custom' FOR UPDATE
 `
 
 type OwnedListParams struct {
@@ -344,6 +346,7 @@ func (q *Queries) OwnedList(ctx context.Context, arg OwnedListParams) (List, err
 		&i.CoverItemID,
 		&i.KeptAt,
 		&i.Rule,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -698,7 +701,7 @@ const updateList = `-- name: UpdateList :one
 UPDATE lists
 SET name = $2, slug = $3, description = $4, privacy = $5, sort_by = $6, sort_how = $7, cover_item_id = $8, rule = $9, updated_at = now()
 WHERE id = $1
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id
 `
 
 type UpdateListParams struct {
@@ -741,12 +744,13 @@ func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, e
 		&i.CoverItemID,
 		&i.KeptAt,
 		&i.Rule,
+		&i.ImportID,
 	)
 	return i, err
 }
 
 const visibleLists = `-- name: VisibleLists :many
-SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, l.cover_item_id, l.kept_at, l.rule, o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
+SELECT l.id, l.profile_id, l.kind, l.name, l.slug, l.description, l.privacy, l.created_at, l.updated_at, l.sort_by, l.sort_how, l.cover_item_id, l.kept_at, l.rule, l.import_id, o.username AS owner_username, o.name AS owner_name, o.private AS owner_private,
     CASE WHEN l.profile_id = $1::bigint THEN 'mine'
          WHEN o.household_id = v.household_id THEN 'household'
          ELSE 'public' END::text AS access,
@@ -819,6 +823,7 @@ func (q *Queries) VisibleLists(ctx context.Context, arg VisibleListsParams) ([]V
 			&i.List.CoverItemID,
 			&i.List.KeptAt,
 			&i.List.Rule,
+			&i.List.ImportID,
 			&i.OwnerUsername,
 			&i.OwnerName,
 			&i.OwnerPrivate,

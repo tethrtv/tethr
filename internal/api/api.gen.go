@@ -1324,6 +1324,12 @@ type AppSecret struct {
 	ClientSecret string `json:"client_secret"`
 }
 
+// ApplyImport defines model for ApplyImport.
+type ApplyImport struct {
+	// Lists Which of the summary's `lists` to bring across, by position from 0. Leave it out to bring them all.
+	Lists *[]int `json:"lists,omitempty"`
+}
+
 // AuthorizationRedirect defines model for AuthorizationRedirect.
 type AuthorizationRedirect struct {
 	RedirectTo string `json:"redirect_to"`
@@ -1601,6 +1607,27 @@ type ImportCount struct {
 	Unmatched int `json:"unmatched"`
 }
 
+// ImportListSummary defines model for ImportListSummary.
+type ImportListSummary struct {
+	Added  int  `json:"added"`
+	Chosen bool `json:"chosen"`
+
+	// Created The import made this list. Undoing the import deletes it unless something else has been added to it since.
+	Created bool `json:"created"`
+
+	// Existing The profile already has a custom list (not a rule list) with this name, or an earlier list in this import makes one, so the films are added to it. Earlier lists in the import only count once the lists are chosen.
+	Existing bool `json:"existing"`
+
+	// Full Matched but left out because the list or the profile's lists were full.
+	Full int    `json:"full"`
+	Name string `json:"name"`
+
+	// Skipped Already on the list.
+	Skipped   int `json:"skipped"`
+	Total     int `json:"total"`
+	Unmatched int `json:"unmatched"`
+}
+
 // ImportSummary defines model for ImportSummary.
 type ImportSummary struct {
 	// Hidden Added and skipped are filled in once the import is applied. Skipped items were already there.
@@ -1608,6 +1635,13 @@ type ImportSummary struct {
 
 	// History Added and skipped are filled in once the import is applied. Skipped items were already there.
 	History ImportCount `json:"history"`
+
+	// ListEntries Added and skipped are filled in once the import is applied. Skipped items were already there.
+	ListEntries ImportCount `json:"list_entries"`
+
+	// ListRoom How many more lists the profile had room for when the file was read.
+	ListRoom int                 `json:"list_room"`
+	Lists    []ImportListSummary `json:"lists"`
 
 	// Playback Added and skipped are filled in once the import is applied. Skipped items were already there.
 	Playback ImportCount `json:"playback"`
@@ -1630,6 +1664,9 @@ type ImportedItem struct {
 	// Label The name the export gave it, shown if it can't be matched.
 	Label string `json:"label"`
 
+	// Notes The note on a list entry, cut to 500 characters.
+	Notes *string `json:"notes,omitempty"`
+
 	// Precision Set `day` when only the date of `at` is known.
 	Precision *ImportedItemPrecision `json:"precision,omitempty"`
 	Rating    *int                   `json:"rating,omitempty"`
@@ -1645,6 +1682,18 @@ type ImportedItemPrecision string
 
 // ImportedItemType defines model for ImportedItem.Type.
 type ImportedItemType string
+
+// ImportedList defines model for ImportedList.
+type ImportedList struct {
+	// Description HTML tags are taken out, then it's cut to 1,000 characters.
+	Description *string `json:"description,omitempty"`
+
+	// Items In list order. A list holds up to 1,000.
+	Items []ImportedItem `json:"items"`
+
+	// Name Cut to 100 characters.
+	Name string `json:"name"`
+}
 
 // Invite defines model for Invite.
 type Invite struct {
@@ -1953,6 +2002,7 @@ type NewApp struct {
 // NewImport defines model for NewImport.
 type NewImport struct {
 	History   *[]ImportedItem `json:"history,omitempty"`
+	Lists     *[]ImportedList `json:"lists,omitempty"`
 	Ratings   *[]ImportedItem `json:"ratings,omitempty"`
 	Source    NewImportSource `json:"source"`
 	Watchlist *[]ImportedItem `json:"watchlist,omitempty"`
@@ -3189,6 +3239,9 @@ type AddHistoryJSONRequestBody = NewWatches
 
 // CreateImportJSONRequestBody defines body for CreateImport for application/json ContentType.
 type CreateImportJSONRequestBody = NewImport
+
+// ApplyImportJSONRequestBody defines body for ApplyImport for application/json ContentType.
+type ApplyImportJSONRequestBody = ApplyImport
 
 // CreateListJSONRequestBody defines body for CreateList for application/json ContentType.
 type CreateListJSONRequestBody = NewList
@@ -9442,6 +9495,7 @@ func (response GetImport404JSONResponse) VisitGetImportResponse(w http.ResponseW
 type ApplyImportRequestObject struct {
 	Id     Id `json:"id"`
 	Params ApplyImportParams
+	Body   *ApplyImportJSONRequestBody
 }
 
 type ApplyImportResponseObject interface {
@@ -9462,7 +9516,21 @@ func (response ApplyImport202JSONResponse) VisitApplyImportResponse(w http.Respo
 	return err
 }
 
-type ApplyImport401JSONResponse struct{ ProblemJSONResponse }
+type ApplyImport400JSONResponse struct{ ProblemJSONResponse }
+
+func (response ApplyImport400JSONResponse) VisitApplyImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyImport401JSONResponse Problem
 
 func (response ApplyImport401JSONResponse) VisitApplyImportResponse(w http.ResponseWriter) error {
 
@@ -9486,6 +9554,20 @@ func (response ApplyImport404JSONResponse) VisitApplyImportResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyImport422JSONResponse Problem
+
+func (response ApplyImport422JSONResponse) VisitApplyImportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -14581,6 +14663,16 @@ func (sh *strictHandler) ApplyImport(w http.ResponseWriter, r *http.Request, id 
 
 	request.Id = id
 	request.Params = params
+
+	var body ApplyImportJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ApplyImport(ctx, request.(ApplyImportRequestObject))

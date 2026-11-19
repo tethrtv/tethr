@@ -18,6 +18,7 @@ import (
 var (
 	ErrImportBusy  = errors.New("an import is already running for this profile")
 	ErrEmptyImport = errors.New("there's nothing to import in that file")
+	ErrImportLists = errors.New("the lists chosen aren't all in the import")
 )
 
 const maxUnmatched = 100
@@ -40,6 +41,7 @@ type ImportFile struct {
 	Playback  []ImportItem
 	Ratings   []ImportItem
 	Hidden    []ImportItem
+	Lists     []ImportList
 }
 
 type ImportCount struct {
@@ -50,12 +52,15 @@ type ImportCount struct {
 }
 
 type ImportSummary struct {
-	History   ImportCount `json:"history"`
-	Watchlist ImportCount `json:"watchlist"`
-	Playback  ImportCount `json:"playback"`
-	Ratings   ImportCount `json:"ratings"`
-	Hidden    ImportCount `json:"hidden"`
-	Unmatched []string    `json:"unmatched"`
+	History     ImportCount    `json:"history"`
+	Watchlist   ImportCount    `json:"watchlist"`
+	Playback    ImportCount    `json:"playback"`
+	Ratings     ImportCount    `json:"ratings"`
+	Hidden      ImportCount    `json:"hidden"`
+	ListEntries ImportCount    `json:"list_entries"`
+	Lists       []ImportedList `json:"lists"`
+	ListRoom    int            `json:"list_room"`
+	Unmatched   []string       `json:"unmatched"`
 }
 
 func (s *ImportSummary) unmatched(c *ImportCount, label string) {
@@ -82,7 +87,7 @@ func toImport(id int64, source, filename, status string, summary []byte, created
 }
 
 func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, source, filename string, f ImportFile) (Import, error) {
-	summary := ImportSummary{Unmatched: []string{}}
+	summary := ImportSummary{Unmatched: []string{}, Lists: []ImportedList{}}
 	keep := func(items []ImportItem, c *ImportCount) []ImportItem {
 		c.Total = len(items)
 		var out []ImportItem
@@ -100,14 +105,21 @@ func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, source
 	f.Playback = keep(f.Playback, &summary.Playback)
 	f.Ratings = keep(f.Ratings, &summary.Ratings)
 	f.Hidden = keep(f.Hidden, &summary.Hidden)
-	if len(f.History)+len(f.Watchlist)+len(f.Playback)+len(f.Ratings)+len(f.Hidden) == 0 {
+	listed := 0
+	for i, l := range f.Lists {
+		l = cleanList(l)
+		s := ImportedList{Name: l.Name, Chosen: true}
+		l.Items = keep(l.Items, &s.ImportCount)
+		summary.ListEntries.Total += s.Total
+		summary.ListEntries.Unmatched += s.Unmatched
+		listed += len(l.Items)
+		f.Lists[i] = l
+		summary.Lists = append(summary.Lists, s)
+	}
+	if len(f.History)+len(f.Watchlist)+len(f.Playback)+len(f.Ratings)+len(f.Hidden)+listed == 0 {
 		return Import{}, ErrEmptyImport
 	}
 	payload, err := json.Marshal(f)
-	if err != nil {
-		return Import{}, err
-	}
-	summaryJSON, err := json.Marshal(summary)
 	if err != nil {
 		return Import{}, err
 	}
@@ -125,6 +137,13 @@ func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, source
 			return ErrImportBusy
 		}
 		if err := q.DropParsedImports(ctx, profileID); err != nil {
+			return err
+		}
+		if err := findLists(ctx, q, profileID, &summary); err != nil {
+			return err
+		}
+		summaryJSON, err := json.Marshal(summary)
+		if err != nil {
 			return err
 		}
 		row, err = q.CreateImport(ctx, store.CreateImportParams{
@@ -178,13 +197,41 @@ func ImportByID(ctx context.Context, db *pgxpool.Pool, profileID, id int64) (Imp
 	return toImport(r.ID, r.Source, r.Filename, r.Status, r.Summary, r.CreatedAt, r.AppliedAt, r.UndoneAt)
 }
 
-func QueueImport(ctx context.Context, db *pgxpool.Pool, profileID, id int64) (Import, error) {
-	n, err := store.New(db).QueueImport(ctx, store.QueueImportParams{ID: id, ProfileID: profileID})
+func QueueImport(ctx context.Context, db *pgxpool.Pool, profileID, id int64, lists []int) (Import, error) {
+	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		r, err := q.ImportByID(ctx, store.ImportByIDParams{ID: id, ProfileID: profileID})
+		if err != nil {
+			return notFound(err)
+		}
+		if r.Status != "parsed" {
+			return ErrNotFound
+		}
+		var summary ImportSummary
+		if err := json.Unmarshal(r.Summary, &summary); err != nil {
+			return err
+		}
+		if err := chooseLists(ctx, q, profileID, &summary, lists); err != nil {
+			return err
+		}
+		summaryJSON, err := json.Marshal(summary)
+		if err != nil {
+			return err
+		}
+		if err := q.SetImportSummary(ctx, store.SetImportSummaryParams{ID: id, Summary: summaryJSON}); err != nil {
+			return err
+		}
+		n, err := q.QueueImport(ctx, store.QueueImportParams{ID: id, ProfileID: profileID})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
 	if err != nil {
 		return Import{}, err
-	}
-	if n == 0 {
-		return Import{}, ErrNotFound
 	}
 	return ImportByID(ctx, db, profileID, id)
 }
@@ -481,6 +528,10 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		return nil, err
 	}
 
+	if err := im.lists(f.Lists); err != nil {
+		return nil, err
+	}
+
 	if summary.Watchlist.Added > 0 {
 		if _, err := q.TouchList(ctx, list.ID); err != nil {
 			return nil, err
@@ -506,6 +557,10 @@ func UndoImport(ctx context.Context, db *pgxpool.Pool, profileID, id int64) (Imp
 			return ErrNotFound
 		}
 		importID := &id
+		touched, err := q.TouchImportedLists(ctx, importID)
+		if err != nil {
+			return err
+		}
 		if _, err := q.UndoImportedWatchEvents(ctx, importID); err != nil {
 			return err
 		}
@@ -515,6 +570,15 @@ func UndoImport(ctx context.Context, db *pgxpool.Pool, profileID, id int64) (Imp
 		listed, err := q.UndoImportedListItems(ctx, importID)
 		if err != nil {
 			return err
+		}
+		dropped, err := q.UndoImportedLists(ctx, importID)
+		if err != nil {
+			return err
+		}
+		if touched+dropped > 0 {
+			if err := markLists(ctx, q, profileID); err != nil {
+				return err
+			}
 		}
 		if _, err := q.UndoImportedRatings(ctx, importID); err != nil {
 			return err

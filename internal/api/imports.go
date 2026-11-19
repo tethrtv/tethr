@@ -33,6 +33,20 @@ func toImport(i core.Import) Import {
 	count := func(c core.ImportCount) ImportCount {
 		return ImportCount{Total: c.Total, Added: c.Added, Skipped: c.Skipped, Unmatched: c.Unmatched}
 	}
+	lists := make([]ImportListSummary, 0, len(i.Summary.Lists))
+	for _, l := range i.Summary.Lists {
+		lists = append(lists, ImportListSummary{
+			Name:      l.Name,
+			Total:     l.Total,
+			Added:     l.Added,
+			Skipped:   l.Skipped,
+			Unmatched: l.Unmatched,
+			Full:      l.Full,
+			Existing:  l.Existing,
+			Chosen:    l.Chosen,
+			Created:   l.Created,
+		})
+	}
 	return Import{
 		Id:        i.ID,
 		Source:    ImportSource(i.Source),
@@ -42,12 +56,15 @@ func toImport(i core.Import) Import {
 		AppliedAt: i.AppliedAt,
 		UndoneAt:  i.UndoneAt,
 		Summary: ImportSummary{
-			History:   count(i.Summary.History),
-			Watchlist: count(i.Summary.Watchlist),
-			Playback:  count(i.Summary.Playback),
-			Ratings:   count(i.Summary.Ratings),
-			Hidden:    count(i.Summary.Hidden),
-			Unmatched: i.Summary.Unmatched,
+			History:     count(i.Summary.History),
+			Watchlist:   count(i.Summary.Watchlist),
+			Playback:    count(i.Summary.Playback),
+			Ratings:     count(i.Summary.Ratings),
+			Hidden:      count(i.Summary.Hidden),
+			ListEntries: count(i.Summary.ListEntries),
+			Lists:       lists,
+			ListRoom:    i.Summary.ListRoom,
+			Unmatched:   i.Summary.Unmatched,
 		},
 	}
 }
@@ -133,7 +150,7 @@ func matchedImport(in NewImport) core.ImportFile {
 	items := func(list *[]ImportedItem) []core.ImportItem {
 		var out []core.ImportItem
 		for _, i := range value(list) {
-			item := core.ImportItem{Ref: core.Ref{Kind: string(i.Type)}, Label: i.Label, At: i.At, Rating: int16(value(i.Rating))}
+			item := core.ImportItem{Ref: core.Ref{Kind: string(i.Type)}, Label: i.Label, At: i.At, Rating: int16(value(i.Rating)), Notes: value(i.Notes)}
 			if i.Tethr != nil && *i.Tethr > 0 {
 				item.Ref.IDs.Tethr = *i.Tethr
 			}
@@ -147,7 +164,11 @@ func matchedImport(in NewImport) core.ImportFile {
 		}
 		return out
 	}
-	return core.ImportFile{History: items(in.History), Watchlist: items(in.Watchlist), Ratings: items(in.Ratings)}
+	var lists []core.ImportList
+	for _, l := range value(in.Lists) {
+		lists = append(lists, core.ImportList{Name: l.Name, Description: value(l.Description), Items: items(&l.Items)})
+	}
+	return core.ImportFile{History: items(in.History), Watchlist: items(in.Watchlist), Ratings: items(in.Ratings), Lists: lists}
 }
 
 func readExport(body []byte) (string, core.ImportFile, error) {
@@ -185,11 +206,20 @@ func (s *Server) ApplyImport(ctx context.Context, req ApplyImportRequestObject) 
 		return ApplyImport404JSONResponse(noSuchProfile), nil
 	}
 	if !ok {
-		return ApplyImport401JSONResponse{notConnected}, err
+		return ApplyImport401JSONResponse(notConnected), err
 	}
-	imp, err := core.QueueImport(ctx, s.DB, c.ProfileID, req.Id)
-	if errors.Is(err, core.ErrNotFound) {
+	var lists []int
+	if req.Body != nil && req.Body.Lists != nil {
+		lists = append([]int{}, *req.Body.Lists...)
+	}
+	imp, err := core.QueueImport(ctx, s.DB, c.ProfileID, req.Id, lists)
+	switch {
+	case errors.Is(err, core.ErrNotFound):
 		return ApplyImport404JSONResponse(problem("not_found", "There’s no import with that ID waiting to be applied. Imports are kept for 24 hours.")), nil
+	case errors.Is(err, core.ErrImportLists):
+		return ApplyImport400JSONResponse{problem("unknown_list", "One of those positions isn’t in this import’s lists. Positions start at 0.")}, nil
+	case errors.Is(err, core.ErrTooManyLists):
+		return ApplyImport422JSONResponse(problem("too_many_lists", "A profile can have up to 100 lists. Choose fewer lists, or delete some first.")), nil
 	}
 	if err != nil {
 		return nil, err

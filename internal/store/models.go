@@ -194,6 +194,7 @@ type List struct {
 	CoverItemID *int64
 	KeptAt      *time.Time
 	Rule        []byte
+	ImportID    *int64
 }
 
 type ListFollow struct {

@@ -97,7 +97,7 @@ func TestRewatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := QueueImport(ctx, db, profile, imported.ID); err != nil {
+	if _, err := QueueImport(ctx, db, profile, imported.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := ApplyNextImport(ctx, db); err != nil {
