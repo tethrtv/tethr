@@ -88,3 +88,24 @@ DELETE FROM ratings WHERE import_id = $1;
 
 -- name: UndoImportedHiddenItems :execrows
 DELETE FROM hidden_items WHERE import_id = $1;
+
+-- name: ListNamed :one
+SELECT * FROM lists
+WHERE profile_id = $1 AND kind = 'custom' AND rule IS NULL AND lower(name) = lower(sqlc.arg(name)::text)
+ORDER BY id
+LIMIT 1
+FOR UPDATE;
+
+-- name: SetListImport :exec
+UPDATE lists SET import_id = $2 WHERE id = $1;
+
+-- name: TouchImportedLists :execrows
+UPDATE lists SET updated_at = now()
+WHERE kind = 'custom' AND id IN (SELECT i.list_id FROM list_items i WHERE i.import_id = $1);
+
+-- name: UndoImportedLists :execrows
+DELETE FROM lists l
+WHERE l.import_id = $1 AND NOT EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id);
+
+-- name: SetImportSummary :exec
+UPDATE imports SET summary = $2 WHERE id = $1;

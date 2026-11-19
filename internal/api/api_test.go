@@ -829,6 +829,48 @@ func TestMatchedImport(t *testing.T) {
 	}
 }
 
+func TestMatchedImportLists(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+
+	rec := do(t, h, "POST", "/v1/imports", `{"source":"letterboxd","lists":[
+		{"name":"Heists","description":"<p>Big <b>jobs</b></p>","items":[
+			{"type":"movie","tmdb":949,"label":"Heat (1995)","notes":"the diner"},
+			{"type":"movie","tmdb":27205,"label":"Inception (2010)"},
+			{"type":"movie","label":"Home video (1998)"}
+		]},
+		{"name":"Skip me","items":[{"type":"movie","tmdb":603,"label":"The Matrix (1999)"}]}
+	]}`, cookie)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", rec.Code, rec.Body)
+	}
+	var imp Import
+	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
+	if sum := imp.Summary; sum.ListEntries.Total != 4 || sum.ListEntries.Unmatched != 1 || len(sum.Lists) != 2 || sum.Lists[0].Name != "Heists" || !sum.Lists[1].Chosen || sum.ListRoom != 100 {
+		t.Fatalf("summary = %+v", sum)
+	}
+
+	id := strconv.FormatInt(imp.Id, 10)
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", `{"lists":[2]}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "unknown_list") {
+		t.Errorf("a list that isn't there = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", `{"lists":[0]}`, cookie); rec.Code != http.StatusAccepted {
+		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
+	}
+	if _, _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
+	if l := imp.Summary.Lists; l[0].Added != 2 || !l[0].Created || l[1].Chosen || l[1].Created {
+		t.Errorf("applied = %+v", l)
+	}
+	if body := do(t, h, "GET", "/v1/lists", "", cookie).Body.String(); !strings.Contains(body, `"Heists"`) || !strings.Contains(body, `"Big jobs"`) || strings.Contains(body, "Skip me") {
+		t.Errorf("lists = %s", body)
+	}
+}
+
 func TestRatingEndpoints(t *testing.T) {
 	h, mail := newTestServer(t)
 	cookie := signIn(t, h, mail)

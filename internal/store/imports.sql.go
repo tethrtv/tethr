@@ -306,6 +306,42 @@ func (q *Queries) ImportWatchEvent(ctx context.Context, arg ImportWatchEventPara
 	return result.RowsAffected(), nil
 }
 
+const listNamed = `-- name: ListNamed :one
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id FROM lists
+WHERE profile_id = $1 AND kind = 'custom' AND rule IS NULL AND lower(name) = lower($2::text)
+ORDER BY id
+LIMIT 1
+FOR UPDATE
+`
+
+type ListNamedParams struct {
+	ProfileID int64
+	Name      string
+}
+
+func (q *Queries) ListNamed(ctx context.Context, arg ListNamedParams) (List, error) {
+	row := q.db.QueryRow(ctx, listNamed, arg.ProfileID, arg.Name)
+	var i List
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.Kind,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Privacy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SortBy,
+		&i.SortHow,
+		&i.CoverItemID,
+		&i.KeptAt,
+		&i.Rule,
+		&i.ImportID,
+	)
+	return i, err
+}
+
 const lockProfile = `-- name: LockProfile :one
 SELECT id FROM profiles WHERE id = $1 FOR UPDATE
 `
@@ -426,6 +462,47 @@ func (q *Queries) QueueImport(ctx context.Context, arg QueueImportParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const setImportSummary = `-- name: SetImportSummary :exec
+UPDATE imports SET summary = $2 WHERE id = $1
+`
+
+type SetImportSummaryParams struct {
+	ID      int64
+	Summary []byte
+}
+
+func (q *Queries) SetImportSummary(ctx context.Context, arg SetImportSummaryParams) error {
+	_, err := q.db.Exec(ctx, setImportSummary, arg.ID, arg.Summary)
+	return err
+}
+
+const setListImport = `-- name: SetListImport :exec
+UPDATE lists SET import_id = $2 WHERE id = $1
+`
+
+type SetListImportParams struct {
+	ID       int64
+	ImportID *int64
+}
+
+func (q *Queries) SetListImport(ctx context.Context, arg SetListImportParams) error {
+	_, err := q.db.Exec(ctx, setListImport, arg.ID, arg.ImportID)
+	return err
+}
+
+const touchImportedLists = `-- name: TouchImportedLists :execrows
+UPDATE lists SET updated_at = now()
+WHERE kind = 'custom' AND id IN (SELECT i.list_id FROM list_items i WHERE i.import_id = $1)
+`
+
+func (q *Queries) TouchImportedLists(ctx context.Context, importID *int64) (int64, error) {
+	result, err := q.db.Exec(ctx, touchImportedLists, importID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const undoImportedHiddenItems = `-- name: UndoImportedHiddenItems :execrows
 DELETE FROM hidden_items WHERE import_id = $1
 `
@@ -444,6 +521,19 @@ DELETE FROM list_items WHERE import_id = $1
 
 func (q *Queries) UndoImportedListItems(ctx context.Context, importID *int64) (int64, error) {
 	result, err := q.db.Exec(ctx, undoImportedListItems, importID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const undoImportedLists = `-- name: UndoImportedLists :execrows
+DELETE FROM lists l
+WHERE l.import_id = $1 AND NOT EXISTS (SELECT 1 FROM list_items i WHERE i.list_id = l.id)
+`
+
+func (q *Queries) UndoImportedLists(ctx context.Context, importID *int64) (int64, error) {
+	result, err := q.db.Exec(ctx, undoImportedLists, importID)
 	if err != nil {
 		return 0, err
 	}

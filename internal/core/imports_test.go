@@ -68,7 +68,7 @@ func TestImport(t *testing.T) {
 		t.Errorf("parsing wrote history: %d entries", len(again))
 	}
 
-	queued, err := QueueImport(ctx, db, profile, parsed.ID)
+	queued, err := QueueImport(ctx, db, profile, parsed.ID, nil)
 	if err != nil || queued.Status != "queued" {
 		t.Fatalf("queue = %+v, %v", queued, err)
 	}
@@ -175,7 +175,7 @@ func TestImportPlaysWithoutTimes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := QueueImport(ctx, db, profile, parsed.ID); err != nil {
+	if _, err := QueueImport(ctx, db, profile, parsed.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := ApplyNextImport(ctx, db); err != nil {
@@ -234,7 +234,7 @@ func TestImportTraktIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := QueueImport(ctx, db, caller.ProfileID, parsed.ID); err != nil {
+	if _, err := QueueImport(ctx, db, caller.ProfileID, parsed.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	_, conflicts, err := ApplyNextImport(ctx, db)

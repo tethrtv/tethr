@@ -2407,7 +2407,7 @@ paths:
 
         Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
 
-        Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched.
+        Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched. Lists in the JSON become private lists with their films in the order given, or are added to the profile's list of the same name. A rule list is never added to.
       security:
         - session: []
         - bearer: []
@@ -2477,6 +2477,12 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/ProfileId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyImport'
       responses:
         '202':
           description: Queued
@@ -2484,15 +2490,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Import'
+        '400':
+          $ref: '#/components/responses/Problem'
         '401':
           $ref: '#/components/responses/Problem'
         '404':
+          $ref: '#/components/responses/Problem'
+        '422':
           $ref: '#/components/responses/Problem'
   /v1/imports/{id}/undo:
     post:
       operationId: undoImport
       summary: Take out everything an import added
-      description: Works for 30 days after an import is applied. Plays, ratings and watchlist entries that were already there before the import stay.
+      description: Works for 30 days after an import is applied. Plays, ratings, watchlist and list entries that were already there before the import stay. Lists the import made are deleted unless something else has been added to them since.
       security:
         - session: []
         - bearer: []
@@ -4619,7 +4629,7 @@ components:
           format: date-time
     ImportSummary:
       type: object
-      required: [history, watchlist, playback, ratings, hidden, unmatched]
+      required: [history, watchlist, playback, ratings, hidden, list_entries, lists, list_room, unmatched]
       properties:
         history:
           $ref: '#/components/schemas/ImportCount'
@@ -4631,6 +4641,15 @@ components:
           $ref: '#/components/schemas/ImportCount'
         hidden:
           $ref: '#/components/schemas/ImportCount'
+        list_entries:
+          $ref: '#/components/schemas/ImportCount'
+        lists:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportListSummary'
+        list_room:
+          type: integer
+          description: How many more lists the profile had room for when the file was read.
         unmatched:
           type: array
           description: Up to 100 of the items that couldn't be matched, as the file names them.
@@ -4658,6 +4677,64 @@ components:
           maxItems: 50000
           items:
             $ref: '#/components/schemas/ImportedItem'
+        lists:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/ImportedList'
+    ImportedList:
+      type: object
+      required: [name, items]
+      properties:
+        name:
+          type: string
+          maxLength: 300
+          description: Cut to 100 characters.
+        description:
+          type: string
+          maxLength: 20000
+          description: HTML tags are taken out, then it's cut to 1,000 characters.
+        items:
+          type: array
+          maxItems: 20000
+          description: In list order. A list holds up to 1,000.
+          items:
+            $ref: '#/components/schemas/ImportedItem'
+    ImportListSummary:
+      type: object
+      required: [name, total, added, skipped, unmatched, full, existing, chosen, created]
+      properties:
+        name:
+          type: string
+        total:
+          type: integer
+        added:
+          type: integer
+        skipped:
+          type: integer
+          description: Already on the list.
+        unmatched:
+          type: integer
+        full:
+          type: integer
+          description: Matched but left out because the list or the profile's lists were full.
+        existing:
+          type: boolean
+          description: The profile already has a custom list (not a rule list) with this name, or an earlier list in this import makes one, so the films are added to it. Earlier lists in the import only count once the lists are chosen.
+        chosen:
+          type: boolean
+        created:
+          type: boolean
+          description: The import made this list. Undoing the import deletes it unless something else has been added to it since.
+    ApplyImport:
+      type: object
+      properties:
+        lists:
+          type: array
+          description: Which of the summary's `lists` to bring across, by position from 0. Leave it out to bring them all.
+          items:
+            type: integer
+            minimum: 0
     ImportedItem:
       type: object
       required: [type, label]
@@ -4688,6 +4765,10 @@ components:
           type: integer
           minimum: 1
           maximum: 10
+        notes:
+          type: string
+          maxLength: 5000
+          description: The note on a list entry, cut to 500 characters.
     FilmMatch:
       type: object
       required: [candidates]
