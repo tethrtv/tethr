@@ -1337,7 +1337,7 @@ export interface paths {
          *
          *     Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
          *
-         *     Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched.
+         *     Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched. Lists in the JSON become private lists with their films in the order given, or are added to the profile's list of the same name. A rule list is never added to.
          */
         post: operations["createImport"];
         delete?: never;
@@ -1394,7 +1394,7 @@ export interface paths {
         put?: never;
         /**
          * Take out everything an import added
-         * @description Works for 30 days after an import is applied. Plays, ratings and watchlist entries that were already there before the import stay.
+         * @description Works for 30 days after an import is applied. Plays, ratings, watchlist and list entries that were already there before the import stay. Lists the import made are deleted unless something else has been added to them since.
          */
         post: operations["undoImport"];
         delete?: never;
@@ -2650,6 +2650,10 @@ export interface components {
             playback: components["schemas"]["ImportCount"];
             ratings: components["schemas"]["ImportCount"];
             hidden: components["schemas"]["ImportCount"];
+            list_entries: components["schemas"]["ImportCount"];
+            lists: components["schemas"]["ImportListSummary"][];
+            /** @description How many more lists the profile had room for when the file was read. */
+            list_room: number;
             /** @description Up to 100 of the items that couldn't be matched, as the file names them. */
             unmatched: string[];
         };
@@ -2659,6 +2663,34 @@ export interface components {
             history?: components["schemas"]["ImportedItem"][];
             watchlist?: components["schemas"]["ImportedItem"][];
             ratings?: components["schemas"]["ImportedItem"][];
+            lists?: components["schemas"]["ImportedList"][];
+        };
+        ImportedList: {
+            /** @description Cut to 100 characters. */
+            name: string;
+            /** @description HTML tags are taken out, then it's cut to 1,000 characters. */
+            description?: string;
+            /** @description In list order. A list holds up to 1,000. */
+            items: components["schemas"]["ImportedItem"][];
+        };
+        ImportListSummary: {
+            name: string;
+            total: number;
+            added: number;
+            /** @description Already on the list. */
+            skipped: number;
+            unmatched: number;
+            /** @description Matched but left out because the list or the profile's lists were full. */
+            full: number;
+            /** @description The profile already has a custom list (not a rule list) with this name, or an earlier list in this import makes one, so the films are added to it. Earlier lists in the import only count once the lists are chosen. */
+            existing: boolean;
+            chosen: boolean;
+            /** @description The import made this list. Undoing the import deletes it unless something else has been added to it since. */
+            created: boolean;
+        };
+        ApplyImport: {
+            /** @description Which of the summary's `lists` to bring across, by position from 0. Leave it out to bring them all. */
+            lists?: number[];
         };
         ImportedItem: {
             /** @enum {string} */
@@ -2683,6 +2715,8 @@ export interface components {
              */
             precision?: "time" | "day";
             rating?: number;
+            /** @description The note on a list entry, cut to 500 characters. */
+            notes?: string;
         };
         FilmMatch: {
             match?: components["schemas"]["Item"];
@@ -5224,7 +5258,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ApplyImport"];
+            };
+        };
         responses: {
             /** @description Queued */
             202: {
@@ -5235,8 +5273,10 @@ export interface operations {
                     "application/json": components["schemas"]["Import"];
                 };
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     undoImport: {

@@ -6,13 +6,16 @@ import type { components } from '../api/schema'
 import { Button } from '../components/Button'
 import { Plain } from '../components/Plain'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
-import { type Film, isLetterboxd, readLetterboxd, unzip } from '../letterboxd'
+import { plural } from '../format'
+import { type Film, type FilmList, isLetterboxd, readLetterboxd, unzip } from '../letterboxd'
 import { ProfilePicker, useSignedIn } from './connect'
 import home from './Home.module.css'
 import styles from './Import.module.css'
+import listStyles from './Lists.module.css'
 import { MatchFilms } from './MatchFilms'
 
 type Import = components['schemas']['Import']
+type ImportList = components['schemas']['ImportListSummary']
 
 const parts = [
   ['history', 'Plays', 'play', 'plays'],
@@ -20,6 +23,7 @@ const parts = [
   ['playback', 'Resume points', 'resume point', 'resume points'],
   ['ratings', 'Ratings', 'rating', 'ratings'],
   ['hidden', 'Hidden shows', 'hidden show', 'hidden shows'],
+  ['list_entries', 'List entries', 'list entry', 'list entries'],
 ] as const
 
 const count = (n: number, one: string, many: string) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`
@@ -49,10 +53,10 @@ export function Import() {
         <header className={home.head}>
           <h1 className={home.title}>Import your history</h1>
           <p className={home.lead}>
-            Bring your plays, watchlist, resume points, ratings and hidden shows across from your old tracker. Download
-            its data export from your settings there, then add the zip here as it is. If it offers more than one kind,
-            choose the full backup, not a simple CSV. Some trackers only give you one backup a month, so download it
-            when you’re ready to move. Nothing is saved until you’ve checked what was found.
+            Bring your plays, watchlist, resume points, ratings, hidden shows and Letterboxd lists across from your old
+            tracker. Download its data export from your settings there, then add the zip here as it is. If it offers
+            more than one kind, choose the full backup, not a simple CSV. Some trackers only give you one backup a
+            month, so download it when you’re ready to move. Nothing is saved until you’ve checked what was found.
           </p>
         </header>
         <ProfilePicker legend="Import into" profiles={me.profiles} value={profileID} onChange={setProfile} />
@@ -86,14 +90,19 @@ function Imports({ profileID }: { profileID: number }) {
     onSuccess: refresh,
   })
 
-  const [letterboxd, setLetterboxd] = useState<{ films: Film[]; filename: string } | null>(null)
+  const [letterboxd, setLetterboxd] = useState<{
+    films: Film[]
+    lists: FilmList[]
+    unreadable: string[]
+    filename: string
+  } | null>(null)
   const read = useMutation({
     mutationFn: async (file: File) => {
       const files = await unzip(file).catch((e) => {
         if (e instanceof Error && e.message === 'not a zip') return null
         throw e
       })
-      if (files && isLetterboxd(files)) setLetterboxd({ films: readLetterboxd(files), filename: file.name })
+      if (files && isLetterboxd(files)) setLetterboxd({ ...readLetterboxd(files), filename: file.name })
       else upload.mutate(file)
     },
   })
@@ -123,6 +132,8 @@ function Imports({ profileID }: { profileID: number }) {
         ) : letterboxd ? (
           <MatchFilms
             films={letterboxd.films}
+            lists={letterboxd.lists}
+            unreadable={letterboxd.unreadable}
             filename={letterboxd.filename}
             profileID={profileID}
             onDone={() => {
@@ -177,10 +188,20 @@ function Review({
   onAnother: () => void
   onDone: () => void
 }) {
+  const lists = imp.summary.lists
+  const [chosen, setChosen] = useState(() => {
+    let room = imp.summary.list_room
+    const picked: number[] = []
+    lists.forEach((_, i) => {
+      if (!needsRoom(lists, picked, i) || room-- > 0) picked.push(i)
+    })
+    return picked
+  })
   const apply = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST('/v1/imports/{id}/apply', {
         params: { path: { id: imp.id }, query: { profile_id: profileID } },
+        body: lists.length ? { lists: chosen } : undefined,
       })
       if (error) throw error
     },
@@ -214,8 +235,12 @@ function Review({
       {unmatched > 0 && (
         <Unmatched names={imp.summary.unmatched} total={unmatched} leftOut={imp.source === 'letterboxd'} />
       )}
+      {lists.length > 0 && (
+        <ListPicker lists={lists} room={imp.summary.list_room} chosen={chosen} onChange={setChosen} />
+      )}
       <p className={home.note}>
-        Plays already in your history are skipped, so importing the same file twice is safe. You can undo the whole
+        Plays already in your history are skipped, so importing the same file twice is safe.
+        {lists.length > 0 && ' Films already on the list they’re going into are skipped too.'} You can undo the whole
         import for 30 days.
       </p>
       <div className={styles.actions}>
@@ -228,6 +253,89 @@ function Review({
       </div>
       {apply.isError && <p className={home.error}>{problemMessage(apply.error)}</p>}
     </div>
+  )
+}
+
+const sameName = (a: ImportList, b: ImportList) => a.name.toLowerCase() === b.name.toLowerCase()
+
+const joinsEarlier = (lists: ImportList[], chosen: number[], i: number) =>
+  lists.some((o, j) => j < i && chosen.includes(j) && o.unmatched < o.total && sameName(o, lists[i]))
+
+const needsRoom = (lists: ImportList[], chosen: number[], i: number) =>
+  !lists[i].existing && lists[i].unmatched < lists[i].total && !joinsEarlier(lists, chosen, i)
+
+function listNote(l: ImportList, earlier: boolean) {
+  const matched = l.total - l.unmatched
+  let note = plural(l.total, 'film')
+  if (l.unmatched) note += `, ${l.unmatched.toLocaleString('en-GB')} left out`
+  note += '.'
+  if (earlier) note += ' Goes into the list above with the same name.'
+  else if (l.existing) note += ' Adds to your list with this name.'
+  else if (!matched) note += ' Nothing to bring across.'
+  if (matched > 1000) note += ' A list holds up to 1,000 films.'
+  return note
+}
+
+function ListPicker({
+  lists,
+  room,
+  chosen,
+  onChange,
+}: {
+  lists: ImportList[]
+  room: number
+  chosen: number[]
+  onChange: (chosen: number[]) => void
+}) {
+  const taken = chosen.filter((i) => needsRoom(lists, chosen, i)).length
+  const full = taken >= room && lists.some((_, i) => !chosen.includes(i) && needsRoom(lists, chosen, i))
+  const toggle = (i: number) =>
+    onChange(chosen.includes(i) ? chosen.filter((c) => c !== i) : [...chosen, i].sort((a, b) => a - b))
+
+  return (
+    <fieldset className={styles.lists}>
+      <legend>Lists</legend>
+      <ul>
+        {lists.map((l, i) => {
+          const on = chosen.includes(i)
+          return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: lists are chosen by their place in the import
+            <li key={i}>
+              <label className={styles.listRow}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!on && needsRoom(lists, chosen, i) && taken >= room}
+                  onChange={() => toggle(i)}
+                />
+                <span className={on ? `${listStyles.tickbox} ${listStyles.on}` : listStyles.tickbox}>
+                  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+                    <path
+                      d="M4.5 10.5l3.6 3.6L15.5 6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+                <span>
+                  <span className={styles.listName}>{l.name}</span>
+                  <span className={styles.listNote}>{listNote(l, joinsEarlier(lists, chosen, i))}</span>
+                </span>
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+      <p className={home.note}>
+        {!full
+          ? 'New lists come across as private, with their films in the same order.'
+          : room > 0
+            ? `A profile holds up to 100 lists, so there’s room for ${plural(room, 'more list', 'more lists')}. Untick one to choose another.`
+            : 'This profile already has 100 lists. Delete some to bring new ones across.'}
+      </p>
+    </fieldset>
   )
 }
 
@@ -269,8 +377,11 @@ function PastImport({ imp, profileID, onDone }: { imp: Import; profileID: number
     },
   })
   const s = imp.summary
+  const made = (s.lists ?? []).filter((l) => l.created).length
   const done = parts.filter(([key]) => s[key].added > 0).map(([key, , one, many]) => count(s[key].added, one, many))
+  if (made) done.push(count(made, 'new list', 'new lists'))
   const skipped = parts.reduce((n, [key]) => n + s[key].skipped, 0)
+  const full = (s.lists ?? []).reduce((n, l) => n + l.full, 0)
 
   let status: string
   switch (imp.status) {
@@ -284,8 +395,10 @@ function PastImport({ imp, profileID, onDone }: { imp: Import; profileID: number
       status = `Imported ${day(imp.applied_at)}, undone ${day(imp.undone_at)}.`
       break
     default:
-      status = `${day(imp.applied_at)}. ${done.length ? `Added ${done.join(', ')}.` : 'Everything was already here.'}`
+      status = `${day(imp.applied_at)}. ${done.length ? `Added ${done.join(', ')}.` : full ? 'Nothing was added.' : 'Everything was already here.'}`
       if (done.length && skipped) status += ` ${count(skipped, 'item was', 'items were')} already here.`
+      if (full)
+        status += ` ${count(full, 'film', 'films')} didn’t fit, as a list holds up to 1,000 films and a profile up to 100 lists.`
   }
 
   return (
@@ -311,6 +424,7 @@ function PastImport({ imp, profileID, onDone }: { imp: Import; profileID: number
         <SlipBody>
           <p>
             Everything it added comes out: {done.join(', ')}. Anything that was already here before the import stays.
+            {made > 0 && ' Lists it made are deleted, unless you’ve added something to them since.'}
           </p>
           {undo.isError && <p className={home.error}>{problemMessage(undo.error)}</p>}
         </SlipBody>
