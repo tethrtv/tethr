@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { api, type Me, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
-import { Plain } from '../components/Plain'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { ago } from '../format'
 import { useSignedIn } from './connect'
@@ -42,79 +41,72 @@ export function MediaServers() {
     },
   })
 
-  if (!me) return <Plain>{null}</Plain>
+  if (!me) return null
 
   return (
-    <Plain
-      wide
-      end={
-        <Link to="/account" className={home.inline}>
-          Your account
+    <div className={home.page}>
+      <header className={home.head}>
+        <Link to="/account/$section" params={{ section: 'apps' }} className={home.crumb}>
+          Connected apps
         </Link>
-      }
-    >
-      <div className={home.page}>
-        <header className={home.head}>
-          <h1 className={home.title}>Media servers</h1>
-          <p className={home.lead}>
-            Log what everyone watches on your Jellyfin, Plex or Emby server, whichever app they use. Match each person
-            on the server to a profile below. Anything they finish before you match them waits here for a week, then
-            logs once you do.
-          </p>
-        </header>
+        <h1 className={home.title}>Media servers</h1>
+        <p className={home.lead}>
+          Log what everyone watches on your Jellyfin, Plex or Emby server, whichever app they use. Match each person on
+          the server to a profile below. Anything they finish before you match them waits here for a week, then logs
+          once you do.
+        </p>
+      </header>
 
-        {address && <Setup kind={address.kind} address={address.url} onDone={() => setAddress(null)} />}
+      {address && <Setup kind={address.kind} address={address.url} onDone={() => setAddress(null)} />}
 
-        <section>
-          <h2 className={home.sectionTitle}>Tethr for Jellyfin</h2>
-          <p className={home.note}>
-            On Jellyfin, our plugin does more than a webhook. It brings in what each person has already watched, and
-            marks things they watch elsewhere as played. In Jellyfin’s dashboard, open Plugins, then Repositories, and
-            add{' '}
-            <button
-              type="button"
-              className={styles.clientID}
-              title="Copy the address"
-              onClick={() => navigator.clipboard?.writeText(pluginRepository).catch(() => {})}
-            >
-              {pluginRepository}
-            </button>
-            . Then install Tethr from the Catalogue, restart Jellyfin, and connect each person in the plugin’s settings.
-          </p>
-        </section>
+      <section>
+        <h2 className={home.sectionTitle}>Tethr for Jellyfin</h2>
+        <p className={home.note}>
+          On Jellyfin, our plugin does more than a webhook. It brings in what each person has already watched, and marks
+          things they watch elsewhere as played. In Jellyfin’s dashboard, open Plugins, then Repositories, and add{' '}
+          <button
+            type="button"
+            className={styles.clientID}
+            title="Copy the address"
+            onClick={() => navigator.clipboard?.writeText(pluginRepository).catch(() => {})}
+          >
+            {pluginRepository}
+          </button>
+          . Then install Tethr from the Catalogue, restart Jellyfin, and connect each person in the plugin’s settings.
+        </p>
+      </section>
 
-        <section>
-          <h2 className={home.sectionTitle}>Your servers</h2>
-          {servers.data?.length ? (
-            <ul className={home.rows}>
-              {servers.data.map((s) => (
-                <ServerRow
-                  key={s.id}
-                  server={s}
-                  profiles={me.profiles}
-                  onAddress={(url) => setAddress({ kind: s.kind, url })}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className={home.note}>None yet.</p>
-          )}
-          <div className={home.rowActions}>
-            {(Object.keys(names) as Kind[]).map((kind) => (
-              <Button
-                key={kind}
-                variant="plain"
-                aria-busy={add.isPending && add.variables === kind}
-                onClick={() => add.mutate(kind)}
-              >
-                Add {names[kind]}
-              </Button>
+      <section>
+        <h2 className={home.sectionTitle}>Your servers</h2>
+        {servers.data?.length ? (
+          <ul className={home.rows}>
+            {servers.data.map((s) => (
+              <ServerRow
+                key={s.id}
+                server={s}
+                profiles={me.profiles}
+                onAddress={(url) => setAddress({ kind: s.kind, url })}
+              />
             ))}
-          </div>
-          {add.isError && <p className={home.error}>{problemMessage(add.error)}</p>}
-        </section>
-      </div>
-    </Plain>
+          </ul>
+        ) : (
+          <p className={home.note}>None yet.</p>
+        )}
+        <div className={home.rowActions}>
+          {(Object.keys(names) as Kind[]).map((kind) => (
+            <Button
+              key={kind}
+              variant="plain"
+              aria-busy={add.isPending && add.variables === kind}
+              onClick={() => add.mutate(kind)}
+            >
+              Add {names[kind]}
+            </Button>
+          ))}
+        </div>
+        {add.isError && <p className={home.error}>{problemMessage(add.error)}</p>}
+      </section>
+    </div>
   )
 }
 

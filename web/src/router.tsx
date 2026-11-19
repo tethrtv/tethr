@@ -3,6 +3,7 @@ import {
   createRoute,
   createRouter,
   Outlet,
+  redirect,
   useLocation,
   useParams,
   useSearch,
@@ -21,8 +22,7 @@ import { CheckEmail } from './pages/CheckEmail'
 import { useMe } from './pages/connect'
 import { Developers } from './pages/Developers'
 import { History } from './pages/History'
-import { Home } from './pages/Home'
-import { Import } from './pages/Import'
+import { Home, isAccountSection } from './pages/Home'
 import { Join } from './pages/Join'
 import { DeveloperTerms, Privacy, Terms } from './pages/Legal'
 import { ListAt } from './pages/List'
@@ -124,6 +124,28 @@ function WatchingUser({ username }: { username: string }) {
 function Front() {
   return useMe().data ? today() : <ComingSoon />
 }
+
+function AccountAt() {
+  const { section = '' } = useParams({ strict: false })
+  if (!isAccountSection(section)) return <NotFound />
+  return (
+    <Shell>
+      <Home section={section} />
+    </Shell>
+  )
+}
+
+const account = () => (
+  <Shell>
+    <Home />
+  </Shell>
+)
+
+const mediaServers = () => (
+  <Shell>
+    <MediaServers />
+  </Shell>
+)
 
 function OneYear() {
   const { year = '' } = useParams({ strict: false })
@@ -238,7 +260,8 @@ const routes = [
     path: '/films/$slug',
     component: Titled,
   }),
-  createRoute({ getParentRoute: () => root, path: '/account', component: Home }),
+  createRoute({ getParentRoute: () => root, path: '/account', component: account }),
+  createRoute({ getParentRoute: () => root, path: '/account/$section', component: AccountAt }),
   createRoute({ getParentRoute: () => root, path: '/sign-in', component: SignIn }),
   createRoute({
     getParentRoute: () => root,
@@ -252,8 +275,14 @@ const routes = [
   createRoute({ getParentRoute: () => root, path: '/terms', component: Terms }),
   createRoute({ getParentRoute: () => root, path: '/developer-terms', component: DeveloperTerms }),
   createRoute({ getParentRoute: () => root, path: '/privacy', component: Privacy }),
-  createRoute({ getParentRoute: () => root, path: '/import', component: Import }),
-  createRoute({ getParentRoute: () => root, path: '/media-servers', component: MediaServers }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/import',
+    beforeLoad: () => {
+      throw redirect({ to: '/account/$section', params: { section: 'import' }, replace: true })
+    },
+  }),
+  createRoute({ getParentRoute: () => root, path: '/media-servers', component: mediaServers }),
   createRoute({
     getParentRoute: () => root,
     path: '/unsubscribe',

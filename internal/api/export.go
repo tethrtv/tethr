@@ -205,7 +205,7 @@ func exportEmail(appURL string, start core.ExportStart) (mail.Message, error) {
 		Preview:  "A copy of everything in your household was downloaded.",
 		Lead:     fmt.Sprintf("A copy of everything in your household was downloaded from %s on %s.", device, when),
 		Button:   "Check your sessions",
-		Link:     appURL + "/account",
+		Link:     appURL + "/account/signing-in",
 		Note:     "If this wasn’t you, sign out everywhere from your account page, then check that nobody else can get into your email.",
 		Footer:   "We send this every time your data is downloaded.",
 		AppURL:   appURL,

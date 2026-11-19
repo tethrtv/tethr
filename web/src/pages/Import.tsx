@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { type ChangeEvent, useRef, useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
-import { Plain } from '../components/Plain'
+import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { plural } from '../format'
 import { type Film, type FilmList, isLetterboxd, readLetterboxd, unzip } from '../letterboxd'
-import { ProfilePicker, useSignedIn } from './connect'
+import { ProfilePicker } from './connect'
 import home from './Home.module.css'
 import styles from './Import.module.css'
 import listStyles from './Lists.module.css'
@@ -33,36 +32,22 @@ const day = (iso?: string) =>
 const undoable = (i: Import) =>
   i.status === 'applied' && !!i.applied_at && Date.now() - Date.parse(i.applied_at) < 30 * 24 * 60 * 60 * 1000
 
-export function Import() {
-  const me = useSignedIn()
+export function ImportSection() {
+  const { me, profile: watching } = useWatching()
   const [profile, setProfile] = useState<number | null>(null)
-  const profileID = profile ?? me?.profiles[0]?.id ?? 0
-
-  if (!me) return <Plain>{null}</Plain>
+  const profileID = profile ?? watching.id
 
   return (
-    <Plain
-      wide
-      end={
-        <Link to="/account" className={home.inline}>
-          Your account
-        </Link>
-      }
-    >
-      <div className={home.page}>
-        <header className={home.head}>
-          <h1 className={home.title}>Import your history</h1>
-          <p className={home.lead}>
-            Bring your plays, watchlist, resume points, ratings, hidden shows and Letterboxd lists across from your old
-            tracker. Download its data export from your settings there, then add the zip here as it is. If it offers
-            more than one kind, choose the full backup, not a simple CSV. Some trackers only give you one backup a
-            month, so download it when you’re ready to move. Nothing is saved until you’ve checked what was found.
-          </p>
-        </header>
-        <ProfilePicker legend="Import into" profiles={me.profiles} value={profileID} onChange={setProfile} />
-        {profileID > 0 && <Imports key={profileID} profileID={profileID} />}
-      </div>
-    </Plain>
+    <>
+      <p className={home.note}>
+        Bring your plays, watchlist, resume points, ratings, hidden shows and Letterboxd lists across from your old
+        tracker. Download its data export from your settings there, then add the zip here as it is. If it offers more
+        than one kind, choose the full backup, not a simple CSV. Some trackers only give you one backup a month, so
+        download it when you’re ready to move. Nothing is saved until you’ve checked what was found.
+      </p>
+      <ProfilePicker legend="Import into" profiles={me.profiles} value={profileID} onChange={setProfile} />
+      <Imports key={profileID} profileID={profileID} />
+    </>
   )
 }
 
