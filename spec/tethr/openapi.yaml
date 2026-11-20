@@ -3368,6 +3368,7 @@ components:
         first_aired:
           type: string
           format: date
+          description: Only sent to Tethr's own website. Apps get air dates from TMDB with their own key.
         order:
           $ref: '#/components/schemas/OrderNumber'
     OrderNumber:

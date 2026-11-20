@@ -113,6 +113,8 @@ func appProblem(err error) (ProblemJSONResponse, bool) {
 	switch {
 	case errors.Is(err, core.ErrAppName):
 		return problem("invalid_name", "Give the app a name of up to 60 characters."), true
+	case errors.Is(err, core.ErrAppNameKept):
+		return problem("name_kept", "Names with Tethr or Zuno in them are kept for those apps. Choose another name."), true
 	case errors.Is(err, core.ErrRedirectURI):
 		return problem("invalid_redirect", "Sign-in can return to an https address, a custom scheme like myplayer://callback, or http on localhost. Up to 10 of them."), true
 	}

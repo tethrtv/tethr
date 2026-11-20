@@ -19,9 +19,14 @@ var (
 	ErrImportBusy  = errors.New("an import is already running for this profile")
 	ErrEmptyImport = errors.New("there's nothing to import in that file")
 	ErrImportLists = errors.New("the lists chosen aren't all in the import")
+	ErrTooManyRows = errors.New("the export has too many entries")
+	ErrTooBig      = errors.New("the export is too big once unpacked")
 )
 
-const maxUnmatched = 100
+const (
+	maxUnmatched  = 100
+	MaxImportRows = 200_000
+)
 
 type ImportItem struct {
 	Ref       Ref
@@ -66,7 +71,7 @@ type ImportSummary struct {
 func (s *ImportSummary) unmatched(c *ImportCount, label string) {
 	c.Unmatched++
 	if label != "" && len(s.Unmatched) < maxUnmatched {
-		s.Unmatched = append(s.Unmatched, label)
+		s.Unmatched = append(s.Unmatched, cut(oneLine(label), 300))
 	}
 }
 
@@ -118,6 +123,9 @@ func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, source
 	}
 	if len(f.History)+len(f.Watchlist)+len(f.Playback)+len(f.Ratings)+len(f.Hidden)+listed == 0 {
 		return Import{}, ErrEmptyImport
+	}
+	if len(f.History)+len(f.Watchlist)+len(f.Playback)+len(f.Ratings)+len(f.Hidden)+listed > MaxImportRows {
+		return Import{}, ErrTooManyRows
 	}
 	payload, err := json.Marshal(f)
 	if err != nil {
@@ -241,51 +249,63 @@ func ExpireImports(ctx context.Context, db *pgxpool.Pool) error {
 }
 
 func ApplyNextImport(ctx context.Context, db *pgxpool.Pool) (bool, []IDConflict, error) {
-	var found bool
-	var failed *store.Import
-	var conflicts []IDConflict
+	imp, err := store.New(db).NextQueuedImport(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil, nil
+	}
+	if err != nil {
+		return false, nil, err
+	}
+	conflicts, err := applyQueued(ctx, db, imp)
+	if err == nil {
+		return true, conflicts, nil
+	}
+	err = fmt.Errorf("import %d: %w", imp.ID, err)
+	if ctx.Err() != nil {
+		return true, conflicts, err
+	}
+	failCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if ferr := store.New(db).FailImport(failCtx, imp.ID); ferr != nil {
+		return true, conflicts, errors.Join(err, ferr)
+	}
+	return true, conflicts, err
+}
+
+func applyQueued(ctx context.Context, db *pgxpool.Pool, imp store.Import) ([]IDConflict, error) {
+	var f ImportFile
+	if err := json.Unmarshal(imp.Payload, &f); err != nil {
+		return nil, err
+	}
+	var summary ImportSummary
+	if err := json.Unmarshal(imp.Summary, &summary); err != nil {
+		return nil, err
+	}
+	im := &importer{ctx: ctx, imp: imp, summary: &summary, resolved: map[string]*resolved{}, areas: map[string]bool{}}
+	if err := im.prepare(db, f); err != nil {
+		return nil, err
+	}
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		conflicts = nil
 		q := store.New(tx)
-		imp, err := q.NextQueuedImport(ctx)
+		_, err := q.LockQueuedImport(ctx, imp.ID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		found = true
-		var f ImportFile
-		if err := json.Unmarshal(imp.Payload, &f); err != nil {
-			failed = &imp
+		// Look the rows up again, as the Wikidata jobs may have merged or retired one since they were made.
+		im.q, im.resolved, im.conflicts = q, map[string]*resolved{}, nil
+		if err := applyImport(ctx, q, im, f); err != nil {
 			return err
 		}
-		var summary ImportSummary
-		if err := json.Unmarshal(imp.Summary, &summary); err != nil {
-			failed = &imp
-			return err
-		}
-		im, err := applyImport(ctx, q, imp, f, &summary)
-		if err != nil {
-			failed = &imp
-			return err
-		}
-		conflicts = im.conflicts
 		summaryJSON, err := json.Marshal(summary)
 		if err != nil {
 			return err
 		}
 		return q.FinishImport(ctx, store.FinishImportParams{ID: imp.ID, Status: "applied", Summary: summaryJSON})
 	})
-	if failed != nil {
-		if ferr := store.New(db).FinishImport(ctx, store.FinishImportParams{ID: failed.ID, Status: "failed", Summary: failed.Summary}); ferr != nil {
-			return found, nil, errors.Join(err, ferr)
-		}
-	}
-	if err != nil {
-		return found, nil, err
-	}
-	return found, conflicts, nil
+	return im.conflicts, err
 }
 
 type importer struct {
@@ -418,11 +438,59 @@ func hiddenField(item ImportItem) string {
 	return "hidden_at"
 }
 
-func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f ImportFile, summary *ImportSummary) (*importer, error) {
-	im := &importer{ctx: ctx, q: q, imp: imp, summary: summary, resolved: map[string]*resolved{}, areas: map[string]bool{}}
-	profileID, importID := imp.ProfileID, &imp.ID
+const prepareBatch = 100
 
-	err := im.each(f.History, &summary.History, []string{"movie", "episode"}, field("watched_at"), func(item ImportItem, r resolved) (int64, error) {
+var (
+	historyKinds   = []string{"movie", "episode"}
+	watchlistKinds = []string{"movie", "show", "season", "episode"}
+	playbackKinds  = []string{"movie", "episode"}
+	ratingKinds    = []string{"movie", "show", "season", "episode"}
+	hiddenKinds    = []string{"movie", "show", "season"}
+	listKinds      = []string{"movie", "show", "season", "episode"}
+)
+
+// Titles and episodes are made in short transactions of their own, so a long import never holds rows other accounts are waiting on.
+func (im *importer) prepare(db *pgxpool.Pool, f ImportFile) error {
+	var refs []Ref
+	add := func(items []ImportItem, kinds []string) {
+		for _, item := range items {
+			if slices.Contains(kinds, item.Ref.Kind) {
+				refs = append(refs, item.Ref)
+			}
+		}
+	}
+	add(f.History, historyKinds)
+	add(f.Watchlist, watchlistKinds)
+	add(f.Playback, playbackKinds)
+	add(f.Ratings, ratingKinds)
+	add(f.Hidden, hiddenKinds)
+	for i, l := range f.Lists {
+		if i < len(im.summary.Lists) && im.summary.Lists[i].Chosen {
+			add(l.Items, listKinds)
+		}
+	}
+	for batch := range slices.Chunk(refs, prepareBatch) {
+		err := pgx.BeginFunc(im.ctx, db, func(tx pgx.Tx) error {
+			im.q = store.New(tx)
+			for _, ref := range batch {
+				if _, err := im.resolve(ref); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applyImport(ctx context.Context, q *store.Queries, im *importer, f ImportFile) error {
+	summary := im.summary
+	profileID, importID := im.imp.ProfileID, &im.imp.ID
+
+	err := im.each(f.History, &summary.History, historyKinds, field("watched_at"), func(item ImportItem, r resolved) (int64, error) {
 		at, precision := UnknownDate, "none"
 		if item.At != nil {
 			at, precision = *item.At, cmp.Or(item.Precision, "time")
@@ -442,14 +510,14 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	list, err := q.Watchlist(ctx, profileID)
+	list, err := watchlist(ctx, q, profileID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	err = im.each(f.Watchlist, &summary.Watchlist, []string{"movie", "show", "season", "episode"}, field("watchlisted_at"), func(item ImportItem, r resolved) (int64, error) {
+	err = im.each(f.Watchlist, &summary.Watchlist, watchlistKinds, field("watchlisted_at"), func(item ImportItem, r resolved) (int64, error) {
 		at := time.Now()
 		if item.At != nil {
 			at = *item.At
@@ -465,10 +533,10 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = im.each(f.Playback, &summary.Playback, []string{"movie", "episode"}, field("paused_at"), func(item ImportItem, r resolved) (int64, error) {
+	err = im.each(f.Playback, &summary.Playback, playbackKinds, field("paused_at"), func(item ImportItem, r resolved) (int64, error) {
 		if item.At == nil || item.Progress < 1 {
 			return 0, nil
 		}
@@ -482,10 +550,10 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = im.each(f.Ratings, &summary.Ratings, []string{"movie", "show", "season", "episode"}, field("rated_at"), func(item ImportItem, r resolved) (int64, error) {
+	err = im.each(f.Ratings, &summary.Ratings, ratingKinds, field("rated_at"), func(item ImportItem, r resolved) (int64, error) {
 		if item.Rating < 1 || item.Rating > 10 {
 			return 0, nil
 		}
@@ -504,10 +572,10 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = im.each(f.Hidden, &summary.Hidden, []string{"movie", "show", "season"}, hiddenField, func(item ImportItem, r resolved) (int64, error) {
+	err = im.each(f.Hidden, &summary.Hidden, hiddenKinds, hiddenField, func(item ImportItem, r resolved) (int64, error) {
 		if !slices.Contains(HiddenSections, item.Section) || item.Section == "progress_watched_reset" && item.At == nil {
 			return 0, nil
 		}
@@ -525,16 +593,16 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		})
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := im.lists(f.Lists); err != nil {
-		return nil, err
+		return err
 	}
 
 	if summary.Watchlist.Added > 0 {
 		if _, err := q.TouchList(ctx, list.ID); err != nil {
-			return nil, err
+			return err
 		}
 		im.areas["watchlist.updated_at"] = true
 	}
@@ -543,7 +611,7 @@ func applyImport(ctx context.Context, q *store.Queries, imp store.Import, f Impo
 		areas = append(areas, a)
 	}
 	slices.Sort(areas)
-	return im, mark(ctx, q, profileID, areas...)
+	return mark(ctx, q, profileID, areas...)
 }
 
 func UndoImport(ctx context.Context, db *pgxpool.Pool, profileID, id int64) (Import, error) {
@@ -587,7 +655,7 @@ func UndoImport(ctx context.Context, db *pgxpool.Pool, profileID, id int64) (Imp
 			return err
 		}
 		if listed > 0 {
-			list, err := q.Watchlist(ctx, profileID)
+			list, err := watchlist(ctx, q, profileID)
 			if err != nil {
 				return err
 			}

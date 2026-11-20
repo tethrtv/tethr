@@ -312,10 +312,10 @@ func (q *Queries) CopyTitleSeasons(ctx context.Context, arg CopyTitleSeasonsPara
 }
 
 const createEpisode = `-- name: CreateEpisode :one
-INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id)
-VALUES ($1, $2, $3, $4)
+INSERT INTO episodes (show_id, season_number, episode_number)
+VALUES ($1, $2, $3)
 ON CONFLICT (show_id, season_number, episode_number) WHERE removed_at IS NULL
-DO UPDATE SET tmdb_episode_id = coalesce(episodes.tmdb_episode_id, excluded.tmdb_episode_id)
+DO UPDATE SET show_id = episodes.show_id
 RETURNING id, show_id, season_number, episode_number, tmdb_episode_id, created_at, first_aired, removed_at
 `
 
@@ -323,16 +323,10 @@ type CreateEpisodeParams struct {
 	ShowID        int64
 	SeasonNumber  int32
 	EpisodeNumber int32
-	TmdbEpisodeID *int32
 }
 
 func (q *Queries) CreateEpisode(ctx context.Context, arg CreateEpisodeParams) (Episode, error) {
-	row := q.db.QueryRow(ctx, createEpisode,
-		arg.ShowID,
-		arg.SeasonNumber,
-		arg.EpisodeNumber,
-		arg.TmdbEpisodeID,
-	)
+	row := q.db.QueryRow(ctx, createEpisode, arg.ShowID, arg.SeasonNumber, arg.EpisodeNumber)
 	var i Episode
 	err := row.Scan(
 		&i.ID,
@@ -1727,6 +1721,21 @@ func (q *Queries) QueueWikidataRefreshes(ctx context.Context, arg QueueWikidataR
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const releaseEpisodeIDs = `-- name: ReleaseEpisodeIDs :exec
+UPDATE episodes SET tmdb_episode_id = NULL
+WHERE tmdb_episode_id = ANY($1::integer[]) AND show_id <> $2
+`
+
+type ReleaseEpisodeIDsParams struct {
+	TmdbIds []int32
+	ShowID  int64
+}
+
+func (q *Queries) ReleaseEpisodeIDs(ctx context.Context, arg ReleaseEpisodeIDsParams) error {
+	_, err := q.db.Exec(ctx, releaseEpisodeIDs, arg.TmdbIds, arg.ShowID)
+	return err
 }
 
 const removeEpisode = `-- name: RemoveEpisode :exec

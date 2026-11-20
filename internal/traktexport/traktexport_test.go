@@ -169,3 +169,15 @@ func TestListsAloneAreAnExport(t *testing.T) {
 		t.Errorf("lists only = %+v, %v", f, err)
 	}
 }
+
+func TestRowsAreCapped(t *testing.T) {
+	rows := strings.TrimSuffix(strings.Repeat("{},", core.MaxImportRows+1), ",")
+	r := export(t, map[string]string{"watched-history.json": "[" + rows + "]"})
+	if _, err := Read(r, r.Size()); !errors.Is(err, core.ErrTooManyRows) {
+		t.Errorf("history past the row cap: %v", err)
+	}
+	r = export(t, map[string]string{"lists-lists.json": `[{"name":"Huge","item_count":2000000000,"ids":{"trakt":1}}]`})
+	if _, err := Read(r, r.Size()); !errors.Is(err, core.ErrTooManyRows) {
+		t.Errorf("a list claiming two billion missing items: %v", err)
+	}
+}

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net/textproto"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,7 +24,11 @@ const (
 	weeklyHour    = 18
 	weeklyPopular = 5
 	posters       = "https://image.tmdb.org/t/p/w154"
+
+	failuresInARow = 3
 )
+
+var refusals = []int{550, 551, 553}
 
 //go:embed weekly.html
 var weeklyHTML string
@@ -62,6 +68,8 @@ func (w Weekly) send(ctx context.Context, now time.Time) error {
 		return err
 	}
 	art := &decor{tmdb: w.TMDB, titles: map[string]tmdb.Title{}, seasons: map[string]tmdb.Season{}, log: w.Log}
+	var failed []error
+	inARow := 0
 	for _, r := range due {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -101,12 +109,22 @@ func (w Weekly) send(ctx context.Context, now time.Time) error {
 		if !ok {
 			continue
 		}
-		// A failed send is usually the mail service, not this account, so stop and let the next hour retry everyone.
-		if err := w.Mail.Send(ctx, m); err != nil {
-			return w.release(r, fmt.Errorf("account %d: %w", r.AccountID, err))
+		err = w.Mail.Send(ctx, m)
+		var reply *textproto.Error
+		switch {
+		case err == nil:
+			inARow = 0
+		case errors.As(err, new(mail.RecipientError)) && errors.As(err, &reply) && slices.Contains(refusals, reply.Code):
+			w.Log.Warn("weekly email refused for one address", "account", r.AccountID, "code", reply.Code)
+		default:
+			failed = append(failed, w.release(r, fmt.Errorf("account %d: %w", r.AccountID, err)))
+			// Several in a row is the mail service, not these accounts, so stop and let the next hour retry them.
+			if inARow++; inARow == failuresInARow {
+				return errors.Join(failed...)
+			}
 		}
 	}
-	return nil
+	return errors.Join(failed...)
 }
 
 func (w Weekly) release(r store.WeeklyRecipientsRow, cause error) error {

@@ -1894,7 +1894,10 @@ export interface components {
             ids: components["schemas"]["Ids"];
             season: number;
             number: number;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Only sent to Tethr's own website. Apps get air dates from TMDB with their own key.
+             */
             first_aired?: string;
             order?: components["schemas"]["OrderNumber"];
         };

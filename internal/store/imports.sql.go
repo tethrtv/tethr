@@ -77,6 +77,15 @@ func (q *Queries) ExpireImports(ctx context.Context) error {
 	return err
 }
 
+const failImport = `-- name: FailImport :exec
+UPDATE imports SET status = 'failed', payload = NULL WHERE id = $1 AND status = 'queued'
+`
+
+func (q *Queries) FailImport(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, failImport, id)
+	return err
+}
+
 const finishImport = `-- name: FinishImport :exec
 UPDATE imports
 SET status = $1, summary = $2, payload = NULL,
@@ -348,6 +357,17 @@ SELECT id FROM profiles WHERE id = $1 FOR UPDATE
 
 func (q *Queries) LockProfile(ctx context.Context, id int64) (int64, error) {
 	row := q.db.QueryRow(ctx, lockProfile, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
+const lockQueuedImport = `-- name: LockQueuedImport :one
+SELECT id FROM imports WHERE id = $1 AND status = 'queued' FOR UPDATE
+`
+
+func (q *Queries) LockQueuedImport(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, lockQueuedImport, id)
 	var id_2 int64
 	err := row.Scan(&id_2)
 	return id_2, err

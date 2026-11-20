@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -159,5 +160,17 @@ func TestReadMissing(t *testing.T) {
 	var bad BadFileError
 	if _, err := Read(r, r.Size()); !errors.As(err, &bad) || bad.Name != "SimklBackup.json" {
 		t.Errorf("broken json = %v", err)
+	}
+}
+
+func TestRowsAreCapped(t *testing.T) {
+	rows := strings.TrimSuffix(strings.Repeat("{},", core.MaxImportRows+1), ",")
+	r := export(t, map[string]string{"SimklBackup.json": `{"shows":[{"show":{},"seasons":[{"number":1,"episodes":[` + rows + `]}]}]}`})
+	if _, err := Read(r, r.Size()); !errors.Is(err, core.ErrTooManyRows) {
+		t.Errorf("episodes past the row cap: %v", err)
+	}
+	r = export(t, map[string]string{"SimklBackup.json": `{"movies":[` + strings.Repeat(`{"movie":{},"status":"plantowatch"},`, core.MaxImportRows) + `{"movie":{},"status":"plantowatch"}]}`})
+	if _, err := Read(r, r.Size()); !errors.Is(err, core.ErrTooManyRows) {
+		t.Errorf("films past the row cap: %v", err)
 	}
 }

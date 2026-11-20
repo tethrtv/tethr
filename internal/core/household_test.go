@@ -60,6 +60,7 @@ func TestAddProfile(t *testing.T) {
 	}{
 		{"owner kind", NewProfile{Name: "Boss", Kind: "owner"}, ErrInvalidKind},
 		{"no name", NewProfile{Name: " ", Kind: "guest"}, ErrNameRequired},
+		{"long name", NewProfile{Name: strings.Repeat("é", 61), Kind: "guest"}, ErrNameTooLong},
 		{"taken username", NewProfile{Name: "Sam", Kind: "person"}, ErrUsernameTaken},
 		{"bad username", NewProfile{Name: "Zed", Kind: "guest", Username: "Zed!"}, ErrInvalidUsername},
 	}
@@ -90,6 +91,10 @@ func TestUpdateAndRemoveProfile(t *testing.T) {
 		t.Errorf("updated = %+v", updated)
 	}
 
+	long := strings.Repeat("a", 61)
+	if _, err := UpdateProfile(ctx, db, accountID, sam.ID, ProfileChanges{Name: &long}); !errors.Is(err, ErrNameTooLong) {
+		t.Errorf("61 character name = %v, want ErrNameTooLong", err)
+	}
 	other, _ := otherAccount(t, db)
 	if _, err := UpdateProfile(ctx, db, other, sam.ID, ProfileChanges{Name: &name}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("someone else's profile = %v, want ErrNotFound", err)

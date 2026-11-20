@@ -400,7 +400,7 @@ func serve(log *slog.Logger) error {
 		go outlines.Run(ctx)
 		v1.FetchOrder = outlines.Order
 		media.TMDB = client
-		details = &meta.Server{TMDB: client, Log: log, SignedIn: v1.SignedIn}
+		details = &meta.Server{TMDB: client, Log: log, SignedIn: v1.SignedIn, IPHeader: os.Getenv("CLIENT_IP_HEADER")}
 	} else {
 		log.Warn("TMDB_TOKEN isn't set, so Up next won't fill in, the website shows no names or posters, and media servers can't log episodes of shows Tethr hasn't seen yet")
 	}

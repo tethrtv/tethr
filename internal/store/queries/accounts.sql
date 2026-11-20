@@ -19,6 +19,9 @@ ORDER BY created_at DESC
 LIMIT 1
 FOR UPDATE;
 
+-- name: RecentWrongCodes :one
+SELECT coalesce(sum(attempts), 0)::bigint FROM email_links WHERE account_id = $1 AND created_at > $2;
+
 -- name: CountEmailLinkAttempt :exec
 UPDATE email_links SET attempts = attempts + 1 WHERE id = $1;
 

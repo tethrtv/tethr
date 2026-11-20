@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"testing"
 	"time"
@@ -163,4 +164,64 @@ func mustZone(t *testing.T, name string) *time.Location {
 		t.Fatal(err)
 	}
 	return loc
+}
+
+type refusing struct {
+	refuse string
+	sent   []string
+}
+
+func (r *refusing) Send(_ context.Context, m mail.Message) error {
+	if m.To == r.refuse {
+		return mail.RecipientError{Err: &textproto.Error{Code: 550, Msg: "no such mailbox"}}
+	}
+	r.sent = append(r.sent, m.To)
+	return nil
+}
+
+func TestWeeklyEmailCarriesOnPastARefusal(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	ny := mustZone(t, "America/New_York")
+	now := time.Now().In(ny)
+	for now.Weekday() != time.Sunday {
+		now = now.AddDate(0, 0, 1)
+	}
+	sunday := time.Date(now.Year(), now.Month(), now.Day(), 18, 15, 0, 0, ny)
+	monday := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+
+	var show int64
+	for _, name := range []string{"ann", "bob", "cat"} {
+		account, _, err := core.CreateAccount(ctx, db, core.SignUp{Email: name + "@example.com", Name: name, Username: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(ctx, "UPDATE accounts SET email_verified_at = now(), time_zone = 'America/New_York' WHERE id = $1", account.ID); err != nil {
+			t.Fatal(err)
+		}
+		caller, err := core.AccountCaller(ctx, db, account.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		season, number := int32(1), int32(1)
+		played, err := core.ScrobbleStop(ctx, db, caller, core.Scrobble{Ref: core.Ref{Kind: "episode", Show: core.IDs{TMDB: 1396}, Season: &season, Number: &number}, Progress: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		show = played.Item.Title.ID
+	}
+	if err := core.SaveOutline(ctx, db, show, []core.OutlineEpisode{
+		{TMDBID: 101, Season: 1, Number: 1, FirstAired: &monday},
+		{TMDBID: 102, Season: 1, Number: 2, FirstAired: &monday},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sender := &refusing{refuse: "ann@example.com"}
+	job := Weekly{DB: db, Mail: sender, AppURL: "https://tethr.example", APIURL: "https://api.tethr.example", Zone: time.UTC, Log: slog.New(slog.DiscardHandler)}
+	_ = job.send(ctx, sunday)
+	_ = job.send(ctx, sunday.Add(time.Hour))
+	if len(sender.sent) != 2 || sender.sent[0] != "bob@example.com" || sender.sent[1] != "cat@example.com" {
+		t.Errorf("sent to %v, want bob and cat once each", sender.sent)
+	}
 }

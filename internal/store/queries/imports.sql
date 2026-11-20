@@ -31,6 +31,12 @@ ORDER BY created_at
 LIMIT 1
 FOR UPDATE SKIP LOCKED;
 
+-- name: LockQueuedImport :one
+SELECT id FROM imports WHERE id = $1 AND status = 'queued' FOR UPDATE;
+
+-- name: FailImport :exec
+UPDATE imports SET status = 'failed', payload = NULL WHERE id = $1 AND status = 'queued';
+
 -- name: FinishImport :exec
 UPDATE imports
 SET status = sqlc.arg(status), summary = sqlc.arg(summary), payload = NULL,

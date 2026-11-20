@@ -10,15 +10,22 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
 var ErrNotFound = errors.New("not on tmdb")
 
+// Every caller shares the server's key, so a burst from one of them can't run up TMDB's rate limit for the rest.
+const inFlight = 16
+
 type Client struct {
 	Token   string
 	BaseURL string
 	HTTP    *http.Client
+
+	once  sync.Once
+	slots chan struct{}
 }
 
 type Episode struct {
@@ -484,6 +491,13 @@ func year(date string) int {
 }
 
 func (c *Client) get(ctx context.Context, path string, v any) error {
+	c.once.Do(func() { c.slots = make(chan struct{}, inFlight) })
+	select {
+	case c.slots <- struct{}{}:
+		defer func() { <-c.slots }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	base := c.BaseURL
 	if base == "" {
 		base = "https://api.themoviedb.org"

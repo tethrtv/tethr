@@ -206,3 +206,41 @@ func TestInvites(t *testing.T) {
 		t.Errorf("open sign-up without an invite = %v", err)
 	}
 }
+
+func TestWrongCodesAcrossLinksLockCodes(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	if _, err := Verify(ctx, db, Verification{Token: signUp(t, db).Token}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	newLink := func() *SignInEmail {
+		t.Helper()
+		if _, err := db.Exec(ctx, "UPDATE email_links SET created_at = created_at - interval '20 minutes'"); err != nil {
+			t.Fatal(err)
+		}
+		email, err := StartSignIn(ctx, db, "nathan@example.com")
+		if err != nil || email == nil {
+			t.Fatalf("sign in = %+v, %v", email, err)
+		}
+		return email
+	}
+	for range 2 {
+		email := newLink()
+		for range codeAttempts {
+			wrong := "000000"
+			if email.Code == wrong {
+				wrong = "111111"
+			}
+			if _, err := Verify(ctx, db, Verification{Email: email.To, Code: wrong}, "test"); !errors.Is(err, ErrInvalidLink) {
+				t.Fatalf("wrong code = %v", err)
+			}
+		}
+	}
+	email := newLink()
+	if _, err := Verify(ctx, db, Verification{Email: email.To, Code: email.Code}, "test"); !errors.Is(err, ErrTooManyCodesToday) {
+		t.Errorf("right code after ten wrong ones on other links = %v, want ErrTooManyCodesToday", err)
+	}
+	if _, err := Verify(ctx, db, Verification{Token: email.Token}, "test"); err != nil {
+		t.Errorf("the link itself = %v", err)
+	}
+}

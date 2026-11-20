@@ -69,7 +69,7 @@ func (s *Server) Scrobble(ctx context.Context, req ScrobbleRequestObject) (Scrob
 	case err != nil:
 		return nil, err
 	}
-	out := ScrobbleResult{Result: Watching, Progress: result.Progress, Item: toItem(result.Item)}
+	out := ScrobbleResult{Result: Watching, Progress: result.Progress, Item: toItem(ctx, result.Item)}
 	switch result.Action {
 	case "pause":
 		out.Result = Paused
@@ -109,7 +109,7 @@ func (s *Server) ListHistory(ctx context.Context, req ListHistoryRequestObject) 
 	}
 	out := HistoryPage{Items: make([]Watch, 0, len(entries)), Total: total, Page: page.Page, Limit: page.Limit}
 	for _, e := range entries {
-		out.Items = append(out.Items, Watch{Id: e.ID, WatchedAt: e.At, Precision: WatchPrecision(e.Precision), Action: WatchAction(e.Action), Item: toItem(e.Item)})
+		out.Items = append(out.Items, Watch{Id: e.ID, WatchedAt: e.At, Precision: WatchPrecision(e.Precision), Action: WatchAction(e.Action), Item: toItem(ctx, e.Item)})
 	}
 	return ListHistory200JSONResponse(out), nil
 }
@@ -174,7 +174,7 @@ func (s *Server) ListPlayback(ctx context.Context, req ListPlaybackRequestObject
 	}
 	out := make(ListPlayback200JSONResponse, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, ResumePoint{Id: e.ID, Progress: e.Progress, PausedAt: e.At, Item: toItem(e.Item)})
+		out = append(out, ResumePoint{Id: e.ID, Progress: e.Progress, PausedAt: e.At, Item: toItem(ctx, e.Item)})
 	}
 	return out, nil
 }
@@ -215,7 +215,7 @@ func (s *Server) ListWatchlist(ctx context.Context, req ListWatchlistRequestObje
 	}
 	out := make(ListWatchlist200JSONResponse, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(e.Item)})
+		out = append(out, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(ctx, e.Item)})
 	}
 	return out, nil
 }
@@ -384,7 +384,13 @@ func toRefs(refs []core.Ref) []ItemRef {
 	return out
 }
 
-func toItem(i core.Item) Item {
+func ownSite(ctx context.Context) bool {
+	_, app := ctx.Value(bearerKey).(string)
+	site, _ := ctx.Value(fetchSiteKey).(string)
+	return !app && (site == "same-origin" || site == "same-site")
+}
+
+func toItem(ctx context.Context, i core.Item) Item {
 	t := i.Title
 	title := Title{Ids: Ids{Tethr: &t.ID}, Slug: &t.Slug, Name: t.Name, OriginalName: t.OriginalName}
 	if t.Year != nil {
@@ -419,7 +425,7 @@ func toItem(i core.Item) Item {
 	}
 	if e := i.Episode; e != nil {
 		episode := &Episode{Season: int(e.SeasonNumber), Number: int(e.EpisodeNumber), Ids: Ids{Tethr: &e.ID}}
-		if e.FirstAired != nil {
+		if e.FirstAired != nil && ownSite(ctx) {
 			episode.FirstAired = &openapi_types.Date{Time: *e.FirstAired}
 		}
 		if e.TmdbEpisodeID != nil {
@@ -449,8 +455,8 @@ func (s *Server) GetUpNext(ctx context.Context, req GetUpNextRequestObject) (Get
 	out := make(GetUpNext200JSONResponse, 0, len(entries))
 	for _, e := range entries {
 		entry := UpNextEntry{
-			Show:          toItem(e.Show).Title,
-			Next:          toEpisode(e.Next),
+			Show:          toItem(ctx, e.Show).Title,
+			Next:          toEpisode(ctx, e.Next),
 			LastWatchedAt: e.LastWatchedAt,
 			Aired:         int(e.Aired),
 			Watched:       int(e.Watched),
@@ -478,7 +484,7 @@ func (s *Server) GetUpcoming(ctx context.Context, req GetUpcomingRequestObject) 
 	}
 	out := make(GetUpcoming200JSONResponse, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, UpcomingEntry{Show: toItem(e.Show).Title, Episode: toEpisode(e.Episode), Watchlist: e.Watchlist})
+		out = append(out, UpcomingEntry{Show: toItem(ctx, e.Show).Title, Episode: toEpisode(ctx, e.Episode), Watchlist: e.Watchlist})
 	}
 	return out, nil
 }
@@ -564,10 +570,10 @@ func (s *Server) GetUpNextLists(ctx context.Context, req GetUpNextListsRequestOb
 	out := make(GetUpNextLists200JSONResponse, 0, len(entries))
 	for _, e := range entries {
 		entry := UpNextListEntry{
-			List:          s.toList(e.List),
+			List:          s.toList(ctx, e.List),
 			ItemId:        e.ItemID,
 			Position:      e.Position,
-			Next:          toItem(e.Next),
+			Next:          toItem(ctx, e.Next),
 			LastWatchedAt: e.LastWatchedAt,
 		}
 		if e.Resume != nil {

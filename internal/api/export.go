@@ -54,7 +54,7 @@ func (s *Server) ExportData(ctx context.Context, _ ExportDataRequestObject) (Exp
 	if err != nil {
 		return nil, err
 	}
-	file, err := s.exportZip(household, start.At)
+	file, err := s.exportZip(ctx, household, start.At)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (s *Server) ExportData(ctx context.Context, _ ExportDataRequestObject) (Exp
 	return ExportData200ApplicationzipResponse{Body: bytes.NewReader(file), ContentLength: int64(len(file)), Headers: ExportData200ResponseHeaders{ContentDisposition: &name}}, nil
 }
 
-func (s *Server) exportZip(h core.HouseholdExport, at time.Time) ([]byte, error) {
+func (s *Server) exportZip(ctx context.Context, h core.HouseholdExport, at time.Time) ([]byte, error) {
 	doc := Export{
 		Format:       Tethr,
 		Version:      1,
@@ -101,27 +101,27 @@ func (s *Server) exportZip(h core.HouseholdExport, at time.Time) ([]byte, error)
 			Imports:   make([]Import, 0, len(p.Imports)),
 		}
 		for _, e := range p.History {
-			out.History = append(out.History, Watch{Id: e.ID, WatchedAt: e.At, Precision: WatchPrecision(e.Precision), Action: WatchAction(e.Action), Item: toItem(e.Item)})
+			out.History = append(out.History, Watch{Id: e.ID, WatchedAt: e.At, Precision: WatchPrecision(e.Precision), Action: WatchAction(e.Action), Item: toItem(ctx, e.Item)})
 			rows = append(rows, historyRow(p.Profile.Name, e))
 		}
 		for _, e := range p.Playback {
-			out.Playback = append(out.Playback, ResumePoint{Id: e.ID, Progress: e.Progress, PausedAt: e.At, Item: toItem(e.Item)})
+			out.Playback = append(out.Playback, ResumePoint{Id: e.ID, Progress: e.Progress, PausedAt: e.At, Item: toItem(ctx, e.Item)})
 		}
 		for _, e := range p.Ratings {
-			out.Ratings = append(out.Ratings, Rating{Id: e.ID, Rating: int(e.Rating), RatedAt: e.At, Item: toItem(e.Item)})
+			out.Ratings = append(out.Ratings, Rating{Id: e.ID, Rating: int(e.Rating), RatedAt: e.At, Item: toItem(ctx, e.Item)})
 		}
 		for _, e := range p.Watchlist {
-			out.Watchlist = append(out.Watchlist, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(e.Item)})
+			out.Watchlist = append(out.Watchlist, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(ctx, e.Item)})
 		}
 		for _, l := range p.Lists {
 			items := make([]Listing, 0, len(l.Entries))
 			for _, e := range l.Entries {
-				items = append(items, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(e.Item)})
+				items = append(items, Listing{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(ctx, e.Item)})
 			}
-			out.Lists = append(out.Lists, ListExport{List: s.toList(l.List), Items: items})
+			out.Lists = append(out.Lists, ListExport{List: s.toList(ctx, l.List), Items: items})
 		}
 		for _, e := range p.Hidden {
-			out.Hidden = append(out.Hidden, HiddenItem{Section: e.Section, HiddenAt: e.At, Item: toItem(e.Item)})
+			out.Hidden = append(out.Hidden, HiddenItem{Section: e.Section, HiddenAt: e.At, Item: toItem(ctx, e.Item)})
 		}
 		for _, i := range p.Imports {
 			out.Imports = append(out.Imports, toImport(i))

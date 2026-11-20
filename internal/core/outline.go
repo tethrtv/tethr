@@ -28,6 +28,13 @@ func OutlineMissing(ctx context.Context, db *pgxpool.Pool, showID int64) error {
 func SaveOutline(ctx context.Context, db *pgxpool.Pool, showID int64, outline []OutlineEpisode) error {
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		q := store.New(tx)
+		ids := make([]int32, 0, len(outline))
+		for _, e := range outline {
+			ids = append(ids, e.TMDBID)
+		}
+		if err := q.ReleaseEpisodeIDs(ctx, store.ReleaseEpisodeIDsParams{TmdbIds: ids, ShowID: showID}); err != nil {
+			return err
+		}
 		existing, err := q.ShowEpisodes(ctx, showID)
 		if err != nil {
 			return err

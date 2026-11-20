@@ -106,6 +106,9 @@ SELECT area, at FROM activity_marks WHERE profile_id = $1;
 SELECT * FROM profiles WHERE id = $1;
 
 -- name: Watchlist :one
+SELECT * FROM lists WHERE profile_id = $1 AND kind = 'watchlist';
+
+-- name: CreateWatchlist :one
 INSERT INTO lists (profile_id, kind, name, slug)
 VALUES ($1, 'watchlist', 'Watchlist', 'watchlist')
 ON CONFLICT (profile_id) WHERE kind = 'watchlist' DO UPDATE SET kind = lists.kind

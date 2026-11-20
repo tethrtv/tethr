@@ -98,6 +98,7 @@ func server(t *testing.T) (http.Handler, *[]string) {
 
 func get(h http.Handler, path, site string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Account", "1")
 	if site != "" {
 		req.Header.Set("Sec-Fetch-Site", site)
 	}
@@ -239,12 +240,53 @@ func TestNotFound(t *testing.T) {
 
 func TestTrending(t *testing.T) {
 	h, _ := server(t)
-	if rec := get(h, "/meta/trending", ""); rec.Code != http.StatusForbidden {
-		t.Errorf("trending from another site = %d", rec.Code)
-	}
 	rec := get(h, "/meta/trending", "same-site")
 	want := `{"results":[{"type":"movie","tmdb":27205,"name":"Inception","year":2010,"poster":"/i.jpg","backdrop":"/i-wide.jpg"},{"type":"show","tmdb":1396,"name":"Breaking Bad","year":2008,"poster":null}]}` + "\n"
 	if rec.Code != http.StatusOK || rec.Body.String() != want {
 		t.Errorf("trending = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestVisitorLimit(t *testing.T) {
+	h, asked := server(t)
+	refused := 0
+	for range 1000 {
+		if rec := get(h, "/meta/movie/27205", "same-site"); rec.Code == http.StatusTooManyRequests {
+			refused++
+			if rec.Header().Get("Retry-After") == "" {
+				t.Fatal("429 with no Retry-After")
+			}
+		}
+	}
+	if refused == 0 || len(*asked) > 1000-refused {
+		t.Errorf("1000 title requests from one visitor: %d refused, %d sent to TMDB", refused, len(*asked))
+	}
+	req := httptest.NewRequest(http.MethodGet, "/meta/movie/27205", nil)
+	req.Header.Set("Sec-Fetch-Site", "same-site")
+	req.RemoteAddr = "198.51.100.9:1234"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("another visitor = %d", rec.Code)
+	}
+}
+
+func TestSignedOutPagesOnlyGetDetails(t *testing.T) {
+	h, _ := server(t)
+	for _, path := range []string{"/meta/tv/1396/season/1", "/meta/tv/1396/orders", "/meta/tv/1396/order/69f50757054263b7bc87e32a", "/meta/trending"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Sec-Fetch-Site", "same-site")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("signed out %s = %d", path, rec.Code)
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/meta/tv/1396", nil)
+	req.Header.Set("Sec-Fetch-Site", "same-site")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("signed out details = %d", rec.Code)
 	}
 }

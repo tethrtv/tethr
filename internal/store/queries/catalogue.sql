@@ -50,10 +50,10 @@ SELECT * FROM episodes WHERE tmdb_episode_id = $1;
 SELECT * FROM episodes WHERE show_id = $1 AND season_number = $2 AND episode_number = $3 AND removed_at IS NULL;
 
 -- name: CreateEpisode :one
-INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id)
-VALUES ($1, $2, $3, $4)
+INSERT INTO episodes (show_id, season_number, episode_number)
+VALUES ($1, $2, $3)
 ON CONFLICT (show_id, season_number, episode_number) WHERE removed_at IS NULL
-DO UPDATE SET tmdb_episode_id = coalesce(episodes.tmdb_episode_id, excluded.tmdb_episode_id)
+DO UPDATE SET show_id = episodes.show_id
 RETURNING *;
 
 -- name: CatalogueEpisodes :many
@@ -86,6 +86,10 @@ SELECT * FROM seasons WHERE id = ANY(@ids::bigint[]);
 
 -- name: ShowEpisodes :many
 SELECT * FROM episodes WHERE show_id = $1 FOR UPDATE;
+
+-- name: ReleaseEpisodeIDs :exec
+UPDATE episodes SET tmdb_episode_id = NULL
+WHERE tmdb_episode_id = ANY(@tmdb_ids::integer[]) AND show_id <> @show_id;
 
 -- name: RemoveEpisode :exec
 UPDATE episodes SET removed_at = now() WHERE id = $1;

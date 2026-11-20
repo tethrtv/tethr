@@ -59,10 +59,10 @@ func (s *Server) reader(ctx context.Context, profileID *int64) (int64, bool, err
 	return c.ProfileID, ok, err
 }
 
-func (s *Server) toList(l core.List) List {
+func (s *Server) toList(ctx context.Context, l core.List) List {
 	cover := make([]Item, 0, len(l.Cover))
 	for _, i := range l.Cover {
-		cover = append(cover, toItem(i))
+		cover = append(cover, toItem(ctx, i))
 	}
 	var matched *int64
 	if l.Rule != nil {
@@ -125,7 +125,7 @@ func (s *Server) ListLists(ctx context.Context, req ListListsRequestObject) (Lis
 	}
 	out := make(ListLists200JSONResponse, 0, len(lists))
 	for _, l := range lists {
-		out = append(out, s.toList(l))
+		out = append(out, s.toList(ctx, l))
 	}
 	return out, nil
 }
@@ -159,7 +159,7 @@ func (s *Server) CreateList(ctx context.Context, req CreateListRequestObject) (C
 	if err != nil {
 		return nil, err
 	}
-	return CreateList201JSONResponse(s.toList(l)), nil
+	return CreateList201JSONResponse(s.toList(ctx, l)), nil
 }
 
 func (s *Server) GetList(ctx context.Context, req GetListRequestObject) (GetListResponseObject, error) {
@@ -181,7 +181,7 @@ func (s *Server) GetList(ctx context.Context, req GetListRequestObject) (GetList
 		return GetList304Response{}, nil
 	}
 	tag := s.etag(l)
-	return GetList200JSONResponse{Body: s.toList(l), Headers: GetList200ResponseHeaders{ETag: &tag}}, nil
+	return GetList200JSONResponse{Body: s.toList(ctx, l), Headers: GetList200ResponseHeaders{ETag: &tag}}, nil
 }
 
 func (s *Server) UpdateList(ctx context.Context, req UpdateListRequestObject) (UpdateListResponseObject, error) {
@@ -214,7 +214,7 @@ func (s *Server) UpdateList(ctx context.Context, req UpdateListRequestObject) (U
 	if err != nil {
 		return nil, err
 	}
-	return UpdateList200JSONResponse(s.toList(l)), nil
+	return UpdateList200JSONResponse(s.toList(ctx, l)), nil
 }
 
 func (s *Server) DeleteList(ctx context.Context, req DeleteListRequestObject) (DeleteListResponseObject, error) {
@@ -267,9 +267,9 @@ func (s *Server) ListListItems(ctx context.Context, req ListListItemsRequestObje
 	if s.unchanged(l, p.IfNoneMatch) {
 		return ListListItems304Response{}, nil
 	}
-	out := ListItemsPage{List: s.toList(l), Items: make([]ListItem, 0, len(entries)), Total: total, Page: query.Page.Page, Limit: query.Page.Limit}
+	out := ListItemsPage{List: s.toList(ctx, l), Items: make([]ListItem, 0, len(entries)), Total: total, Page: query.Page.Page, Limit: query.Page.Limit}
 	for _, e := range entries {
-		item := ListItem{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(e.Item)}
+		item := ListItem{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Notes: e.Notes, Item: toItem(ctx, e.Item)}
 		if e.Progress != nil {
 			item.Progress = &ItemProgress{Watched: e.Progress.Watched, Total: e.Progress.Total, LastWatchedAt: e.Progress.LastWatchedAt}
 		}
@@ -416,10 +416,10 @@ var autoListWords = map[string][2]string{
 
 var noSuchAutoList = problem("not_found", "There’s no list of that kind for this profile.")
 
-func toAutoList(l core.AutoList) AutoList {
+func toAutoList(ctx context.Context, l core.AutoList) AutoList {
 	cover := make([]Item, 0, len(l.Cover))
 	for _, i := range l.Cover {
-		cover = append(cover, toItem(i))
+		cover = append(cover, toItem(ctx, i))
 	}
 	words := autoListWords[l.Kind]
 	return AutoList{Kind: AutoListKind(l.Kind), Name: words[0], Description: words[1], ItemCount: l.Count, Cover: cover}
@@ -439,7 +439,7 @@ func (s *Server) ListAutoLists(ctx context.Context, req ListAutoListsRequestObje
 	}
 	out := make(ListAutoLists200JSONResponse, 0, len(lists))
 	for _, l := range lists {
-		out = append(out, toAutoList(l))
+		out = append(out, toAutoList(ctx, l))
 	}
 	return out, nil
 }
@@ -473,9 +473,9 @@ func (s *Server) ListAutoListItems(ctx context.Context, req ListAutoListItemsReq
 	if err != nil {
 		return nil, err
 	}
-	out := ListAutoListItems200JSONResponse{List: toAutoList(l), Items: make([]AutoListItem, 0, len(entries)), Total: total, Page: query.Page.Page, Limit: query.Page.Limit}
+	out := ListAutoListItems200JSONResponse{List: toAutoList(ctx, l), Items: make([]AutoListItem, 0, len(entries)), Total: total, Page: query.Page.Page, Limit: query.Page.Limit}
 	for _, e := range entries {
-		item := AutoListItem{Rank: int(e.Rank), At: e.At, Item: toItem(e.Item)}
+		item := AutoListItem{Rank: int(e.Rank), At: e.At, Item: toItem(ctx, e.Item)}
 		if e.Rating != nil {
 			rating := int(*e.Rating)
 			item.Rating = &rating
@@ -506,5 +506,5 @@ func (s *Server) CopyAutoList(ctx context.Context, req CopyAutoListRequestObject
 	if err != nil {
 		return nil, err
 	}
-	return CopyAutoList201JSONResponse(s.toList(l)), nil
+	return CopyAutoList201JSONResponse(s.toList(ctx, l)), nil
 }

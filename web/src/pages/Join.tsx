@@ -18,6 +18,7 @@ export const toUsername = (name: string) =>
 
 const handled = [
   'name_required',
+  'name_too_long',
   'username_taken',
   'invalid_username',
   'invalid_email',
@@ -89,7 +90,7 @@ export function Join() {
             value={name}
             onChange={setName}
             autoComplete="given-name"
-            error={fieldError(['name_required'])}
+            error={fieldError(['name_required', 'name_too_long'])}
             hint="Used for your profile. Change it any time."
           />
           <Field

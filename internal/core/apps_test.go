@@ -109,3 +109,23 @@ func TestRegisterApps(t *testing.T) {
 		t.Errorf("eleventh app: %v", err)
 	}
 }
+
+func TestReservedAppNames(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	accountID, _ := signedUpAccount(t, db)
+
+	for _, name := range []string{"Tethr", "tethr for Plex", "Zuno", "ZUNO Player", "My Zuno"} {
+		if _, _, err := RegisterApp(ctx, db, accountID, name, nil); !errors.Is(err, ErrAppNameKept) {
+			t.Errorf("%q: %v", name, err)
+		}
+	}
+	_, row, err := RegisterApp(ctx, db, accountID, "Tether Box", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := "Zuno"
+	if _, err := UpdateApp(ctx, db, accountID, row.ID, AppChanges{Name: &renamed}); !errors.Is(err, ErrAppNameKept) {
+		t.Errorf("renamed to Zuno: %v", err)
+	}
+}

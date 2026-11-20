@@ -19,10 +19,11 @@ import (
 )
 
 var (
-	ErrInvalidLink     = errors.New("that link or code has expired or already been used")
-	ErrTooManyAttempts = errors.New("too many wrong codes, ask for a new email")
-	ErrTooManyEmails   = errors.New("too many emails, try again in a few minutes")
-	ErrNoSession       = errors.New("not signed in")
+	ErrInvalidLink       = errors.New("that link or code has expired or already been used")
+	ErrTooManyAttempts   = errors.New("too many wrong codes, ask for a new email")
+	ErrTooManyCodesToday = errors.New("too many wrong codes today, use the link in the email")
+	ErrTooManyEmails     = errors.New("too many emails, try again in a few minutes")
+	ErrNoSession         = errors.New("not signed in")
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 	emailWindow     = 15 * time.Minute
 	emailsPerWindow = 3
 	codeAttempts    = 5
+	wrongCodesADay  = 10
 	sessionLifetime = 30 * 24 * time.Hour
 )
 
@@ -179,6 +181,13 @@ func Verify(ctx context.Context, db *pgxpool.Pool, v Verification, userAgent str
 		if v.Token == "" {
 			if link.Attempts >= codeAttempts {
 				return ErrTooManyAttempts
+			}
+			wrong, err := q.RecentWrongCodes(ctx, store.RecentWrongCodesParams{AccountID: link.AccountID, CreatedAt: time.Now().Add(-24 * time.Hour)})
+			if err != nil {
+				return err
+			}
+			if wrong >= wrongCodesADay {
+				return ErrTooManyCodesToday
 			}
 			if subtle.ConstantTimeCompare(link.CodeHash, hash(strings.TrimSpace(v.Code))) != 1 {
 				wrongCode = true

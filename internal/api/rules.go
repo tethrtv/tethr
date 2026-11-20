@@ -159,7 +159,7 @@ func (s *Server) PreviewRule(ctx context.Context, req PreviewRuleRequestObject) 
 		Limit:        query.Page.Limit,
 	}
 	for _, e := range preview.Entries {
-		item := ListItem{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Item: toItem(e.Item)}
+		item := ListItem{Id: e.ID, Rank: int(e.Rank), ListedAt: e.At, Item: toItem(ctx, e.Item)}
 		if e.Progress != nil {
 			item.Progress = &ItemProgress{Watched: e.Progress.Watched, Total: e.Progress.Total, LastWatchedAt: e.Progress.LastWatchedAt}
 		}
@@ -193,7 +193,7 @@ func (s *Server) CopyList(ctx context.Context, req CopyListRequestObject) (CopyL
 	if err != nil {
 		return nil, err
 	}
-	return CopyList201JSONResponse(s.toList(l)), nil
+	return CopyList201JSONResponse(s.toList(ctx, l)), nil
 }
 
 func (s *Server) SearchCompanies(ctx context.Context, req SearchCompaniesRequestObject) (SearchCompaniesResponseObject, error) {

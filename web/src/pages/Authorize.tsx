@@ -9,6 +9,15 @@ import auth from './Auth.module.css'
 import styles from './Connect.module.css'
 import { ProfilePicker, useSignedIn } from './connect'
 
+export function destination(raw: string) {
+  try {
+    const url = new URL(raw)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.host : `${url.protocol}//`
+  } catch {
+    return raw
+  }
+}
+
 export function Authorize() {
   const me = useSignedIn()
   const search = useSearch({ from: '/authorize' })
@@ -82,7 +91,10 @@ export function Authorize() {
                 </Button>
               </div>
               {allow.isError && <p className={`${auth.status} ${auth.error}`}>{problemMessage(allow.error)}</p>}
-              <p className={styles.note}>You’ll go back to {app.data.app_name} once you choose.</p>
+              <p className={styles.note}>
+                Once you choose, you’ll be sent to {destination(search.redirect_uri)}. If you don’t recognise that,
+                don’t connect.
+              </p>
             </>
           ) : (
             <h1 className={auth.title}>Checking the app…</h1>

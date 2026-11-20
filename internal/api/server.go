@@ -57,8 +57,8 @@ const (
 func (s *Server) Handler() http.Handler {
 	strict := NewStrictHandlerWithOptions(s, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-				writeProblem(w, http.StatusRequestEntityTooLarge, "too_big", "Requests up to 100 MB can be sent.")
+			if tooBig, ok := errors.AsType[*http.MaxBytesError](err); ok {
+				writeProblem(w, http.StatusRequestEntityTooLarge, "too_big", fmt.Sprintf("Requests can be up to %d MB.", tooBig.Limit>>20))
 				return
 			}
 			writeProblem(w, http.StatusBadRequest, "invalid_request", "That request couldn't be read.")
@@ -93,17 +93,44 @@ func (s *Server) SignedIn(next func(http.ResponseWriter, *http.Request, int64)) 
 
 func (s *Server) withRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxUpload+1)
 		ctx := context.WithValue(r.Context(), userAgentKey, r.UserAgent())
 		ctx = context.WithValue(ctx, fetchSiteKey, r.Header.Get("Sec-Fetch-Site"))
+		credentials := false
 		if c, err := r.Cookie(s.Cookie.Name); err == nil {
 			ctx = context.WithValue(ctx, sessionKey, c.Value)
+			credentials = true
 		}
 		if token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
 			ctx = context.WithValue(ctx, bearerKey, token)
+			credentials = true
 		}
+		size := bodyLimit(r, credentials)
+		if size > maxBody {
+			// The server has no read timeout, and a slow upload would hold one of the parsing slots.
+			if err := http.NewResponseController(w).SetReadDeadline(time.Now().Add(uploadTime)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+				s.log().Error("setting an upload deadline", "err", err)
+			}
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, size)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+const (
+	maxBody       = 1 << 20
+	maxImportJSON = 32 << 20
+	uploadTime    = 5 * time.Minute
+)
+
+// JSON bodies are decoded before any handler checks who is asking, so only imports with credentials get room.
+func bodyLimit(r *http.Request, credentials bool) int64 {
+	if !credentials || r.Method != http.MethodPost || r.URL.Path != "/v1/imports" {
+		return maxBody
+	}
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		return maxImportJSON
+	}
+	return maxUpload + 1
 }
 
 func (s *Server) limited(next http.Handler) http.Handler {
@@ -214,6 +241,8 @@ func (s *Server) Verify(ctx context.Context, req VerifyRequestObject) (VerifyRes
 		return Verify400JSONResponse{problem("invalid_link", "That link or code has expired or has already been used.")}, nil
 	case errors.Is(err, core.ErrTooManyAttempts):
 		return Verify429JSONResponse(problem("too_many_attempts", "Too many wrong codes. Ask for a new email.")), nil
+	case errors.Is(err, core.ErrTooManyCodesToday):
+		return Verify429JSONResponse(problem("too_many_codes_today", "Too many wrong codes today. Use the link in your email instead.")), nil
 	case err != nil:
 		return nil, err
 	}
@@ -311,6 +340,8 @@ func inputProblem(err error) (ProblemJSONResponse, bool) {
 		return problem("invalid_username", "Usernames are 2 to 24 lowercase letters, numbers and dashes."), true
 	case errors.Is(err, core.ErrNameRequired):
 		return problem("name_required", "What should we call you?"), true
+	case errors.Is(err, core.ErrNameTooLong):
+		return problem("name_too_long", "Names are up to 60 characters."), true
 	case errors.Is(err, core.ErrInvalidKind):
 		return problem("invalid_kind", "A profile is a person, kids or a guest."), true
 	case errors.Is(err, core.ErrInvalidTimeZone):
