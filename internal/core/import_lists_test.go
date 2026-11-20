@@ -23,7 +23,9 @@ func listsByName(t *testing.T, db *pgxpool.Pool, profile int64) map[string]List 
 	}
 	out := map[string]List{}
 	for _, l := range lists {
-		out[l.Slug] = l
+		if l.Owner.ID == profile {
+			out[l.Slug] = l
+		}
 	}
 	return out
 }
@@ -294,5 +296,119 @@ func TestImportListsCheckedWhenChosen(t *testing.T) {
 	}
 	if got := listTMDB(t, db, profile, listsByName(t, db, profile)["twice"].ID); got != "1, 2" {
 		t.Errorf("twice = %s", got)
+	}
+}
+
+func TestImportListsKeepPrivacyAndSort(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+	profile := caller.ProfileID
+	kid, err := AddProfile(ctx, db, caller.AccountID, NewProfile{Name: "Ollie", Kind: "kids"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file := ImportFile{Lists: []ImportList{
+		{Name: "Shared", Privacy: "public", SortBy: "added", SortHow: "desc", Items: []ImportItem{{Ref: movie(1), Label: "1"}}},
+		{Name: "Friends only", Privacy: "friends", SortBy: "released", Items: []ImportItem{{Ref: movie(2), Label: "2"}}},
+		{Name: "Odd sort", Privacy: "private", SortBy: "percentage", SortHow: "desc", Items: []ImportItem{{Ref: movie(3), Label: "3"}}},
+	}}
+	parsed, err := CreateImport(ctx, db, profile, "trakt", "trakt.zip", file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := parsed.Summary.Lists; l[0].Privacy != "public" || l[1].Privacy != "private" || l[2].Privacy != "private" {
+		t.Fatalf("privacy = %+v", l)
+	}
+	if _, err := QueueImport(ctx, db, profile, parsed.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ApplyNextImport(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	lists := listsByName(t, db, profile)
+	if l := lists["shared"]; l.Privacy != "public" || l.SortBy != "added" || l.SortHow != "desc" {
+		t.Errorf("shared = %+v", l)
+	}
+	if l := lists["friends-only"]; l.Privacy != "private" || l.SortBy != "year" || l.SortHow != "asc" {
+		t.Errorf("friends only = %+v", l)
+	}
+	if l := lists["odd-sort"]; l.SortBy != "rank" || l.SortHow != "asc" {
+		t.Errorf("odd sort = %+v", l)
+	}
+
+	kids, err := CreateImport(ctx, db, kid.ID, "trakt", "trakt.zip", file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kids.Summary.Lists[0].Privacy != "private" {
+		t.Errorf("a kids profile was offered a public list: %+v", kids.Summary.Lists[0])
+	}
+	if _, err := QueueImport(ctx, db, kid.ID, kids.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ApplyNextImport(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if l := listsByName(t, db, kid.ID)["shared"]; l.Privacy != "private" {
+		t.Errorf("kids list = %+v", l)
+	}
+}
+
+func TestImportListsSavedBeforePrivacy(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+	profile := caller.ProfileID
+
+	file := ImportFile{Lists: []ImportList{{Name: "Old", Items: []ImportItem{{Ref: movie(1), Label: "1"}}}}}
+	parsed, err := CreateImport(ctx, db, profile, "letterboxd", "letterboxd.zip", file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(ctx, `UPDATE imports SET
+		payload = convert_to((convert_from(payload, 'UTF8')::jsonb #- '{Lists,0,Privacy}' #- '{Lists,0,SortBy}' #- '{Lists,0,SortHow}')::text, 'UTF8'),
+		summary = summary #- '{lists,0,privacy}'
+		WHERE id = $1`, parsed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := QueueImport(ctx, db, profile, parsed.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ApplyNextImport(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	applied, _ := ImportByID(ctx, db, profile, parsed.ID)
+	if l := listsByName(t, db, profile)["old"]; applied.Status != "applied" || l.Privacy != "private" || l.SortBy != "rank" {
+		t.Errorf("an import saved before lists kept privacy = %s, %+v", applied.Status, l)
+	}
+}
+
+func TestPlainText(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{`<p>My <a href="https://boxd.it/x">picks</a> &amp; more</p><p>Second</p>`, "My picks & more\nSecond"},
+		{"Films that **twist**, see [the list](https://trakt.tv/x) and _more_.", "Films that twist, see the list and more."},
+		{"## Ranked\n> worth it\n![poster](https://x/p.jpg) `code` *really*", "Ranked\nworth it\nposter code really"},
+		{"5 * 3 = 15 and snake_case_name stay", "5 * 3 = 15 and snake_case_name stay"},
+	} {
+		if got := plainText(c.in); got != c.want {
+			t.Errorf("plainText(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestImportListMissingItemsListedOnce(t *testing.T) {
+	db := dbtest.New(t)
+	caller, _, _ := connectedProfile(t, db)
+	items := []ImportItem{{Label: "Lost: its items are missing from the export"}, {}, {}}
+	file := ImportFile{Lists: []ImportList{{Name: "Lost", Items: items}, {Name: "Kept", Items: []ImportItem{{Ref: movie(1), Label: "1"}}}}}
+	parsed, err := CreateImport(context.Background(), db, caller.ProfileID, "trakt", "trakt.zip", file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := parsed.Summary; s.Lists[0].Total != 3 || s.Lists[0].Unmatched != 3 || len(s.Unmatched) != 1 {
+		t.Errorf("summary = %+v", s)
 	}
 }

@@ -65,7 +65,7 @@ type ImportSummary struct {
 
 func (s *ImportSummary) unmatched(c *ImportCount, label string) {
 	c.Unmatched++
-	if len(s.Unmatched) < maxUnmatched {
+	if label != "" && len(s.Unmatched) < maxUnmatched {
 		s.Unmatched = append(s.Unmatched, label)
 	}
 }
@@ -108,7 +108,7 @@ func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, source
 	listed := 0
 	for i, l := range f.Lists {
 		l = cleanList(l)
-		s := ImportedList{Name: l.Name, Chosen: true}
+		s := ImportedList{Name: l.Name, Privacy: l.Privacy, Chosen: true}
 		l.Items = keep(l.Items, &s.ImportCount)
 		summary.ListEntries.Total += s.Total
 		summary.ListEntries.Unmatched += s.Unmatched

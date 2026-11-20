@@ -40,10 +40,10 @@ export function ImportSection() {
   return (
     <>
       <p className={home.note}>
-        Bring your plays, watchlist, resume points, ratings, hidden shows and Letterboxd lists across from your old
-        tracker. Download its data export from your settings there, then add the zip here as it is. If it offers more
-        than one kind, choose the full backup, not a simple CSV. Some trackers only give you one backup a month, so
-        download it when you’re ready to move. Nothing is saved until you’ve checked what was found.
+        Bring your plays, watchlist, resume points, ratings, hidden shows and lists across from your old tracker.
+        Download its data export from your settings there, then add the zip here as it is. If it offers more than one
+        kind, choose the full backup, not a simple CSV. Some trackers only give you one backup a month, so download it
+        when you’re ready to move. Nothing is saved until you’ve checked what was found.
       </p>
       <ProfilePicker legend="Import into" profiles={me.profiles} value={profileID} onChange={setProfile} />
       <Imports key={profileID} profileID={profileID} />
@@ -113,7 +113,13 @@ function Imports({ profileID }: { profileID: number }) {
         </h2>
         <input ref={input} type="file" accept=".zip,application/zip" hidden onChange={choose} />
         {waiting ? (
-          <Review imp={waiting} profileID={profileID} onAnother={() => input.current?.click()} onDone={refresh} />
+          <Review
+            key={waiting.id}
+            imp={waiting}
+            profileID={profileID}
+            onAnother={() => input.current?.click()}
+            onDone={refresh}
+          />
         ) : letterboxd ? (
           <MatchFilms
             films={letterboxd.films}
@@ -221,7 +227,13 @@ function Review({
         <Unmatched names={imp.summary.unmatched} total={unmatched} leftOut={imp.source === 'letterboxd'} />
       )}
       {lists.length > 0 && (
-        <ListPicker lists={lists} room={imp.summary.list_room} chosen={chosen} onChange={setChosen} />
+        <ListPicker
+          lists={lists}
+          room={imp.summary.list_room}
+          chosen={chosen}
+          onChange={setChosen}
+          films={imp.source === 'letterboxd'}
+        />
       )}
       <p className={home.note}>
         Plays already in your history are skipped, so importing the same file twice is safe.
@@ -249,15 +261,16 @@ const joinsEarlier = (lists: ImportList[], chosen: number[], i: number) =>
 const needsRoom = (lists: ImportList[], chosen: number[], i: number) =>
   !lists[i].existing && lists[i].unmatched < lists[i].total && !joinsEarlier(lists, chosen, i)
 
-function listNote(l: ImportList, earlier: boolean) {
+function listNote(l: ImportList, earlier: boolean, films: boolean) {
   const matched = l.total - l.unmatched
-  let note = plural(l.total, 'film')
-  if (l.unmatched) note += `, ${l.unmatched.toLocaleString('en-GB')} left out`
+  let note = films ? plural(l.total, 'film') : plural(l.total, 'item')
+  if (l.unmatched) note += `, ${l.unmatched.toLocaleString('en-GB')} ${films ? 'left out' : 'can’t be matched'}`
   note += '.'
   if (earlier) note += ' Goes into the list above with the same name.'
   else if (l.existing) note += ' Adds to your list with this name.'
   else if (!matched) note += ' Nothing to bring across.'
-  if (matched > 1000) note += ' A list holds up to 1,000 films.'
+  else if (l.privacy === 'public') note += ' Comes across public.'
+  if (matched > 1000) note += ` A list holds up to 1,000 ${films ? 'films' : 'items'}.`
   return note
 }
 
@@ -266,11 +279,13 @@ function ListPicker({
   room,
   chosen,
   onChange,
+  films,
 }: {
   lists: ImportList[]
   room: number
   chosen: number[]
   onChange: (chosen: number[]) => void
+  films: boolean
 }) {
   const taken = chosen.filter((i) => needsRoom(lists, chosen, i)).length
   const full = taken >= room && lists.some((_, i) => !chosen.includes(i) && needsRoom(lists, chosen, i))
@@ -306,7 +321,7 @@ function ListPicker({
                 </span>
                 <span>
                   <span className={styles.listName}>{l.name}</span>
-                  <span className={styles.listNote}>{listNote(l, joinsEarlier(lists, chosen, i))}</span>
+                  <span className={styles.listNote}>{listNote(l, joinsEarlier(lists, chosen, i), films)}</span>
                 </span>
               </label>
             </li>
@@ -315,7 +330,9 @@ function ListPicker({
       </ul>
       <p className={home.note}>
         {!full
-          ? 'New lists come across as private, with their films in the same order.'
+          ? lists.some((l, i) => chosen.includes(i) && l.privacy === 'public' && needsRoom(lists, chosen, i))
+            ? `New lists keep their ${films ? 'films' : 'items'} in the same order. Public ones stay public, and the rest come across private.`
+            : `New lists come across as private, with their ${films ? 'films' : 'items'} in the same order.`
           : room > 0
             ? `A profile holds up to 100 lists, so there’s room for ${plural(room, 'more list', 'more lists')}. Untick one to choose another.`
             : 'This profile already has 100 lists. Delete some to bring new ones across.'}

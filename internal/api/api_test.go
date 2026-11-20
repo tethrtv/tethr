@@ -674,6 +674,10 @@ func traktZip(t *testing.T) string {
 	]`))
 	w, _ = z.Create("ratings-movies.json")
 	_, _ = w.Write([]byte(`[{"rated_at":"2024-01-03T10:00:00.000Z","rating":9,"type":"movie","movie":{"title":"Inception","year":2010,"ids":{"tmdb":27205}}}]`))
+	w, _ = z.Create("lists-lists.json")
+	_, _ = w.Write([]byte(`[{"name":"Mind benders","description":"Twisty","privacy":"public","sort_by":"rank","sort_how":"asc","ids":{"trakt":36790015,"slug":"mind-benders"}}]`))
+	w, _ = z.Create("lists-list-36790015-mind-benders.json")
+	_, _ = w.Write([]byte(`[{"rank":1,"id":1,"listed_at":"2024-01-04T10:00:00.000Z","notes":null,"type":"movie","movie":{"title":"Inception","year":2010,"ids":{"tmdb":27205}}}]`))
 	_ = z.Close()
 	return buf.String()
 }
@@ -714,6 +718,9 @@ func TestImports(t *testing.T) {
 	if imp.Status != Parsed || imp.Filename != "trakt.zip" || imp.Summary.History.Total != 2 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Lost tape (1990)" {
 		t.Fatalf("import = %+v", imp)
 	}
+	if l := imp.Summary.Lists; len(l) != 1 || l[0].Name != "Mind benders" || l[0].Privacy != ImportListSummaryPrivacyPublic || l[0].Total != 1 {
+		t.Fatalf("lists = %+v", l)
+	}
 
 	id := strconv.FormatInt(imp.Id, 10)
 	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", "", cookie); rec.Code != http.StatusNotFound {
@@ -726,7 +733,7 @@ func TestImports(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id+"?profile_id="+samID, "", cookie).Body.Bytes(), &imp)
-	if imp.Status != Applied || imp.Summary.History.Added != 1 || imp.Summary.Ratings.Added != 1 {
+	if imp.Status != Applied || imp.Summary.History.Added != 1 || imp.Summary.Ratings.Added != 1 || !imp.Summary.Lists[0].Created || imp.Summary.ListEntries.Added != 1 {
 		t.Errorf("applied = %+v", imp)
 	}
 	if rec := do(t, h, "GET", "/v1/history", "", cookie); !strings.Contains(rec.Body.String(), `"items":[]`) {

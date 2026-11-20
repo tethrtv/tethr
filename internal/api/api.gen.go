@@ -107,6 +107,24 @@ func (e ImportStatus) Valid() bool {
 	}
 }
 
+// Defines values for ImportListSummaryPrivacy.
+const (
+	ImportListSummaryPrivacyPrivate ImportListSummaryPrivacy = "private"
+	ImportListSummaryPrivacyPublic  ImportListSummaryPrivacy = "public"
+)
+
+// Valid indicates whether the value is a known member of the ImportListSummaryPrivacy enum.
+func (e ImportListSummaryPrivacy) Valid() bool {
+	switch e {
+	case ImportListSummaryPrivacyPrivate:
+		return true
+	case ImportListSummaryPrivacyPublic:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ImportedItemPrecision.
 const (
 	ImportedItemPrecisionDay  ImportedItemPrecision = "day"
@@ -1622,11 +1640,17 @@ type ImportListSummary struct {
 	Full int    `json:"full"`
 	Name string `json:"name"`
 
+	// Privacy What a new list gets. Public lists in a Trakt export stay public, except on kids and guest profiles. A list that's added to keeps its own.
+	Privacy ImportListSummaryPrivacy `json:"privacy"`
+
 	// Skipped Already on the list.
 	Skipped   int `json:"skipped"`
 	Total     int `json:"total"`
 	Unmatched int `json:"unmatched"`
 }
+
+// ImportListSummaryPrivacy What a new list gets. Public lists in a Trakt export stay public, except on kids and guest profiles. A list that's added to keeps its own.
+type ImportListSummaryPrivacy string
 
 // ImportSummary defines model for ImportSummary.
 type ImportSummary struct {
@@ -1685,7 +1709,7 @@ type ImportedItemType string
 
 // ImportedList defines model for ImportedList.
 type ImportedList struct {
-	// Description HTML tags are taken out, then it's cut to 1,000 characters.
+	// Description HTML and Markdown formatting are taken out, then it's cut to 1,000 characters.
 	Description *string `json:"description,omitempty"`
 
 	// Items In list order. A list holds up to 1,000.
