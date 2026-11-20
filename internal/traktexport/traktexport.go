@@ -41,6 +41,7 @@ func (i ids) core() core.IDs {
 
 type media struct {
 	Title string `json:"title"`
+	Name  string `json:"name"`
 	Year  *int   `json:"year"`
 	IDs   ids    `json:"ids"`
 }
@@ -67,6 +68,7 @@ type entry struct {
 	HiddenAt  *time.Time `json:"hidden_at"`
 	Movie     *media     `json:"movie"`
 	Show      *media     `json:"show"`
+	Person    *media     `json:"person"`
 	Season    *struct {
 		Number int32 `json:"number"`
 	} `json:"season"`
@@ -86,6 +88,9 @@ func (e entry) item() core.ImportItem {
 	case e.Show == nil:
 		item.Ref = core.Ref{Kind: e.Type}
 		item.Label = "Something with no title"
+		if e.Person != nil && e.Person.Name != "" {
+			item.Label = e.Person.Name
+		}
 	case e.Episode != nil:
 		item.Ref = core.Ref{Kind: "episode", IDs: core.IDs{TMDB: e.Episode.IDs.TMDB}, Show: e.Show.IDs.core(), Season: &e.Episode.Season, Number: &e.Episode.Number}
 		item.Label = fmt.Sprintf("%s %dx%02d", e.Show.label(), e.Episode.Season, e.Episode.Number)
@@ -99,7 +104,23 @@ func (e entry) item() core.ImportItem {
 	return item
 }
 
-var files = regexp.MustCompile(`^(watched-history|lists-watchlist|watched-playback|ratings-(?:movies|shows|seasons|episodes)|hidden-[a-z-]+)(?:-\d+)?\.json$`)
+var (
+	files     = regexp.MustCompile(`^(watched-history|lists-watchlist|watched-playback|ratings-(?:movies|shows|seasons|episodes)|hidden-[a-z-]+)(?:-\d+)?\.json$`)
+	listIndex = regexp.MustCompile(`^lists-lists(?:-\d+)?\.json$`)
+)
+
+type list struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	Privacy     string  `json:"privacy"`
+	SortBy      string  `json:"sort_by"`
+	SortHow     string  `json:"sort_how"`
+	ItemCount   int     `json:"item_count"`
+	IDs         struct {
+		Trakt int64  `json:"trakt"`
+		Slug  string `json:"slug"`
+	} `json:"ids"`
+}
 
 func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 	var out core.ImportFile
@@ -115,7 +136,7 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 			continue
 		}
 		found = true
-		entries, err := readEntries(f, &budget)
+		entries, err := readJSON[entry](f, &budget)
 		if err != nil {
 			return out, BadFileError{Name: path.Base(f.Name), Err: err}
 		}
@@ -145,20 +166,75 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 			}
 		}
 	}
-	if !found {
+	lists, err := readLists(z, &budget)
+	if err != nil {
+		return out, err
+	}
+	if !found && lists == nil {
 		return out, ErrNotAnExport
+	}
+	out.Lists = lists
+	return out, nil
+}
+
+func readLists(z *zip.Reader, budget *int64) ([]core.ImportList, error) {
+	var index []list
+	for _, f := range z.File {
+		if !listIndex.MatchString(path.Base(f.Name)) || f.FileInfo().IsDir() {
+			continue
+		}
+		page, err := readJSON[list](f, budget)
+		if err != nil {
+			return nil, BadFileError{Name: path.Base(f.Name), Err: err}
+		}
+		index = append(index, page...)
+	}
+	if index == nil {
+		return nil, nil
+	}
+	out := make([]core.ImportList, 0, len(index))
+	for _, l := range index {
+		prefix := fmt.Sprintf("lists-list-%d-", l.IDs.Trakt)
+		var pages []*zip.File
+		for _, f := range z.File {
+			name := path.Base(f.Name)
+			if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".json") && !f.FileInfo().IsDir() {
+				pages = append(pages, f)
+			}
+		}
+		slices.SortFunc(pages, func(a, b *zip.File) int { return cmp.Compare(path.Base(a.Name), path.Base(b.Name)) })
+		var entries []entry
+		for _, f := range pages {
+			got, err := readJSON[entry](f, budget)
+			if err != nil {
+				return nil, BadFileError{Name: path.Base(f.Name), Err: err}
+			}
+			entries = append(entries, got...)
+		}
+		slices.SortStableFunc(entries, func(a, b entry) int { return cmp.Compare(a.Rank, b.Rank) })
+		il := core.ImportList{Name: l.Name, Description: deref(l.Description), Privacy: l.Privacy, SortBy: l.SortBy, SortHow: l.SortHow}
+		for _, e := range entries {
+			item := e.item()
+			item.At, item.Notes = e.ListedAt, strings.TrimSpace(deref(e.Notes))
+			il.Items = append(il.Items, item)
+		}
+		if len(pages) == 0 && l.ItemCount > 0 {
+			il.Items = append(il.Items, core.ImportItem{Label: cmp.Or(l.Name, "A list") + ": its items are missing from the export"})
+			il.Items = append(il.Items, make([]core.ImportItem, l.ItemCount-1)...)
+		}
+		out = append(out, il)
 	}
 	return out, nil
 }
 
-func readEntries(f *zip.File, budget *int64) ([]entry, error) {
+func readJSON[T any](f *zip.File, budget *int64) ([]T, error) {
 	rc, err := f.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rc.Close() }()
 	limited := &io.LimitedReader{R: rc, N: *budget + 1}
-	var entries []entry
+	var entries []T
 	err = json.NewDecoder(limited).Decode(&entries)
 	*budget = limited.N - 1
 	if *budget < 0 {

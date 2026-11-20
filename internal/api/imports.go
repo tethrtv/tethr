@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -37,6 +38,7 @@ func toImport(i core.Import) Import {
 	for _, l := range i.Summary.Lists {
 		lists = append(lists, ImportListSummary{
 			Name:      l.Name,
+			Privacy:   ImportListSummaryPrivacy(cmp.Or(l.Privacy, "private")),
 			Total:     l.Total,
 			Added:     l.Added,
 			Skipped:   l.Skipped,

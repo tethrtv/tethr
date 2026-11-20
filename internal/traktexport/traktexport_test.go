@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/tethrtv/tethr/internal/core"
@@ -90,5 +92,80 @@ func TestNotAnExport(t *testing.T) {
 	bad := export(t, map[string]string{"watched-history.json": `{"oops"`})
 	if _, err := Read(bad, bad.Size()); err == nil || errors.Is(err, ErrNotAnExport) {
 		t.Errorf("broken JSON: %v", err)
+	}
+}
+
+func TestReadLists(t *testing.T) {
+	page := func(from, to int) string {
+		var items []string
+		for i := from; i <= to; i++ {
+			items = append(items, fmt.Sprintf(`{"rank":%d,"id":%d,"listed_at":"2026-08-10T18:40:58.000Z","notes":null,"my_rating":null,"type":"movie","movie":{"title":"Film %d","year":2001,"ids":{"trakt":%d,"slug":"film-%d","tmdb":%d,"plex":{"guid":"x","slug":"y"}}}}`, i, i, i, i, i, i))
+		}
+		return "[" + strings.Join(items, ",") + "]"
+	}
+	r := export(t, map[string]string{
+		"lists-lists.json": `[
+			{"name":"Heists","description":"The good ones","privacy":"public","type":"personal","display_numbers":true,"allow_comments":true,"sort_by":"rank","sort_how":"asc","created_at":"2026-08-10T11:22:19.000Z","updated_at":"2026-08-10T18:41:38.000Z","item_count":2,"comment_count":0,"likes":0,"ids":{"slug":"heists","trakt":36790015},"images":{"posters":[]},"user":{"username":"someone"}},
+			{"name":"Big one","description":null,"privacy":"friends","sort_by":"added","sort_how":"desc","item_count":3,"ids":{"slug":"big-one-2","trakt":42}},
+			{"name":"Empty","description":"","privacy":"private","sort_by":"rank","sort_how":"asc","item_count":0,"ids":{"slug":"empty","trakt":7}},
+			{"name":"Failed to download","privacy":"link","ids":{"slug":"gone","trakt":8}},
+			{"name":"Lost items","privacy":"private","item_count":12,"ids":{"slug":"lost","trakt":4}}
+		]`,
+		"lists-list-36790015-heists.json": `[
+			{"rank":2,"id":2,"listed_at":"2026-08-10T18:40:58.000Z","notes":" the diner ","type":"movie","movie":{"title":"Heat","year":1995,"ids":{"trakt":1,"slug":"heat-1995","imdb":"tt0113277","tmdb":949}}},
+			{"rank":1,"id":1,"listed_at":"2026-08-10T18:40:00.000Z","notes":null,"type":"show","show":` + breakingBad + `},
+			{"rank":3,"id":3,"listed_at":"2026-08-10T18:41:00.000Z","notes":null,"type":"person","person":{"name":"Michael Mann","ids":{"trakt":5,"slug":"michael-mann","tmdb":1}}}
+		]`,
+		"lists-list-42-old-name-1.json": page(1, 2),
+		"lists-list-42-old-name-3.json": `[]`,
+		"lists-list-42-old-name-2.json": page(3, 3),
+		"lists-list-7-empty.json":       `[]`,
+		"lists-watchlist.json":          `[]`,
+		"likes-lists.json":              `[{"liked_at":"2026-01-01T00:00:00.000Z","type":"list","list":{"name":"Someone else's","ids":{"trakt":99,"slug":"theirs"}}}]`,
+		"lists-collaborations.json":     `[{"name":"Shared with me","ids":{"trakt":98,"slug":"shared"}}]`,
+		"lists-list-98-shared.json":     page(1, 1),
+	})
+	f, err := Read(r, r.Size())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Lists) != 5 {
+		t.Fatalf("lists = %+v", f.Lists)
+	}
+	heists := f.Lists[0]
+	if heists.Name != "Heists" || heists.Description != "The good ones" || heists.Privacy != "public" || heists.SortBy != "rank" || heists.SortHow != "asc" {
+		t.Errorf("heists = %+v", heists)
+	}
+	if len(heists.Items) != 3 || heists.Items[0].Ref.Kind != "show" || heists.Items[1].Ref.IDs.TMDB != 949 || heists.Items[1].Notes != "the diner" || heists.Items[1].At == nil {
+		t.Errorf("heists items = %+v", heists.Items)
+	}
+	if heists.Items[2].Ref.Kind != "person" || heists.Items[2].Label != "Michael Mann" {
+		t.Errorf("a person on a list = %+v", heists.Items[2])
+	}
+	big := f.Lists[1]
+	if big.Name != "Big one" || big.Privacy != "friends" || big.SortBy != "added" || big.SortHow != "desc" || len(big.Items) != 3 {
+		t.Fatalf("big one = %+v", big)
+	}
+	for i, item := range big.Items {
+		if item.Ref.IDs.TMDB != int64(i+1) {
+			t.Errorf("big one should be in rank order across pages: %+v", big.Items)
+		}
+	}
+	if f.Lists[2].Name != "Empty" || len(f.Lists[2].Items) != 0 || f.Lists[3].Name != "Failed to download" || len(f.Lists[3].Items) != 0 {
+		t.Errorf("empty lists = %+v", f.Lists[2:])
+	}
+	if lost := f.Lists[4].Items; len(lost) != 12 || lost[0].Ref.Kind != "" || lost[0].Label != "Lost items: its items are missing from the export" || lost[11].Label != "" {
+		t.Errorf("a list whose items aren't in the export = %+v", lost)
+	}
+}
+
+func TestListsAloneAreAnExport(t *testing.T) {
+	r := export(t, map[string]string{
+		"lists-lists.json":         `[{"name":"Heists","privacy":"private","ids":{"slug":"heists","trakt":1}}]`,
+		"lists-list-1-heists.json": `[{"rank":1,"type":"movie","movie":{"title":"Heat","year":1995,"ids":{"tmdb":949}}}]`,
+	})
+	f, err := Read(r, r.Size())
+	if err != nil || len(f.Lists) != 1 || len(f.Lists[0].Items) != 1 {
+		t.Errorf("lists only = %+v, %v", f, err)
 	}
 }

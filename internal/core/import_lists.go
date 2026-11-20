@@ -18,12 +18,16 @@ import (
 type ImportList struct {
 	Name        string
 	Description string
+	Privacy     string
+	SortBy      string
+	SortHow     string
 	Items       []ImportItem
 }
 
 type ImportedList struct {
 	ImportCount
 	Name     string `json:"name"`
+	Privacy  string `json:"privacy"`
 	Full     int    `json:"full"`
 	Existing bool   `json:"existing"`
 	Chosen   bool   `json:"chosen"`
@@ -34,12 +38,30 @@ var (
 	lineTags   = regexp.MustCompile(`(?i)<br\s*/?>|</p>`)
 	tags       = regexp.MustCompile(`<[^>]*>`)
 	blankLines = regexp.MustCompile(`\n{3,}`)
+	markdown   = []struct {
+		re   *regexp.Regexp
+		with string
+	}{
+		{regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`), "$1"},
+		{regexp.MustCompile(`\[([^\]]+)\]\([^)\s]*\)`), "$1"},
+		{regexp.MustCompile(`\*\*(\S(?:[^*]*\S)?)\*\*`), "$1"},
+		{regexp.MustCompile(`__(\S(?:[^_]*\S)?)__`), "$1"},
+		{regexp.MustCompile(`(^|[\s(])\*(\S(?:[^*]*\S)?)\*`), "$1$2"},
+		{regexp.MustCompile(`(^|[\s(])_(\S(?:[^_]*\S)?)_`), "$1$2"},
+		{regexp.MustCompile("`([^`]+)`"), "$1"},
+		{regexp.MustCompile(`(?m)^#{1,6}\s+`), ""},
+		{regexp.MustCompile(`(?m)^>\s?`), ""},
+	}
 )
 
 func plainText(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = lineTags.ReplaceAllString(s, "\n")
-	s = html.UnescapeString(tags.ReplaceAllString(s, ""))
+	s = tags.ReplaceAllString(s, "")
+	for _, m := range markdown {
+		s = m.re.ReplaceAllString(s, m.with)
+	}
+	s = html.UnescapeString(s)
 	return strings.TrimSpace(blankLines.ReplaceAllString(s, "\n\n"))
 }
 
@@ -54,6 +76,14 @@ func cut(s string, n int) string {
 func cleanList(l ImportList) ImportList {
 	l.Name = cmp.Or(cut(l.Name, 100), "Untitled list")
 	l.Description = cut(plainText(l.Description), 1000)
+	if l.Privacy != "public" {
+		l.Privacy = "private"
+	}
+	l.SortBy = map[string]string{"rank": "rank", "added": "added", "title": "title", "released": "year"}[l.SortBy]
+	if l.SortBy == "" || l.SortHow != "desc" {
+		l.SortHow = "asc"
+	}
+	l.SortBy = cmp.Or(l.SortBy, "rank")
 	items := make([]ImportItem, len(l.Items))
 	for i, item := range l.Items {
 		item.Notes = cut(item.Notes, 500)
@@ -72,6 +102,15 @@ func findLists(ctx context.Context, q *store.Queries, profileID int64, summary *
 		return err
 	}
 	summary.ListRoom = max(maxLists-int(n), 0)
+	p, err := q.ProfileByID(ctx, profileID)
+	if err != nil {
+		return err
+	}
+	if p.Kind == "kids" || p.Kind == "guest" {
+		for i := range summary.Lists {
+			summary.Lists[i].Privacy = "private"
+		}
+	}
 	return markExisting(ctx, q, profileID, summary.Lists, false)
 }
 
@@ -172,9 +211,9 @@ func (im *importer) lists(lists []ImportList) error {
 			list.ID, err = createList(im.ctx, im.q, im.imp.ProfileID, store.List{
 				Name:        l.Name,
 				Description: optional(l.Description),
-				Privacy:     "private",
-				SortBy:      "rank",
-				SortHow:     "asc",
+				Privacy:     cmp.Or(s.Privacy, "private"),
+				SortBy:      cmp.Or(l.SortBy, "rank"),
+				SortHow:     cmp.Or(l.SortHow, "asc"),
 			})
 			if errors.Is(err, ErrTooManyLists) {
 				s.Full += len(items)

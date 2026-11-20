@@ -1333,7 +1333,7 @@ export interface paths {
         put?: never;
         /**
          * Read a Trakt export or Simkl backup before importing it
-         * @description Send the zip from Trakt's data export, or the zip from Simkl's "Download backup", as the body. Tethr reads history, the watchlist, resume points, ratings and hidden items, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
+         * @description Send the zip from Trakt's data export, or the zip from Simkl's "Download backup", as the body. Tethr reads history, the watchlist, resume points, ratings, hidden items and, from Trakt, custom lists, and keeps them for 24 hours. Nothing is written until the import is applied, so check the counts and the unmatched list first. Everything else in the zip is ignored.
          *
          *     Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
          *
@@ -2668,13 +2668,18 @@ export interface components {
         ImportedList: {
             /** @description Cut to 100 characters. */
             name: string;
-            /** @description HTML tags are taken out, then it's cut to 1,000 characters. */
+            /** @description HTML and Markdown formatting are taken out, then it's cut to 1,000 characters. */
             description?: string;
             /** @description In list order. A list holds up to 1,000. */
             items: components["schemas"]["ImportedItem"][];
         };
         ImportListSummary: {
             name: string;
+            /**
+             * @description What a new list gets. Public lists in a Trakt export stay public, except on kids and guest profiles. A list that's added to keeps its own.
+             * @enum {string}
+             */
+            privacy: "private" | "public";
             total: number;
             added: number;
             /** @description Already on the list. */
