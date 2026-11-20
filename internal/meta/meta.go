@@ -30,15 +30,20 @@ const (
 
 var groupID = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
-var searchLimit = limit.Rule{Name: "SEARCH_LIMIT", Limit: 30, Period: time.Minute, Burst: 30}
+var (
+	searchLimit = limit.Rule{Name: "SEARCH_LIMIT", Limit: 30, Period: time.Minute, Burst: 30}
+	visitLimit  = limit.Rule{Name: "META_LIMIT", Limit: 1200, Period: 5 * time.Minute, Burst: 600}
+)
 
 type Server struct {
 	TMDB     *tmdb.Client
 	Log      *slog.Logger
 	SignedIn func(func(http.ResponseWriter, *http.Request, int64)) http.Handler
+	IPHeader string
 
 	once     sync.Once
 	searches *limit.Limiter
+	visits   *limit.Limiter
 }
 
 type title struct {
@@ -119,25 +124,48 @@ type episode struct {
 func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /meta/movie/{id}", s.ownSite(s.title(s.TMDB.Movie, movieCache)))
 	mux.HandleFunc("GET /meta/tv/{id}", s.ownSite(s.title(s.TMDB.Show, showCache)))
-	mux.HandleFunc("GET /meta/tv/{id}/season/{season}", s.ownSite(s.season))
-	mux.HandleFunc("GET /meta/tv/{id}/orders", s.ownSite(s.orders))
-	mux.HandleFunc("GET /meta/tv/{id}/order/{group}", s.ownSite(s.order))
-	mux.HandleFunc("GET /meta/trending", s.ownSite(s.trending))
+	mux.Handle("GET /meta/tv/{id}/season/{season}", s.signedIn(s.season))
+	mux.Handle("GET /meta/tv/{id}/orders", s.signedIn(s.orders))
+	mux.Handle("GET /meta/tv/{id}/order/{group}", s.signedIn(s.order))
+	mux.Handle("GET /meta/trending", s.signedIn(s.trending))
 	mux.Handle("GET /meta/search", s.SignedIn(s.search))
 }
 
 // Only Tethr's own pages may ask; apps fetch from TMDB with their own keys.
+// The header can be faked, so each visitor is also limited.
 func (s *Server) ownSite(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Header.Get("Sec-Fetch-Site") {
 		case "same-origin", "same-site":
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			next(w, r)
+			if s.allowed(w, r) {
+				next(w, r)
+			}
 		default:
 			w.Header().Set("Cache-Control", "no-store")
 			http.Error(w, "only Tethr's own website can use this", http.StatusForbidden)
 		}
 	}
+}
+
+func (s *Server) signedIn(next http.HandlerFunc) http.Handler {
+	return s.SignedIn(func(w http.ResponseWriter, r *http.Request, _ int64) {
+		if s.allowed(w, r) {
+			next(w, r)
+		}
+	})
+}
+
+func (s *Server) allowed(w http.ResponseWriter, r *http.Request) bool {
+	s.once.Do(s.limits)
+	now := time.Now()
+	wait, ok := s.visits.Allow(limit.Visitor(r, s.IPHeader), now)
+	if !ok {
+		w.Header().Set("Cache-Control", "no-store")
+		limit.Refuse(w, visitLimit, wait, now)
+		http.Error(w, "too many requests, try again in a moment", http.StatusTooManyRequests)
+	}
+	return ok
 }
 
 func (s *Server) title(fetch func(context.Context, int32) (tmdb.Title, error), cache string) http.HandlerFunc {
@@ -294,6 +322,7 @@ func (s *Server) trending(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) limits() {
 	s.searches = limit.New(searchLimit)
+	s.visits = limit.New(visitLimit)
 }
 
 func (s *Server) found(w http.ResponseWriter, r *http.Request, err error) bool {

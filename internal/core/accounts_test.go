@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/tethrtv/tethr/internal/dbtest"
@@ -70,6 +71,7 @@ func TestCreateAccountTaken(t *testing.T) {
 		{"same username", SignUp{Email: "sam@example.com", Name: "Sam", Username: "nathan"}, ErrUsernameTaken},
 		{"bad email", SignUp{Email: "sam", Name: "Sam", Username: "sam"}, ErrInvalidEmail},
 		{"no name", SignUp{Email: "sam@example.com", Name: " ", Username: "sam"}, ErrNameRequired},
+		{"long name", SignUp{Email: "sam@example.com", Name: strings.Repeat("a", 61), Username: "sam"}, ErrNameTooLong},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

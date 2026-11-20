@@ -474,6 +474,22 @@ func (q *Queries) RecentEmailLinks(ctx context.Context, arg RecentEmailLinksPara
 	return count, err
 }
 
+const recentWrongCodes = `-- name: RecentWrongCodes :one
+SELECT coalesce(sum(attempts), 0)::bigint FROM email_links WHERE account_id = $1 AND created_at > $2
+`
+
+type RecentWrongCodesParams struct {
+	AccountID int64
+	CreatedAt time.Time
+}
+
+func (q *Queries) RecentWrongCodes(ctx context.Context, arg RecentWrongCodesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, recentWrongCodes, arg.AccountID, arg.CreatedAt)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const releaseWeekly = `-- name: ReleaseWeekly :exec
 UPDATE accounts SET weekly_sent_at = $2 WHERE id = $1
 `

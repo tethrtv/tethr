@@ -60,6 +60,7 @@ func do(t *testing.T, h http.Handler, method, path, body string, cookies ...*htt
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", "https://staging.tethr.tv")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 	for _, c := range cookies {
 		req.AddCookie(c)
 	}
@@ -910,5 +911,98 @@ func TestRatingEndpoints(t *testing.T) {
 	}
 	if rec := do(t, h, "DELETE", path, "", cookie); rec.Code != http.StatusNotFound {
 		t.Errorf("remove twice = %d", rec.Code)
+	}
+}
+
+func TestRequestSizes(t *testing.T) {
+	h, mail := newTestServer(t)
+	big := strings.Repeat("a", 2<<20)
+
+	if rec := do(t, h, "POST", "/v1/auth/email-link", `{"email":"`+big+`"}`); rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("2 MB signed out = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/v1/imports", `{"source":"letterboxd","history":[{"type":"movie","label":"`+big+`"}]}`); rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("2 MB matched import signed out = %d %s", rec.Code, rec.Body)
+	}
+	cookie := signIn(t, h, mail)
+	if rec := do(t, h, "POST", "/v1/profiles", `{"name":"`+big+`","kind":"person"}`, cookie); rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("2 MB profile = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/v1/imports", `{"source":"letterboxd","history":[{"type":"movie","tmdb":27205,"label":"`+big+`"}]}`, cookie); rec.Code == http.StatusRequestEntityTooLarge {
+		t.Errorf("2 MB matched import signed in = %d %s", rec.Code, rec.Body)
+	}
+
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	w, _ := z.Create("watched-history.json")
+	_, _ = w.Write([]byte("[" + strings.TrimSuffix(strings.Repeat("{},", core.MaxImportRows+1), ",") + "]"))
+	_ = z.Close()
+	if rec := upload(t, h, "/v1/imports", buf.String(), cookie); rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "too_big") {
+		t.Errorf("too many rows = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestAirDatesOnlyOnTheWebsite(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+	ctx := context.Background()
+
+	var me Me
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/me", "", cookie).Body.Bytes(), &me)
+	app, err := core.CreateApp(ctx, s.DB, "A player", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	device, err := core.StartDeviceCode(ctx, s.DB, app.ClientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := do(t, h, "POST", "/v1/devices/"+device.UserCode+"/approve", `{"profile_id":`+strconv.FormatInt(me.Profiles[0].Id, 10)+`}`, cookie); rec.Code != http.StatusNoContent {
+		t.Fatalf("approve = %d %s", rec.Code, rec.Body)
+	}
+	tokens, err := core.PollDeviceCode(ctx, s.DB, app.ClientID, "", device.Code, "A player")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := bearer(t, h, "POST", "/v1/scrobble", `{"event":"stop","progress":100,"item":{"type":"episode","show":{"tmdb":1396},"season":1,"number":1}}`, tokens.Access)
+	var watched ScrobbleResult
+	_ = json.Unmarshal(rec.Body.Bytes(), &watched)
+	soon := time.Now().AddDate(0, 0, 3)
+	if err := core.SaveOutline(ctx, s.DB, *watched.Item.Title.Ids.Tethr, []core.OutlineEpisode{
+		{TMDBID: 1, Season: 1, Number: 1, FirstAired: &soon},
+		{TMDBID: 2, Season: 1, Number: 2, FirstAired: &soon},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"/v1/upcoming", "/v1/history"} {
+		if body := bearer(t, h, "GET", path, "", tokens.Access).Body.String(); strings.Contains(body, "first_aired") {
+			t.Errorf("an app got TMDB air dates from %s: %s", path, body)
+		}
+	}
+	if body := do(t, h, "GET", "/v1/upcoming", "", cookie).Body.String(); !strings.Contains(body, "first_aired") {
+		t.Errorf("the website lost air dates: %s", body)
+	}
+	req := httptest.NewRequest("GET", "/v1/upcoming", nil)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), "first_aired") {
+		t.Errorf("a request from outside Tethr's site got air dates: %s", rec.Body)
+	}
+}
+
+func TestTooBigSaysTheLimit(t *testing.T) {
+	h, mail := newTestServer(t)
+	cookie := signIn(t, h, mail)
+	body := `{"name":"` + strings.Repeat("x", 2<<20) + `"}`
+	if rec := do(t, h, "POST", "/v1/lists", body, cookie); rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "up to 1 MB") {
+		t.Errorf("a 2 MB list = %d %s", rec.Code, rec.Body.String()[:min(200, rec.Body.Len())])
+	}
+	if rec := do(t, h, "POST", "/v1/imports", `{"source":"letterboxd","history":[`+strings.Repeat(`{"type":"movie","label":"x"},`, 2<<20)+`{"type":"movie","label":"x"}]}`, cookie); rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "up to 32 MB") {
+		t.Errorf("a huge matched import = %d %s", rec.Code, rec.Body.String()[:min(200, rec.Body.Len())])
 	}
 }

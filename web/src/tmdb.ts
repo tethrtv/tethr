@@ -39,9 +39,9 @@ const apiURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 const images = 'https://image.tmdb.org/t/p/'
 const day = 24 * 60 * 60 * 1000
 
-async function meta<T>(path: string): Promise<T | null> {
+async function meta<T>(path: string, signedIn = false): Promise<T | null> {
   // Bump v when the shape of /meta's answers changes, or browsers and Cloudflare keep serving the old one.
-  const res = await fetch(`${apiURL}/meta${path}?v=4`)
+  const res = await fetch(`${apiURL}/meta${path}?v=5`, signedIn ? { credentials: 'include' } : undefined)
   return res.ok ? res.json() : null
 }
 
@@ -94,7 +94,7 @@ export function useTrending() {
     queryKey: ['meta', 'trending'],
     staleTime: 60 * 60 * 1000,
     queryFn: async () => {
-      const found = await meta<{ results: Trend[] }>('/trending')
+      const found = await meta<{ results: Trend[] }>('/trending', true)
       if (!found) throw new Error('Trending isn’t available right now.')
       return found.results
     },
@@ -106,7 +106,7 @@ export function useSeason(show?: number, season?: number) {
     queryKey: ['meta', 'season', show, season],
     enabled: !!show && season !== undefined,
     staleTime: day,
-    queryFn: () => meta<Season>(`/tv/${show}/season/${season}`),
+    queryFn: () => meta<Season>(`/tv/${show}/season/${season}`, true),
   }).data
 }
 
@@ -123,7 +123,7 @@ export function useOrders(show?: number) {
     queryKey: ['meta', 'orders', show],
     enabled: !!show,
     staleTime: day,
-    queryFn: async () => (await meta<{ orders: Order[] }>(`/tv/${show}/orders`))?.orders ?? [],
+    queryFn: async () => (await meta<{ orders: Order[] }>(`/tv/${show}/orders`, true))?.orders ?? [],
   }).data
 }
 
@@ -132,6 +132,6 @@ export function useGroup(show?: number, group?: string) {
     queryKey: ['meta', 'order', show, group],
     enabled: !!show && !!group,
     staleTime: day,
-    queryFn: () => meta<Group>(`/tv/${show}/order/${group}`),
+    queryFn: () => meta<Group>(`/tv/${show}/order/${group}`, true),
   }).data
 }

@@ -36,8 +36,8 @@ func AddProfile(ctx context.Context, db *pgxpool.Pool, accountID int64, in NewPr
 	if !slices.Contains([]string{"person", "kids", "guest"}, in.Kind) {
 		return store.Profile{}, ErrInvalidKind
 	}
-	if in.Name == "" {
-		return store.Profile{}, ErrNameRequired
+	if err := validName(in.Name); err != nil {
+		return store.Profile{}, err
 	}
 	var profile store.Profile
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
@@ -97,8 +97,8 @@ func suggestUsername(owner, name string) string {
 func UpdateProfile(ctx context.Context, db *pgxpool.Pool, accountID, profileID int64, c ProfileChanges) (store.Profile, error) {
 	if c.Name != nil {
 		name := strings.TrimSpace(*c.Name)
-		if name == "" {
-			return store.Profile{}, ErrNameRequired
+		if err := validName(name); err != nil {
+			return store.Profile{}, err
 		}
 		c.Name = &name
 	}

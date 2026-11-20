@@ -188,7 +188,7 @@ func (im *importer) lists(lists []ImportList) error {
 		var items []found
 		for _, item := range l.Items {
 			var r *resolved
-			if slices.Contains([]string{"movie", "show", "season", "episode"}, item.Ref.Kind) {
+			if slices.Contains(listKinds, item.Ref.Kind) {
 				var err error
 				if r, err = im.resolve(item.Ref); err != nil {
 					return err

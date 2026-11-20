@@ -26,6 +26,11 @@ type Message struct {
 	Unsubscribe string
 }
 
+type RecipientError struct{ Err error }
+
+func (e RecipientError) Error() string { return "recipient refused: " + e.Err.Error() }
+func (e RecipientError) Unwrap() error { return e.Err }
+
 type SMTP struct {
 	Addr     string
 	Username string
@@ -76,7 +81,7 @@ func (s SMTP) Send(_ context.Context, m Message) error {
 		return err
 	}
 	if err := c.Rcpt(m.To); err != nil {
-		return err
+		return RecipientError{Err: err}
 	}
 	w, err := c.Data()
 	if err != nil {

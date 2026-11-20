@@ -225,7 +225,7 @@ func watched(ctx context.Context, q *store.Queries, profileID int64, grant *int6
 	if dropped > 0 {
 		areas = append(areas, area(r, "paused_at"))
 	}
-	list, err := q.Watchlist(ctx, profileID)
+	list, err := watchlist(ctx, q, profileID)
 	if err != nil {
 		return event, err
 	}
@@ -523,9 +523,18 @@ func RemovePlayback(ctx context.Context, db *pgxpool.Pool, profileID, id int64) 
 	})
 }
 
+// Inserting first would take a value from the capped lists sequence on every call, even when the watchlist exists.
+func watchlist(ctx context.Context, q *store.Queries, profileID int64) (store.List, error) {
+	list, err := q.Watchlist(ctx, profileID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return q.CreateWatchlist(ctx, profileID)
+	}
+	return list, err
+}
+
 func Watchlist(ctx context.Context, db *pgxpool.Pool, profileID int64, kind string) ([]Entry, error) {
 	q := store.New(db)
-	list, err := q.Watchlist(ctx, profileID)
+	list, err := watchlist(ctx, q, profileID)
 	if err != nil {
 		return nil, err
 	}
@@ -624,7 +633,7 @@ func changeWatchlist(ctx context.Context, db *pgxpool.Pool, profileID int64, cha
 	var result SyncResult
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		list, err := q.Watchlist(ctx, profileID)
+		list, err := watchlist(ctx, q, profileID)
 		if err != nil {
 			return err
 		}

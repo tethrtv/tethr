@@ -128,7 +128,7 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 	if err != nil {
 		return out, ErrNotAnExport
 	}
-	budget := int64(maxUnpacked)
+	rd := &reader{budget: maxUnpacked, rows: core.MaxImportRows}
 	found := false
 	for _, f := range z.File {
 		m := files.FindStringSubmatch(path.Base(f.Name))
@@ -136,9 +136,9 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 			continue
 		}
 		found = true
-		entries, err := readJSON[entry](f, &budget)
+		entries, err := readJSON[entry](f, rd)
 		if err != nil {
-			return out, BadFileError{Name: path.Base(f.Name), Err: err}
+			return out, badFile(f, err)
 		}
 		kind := m[1]
 		if kind == "lists-watchlist" {
@@ -166,7 +166,7 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 			}
 		}
 	}
-	lists, err := readLists(z, &budget)
+	lists, err := readLists(z, rd)
 	if err != nil {
 		return out, err
 	}
@@ -177,15 +177,15 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 	return out, nil
 }
 
-func readLists(z *zip.Reader, budget *int64) ([]core.ImportList, error) {
+func readLists(z *zip.Reader, r *reader) ([]core.ImportList, error) {
 	var index []list
 	for _, f := range z.File {
 		if !listIndex.MatchString(path.Base(f.Name)) || f.FileInfo().IsDir() {
 			continue
 		}
-		page, err := readJSON[list](f, budget)
+		page, err := readJSON[list](f, r)
 		if err != nil {
-			return nil, BadFileError{Name: path.Base(f.Name), Err: err}
+			return nil, badFile(f, err)
 		}
 		index = append(index, page...)
 	}
@@ -205,9 +205,9 @@ func readLists(z *zip.Reader, budget *int64) ([]core.ImportList, error) {
 		slices.SortFunc(pages, func(a, b *zip.File) int { return cmp.Compare(path.Base(a.Name), path.Base(b.Name)) })
 		var entries []entry
 		for _, f := range pages {
-			got, err := readJSON[entry](f, budget)
+			got, err := readJSON[entry](f, r)
 			if err != nil {
-				return nil, BadFileError{Name: path.Base(f.Name), Err: err}
+				return nil, badFile(f, err)
 			}
 			entries = append(entries, got...)
 		}
@@ -219,6 +219,10 @@ func readLists(z *zip.Reader, budget *int64) ([]core.ImportList, error) {
 			il.Items = append(il.Items, item)
 		}
 		if len(pages) == 0 && l.ItemCount > 0 {
+			if l.ItemCount > r.rows {
+				return nil, core.ErrTooManyRows
+			}
+			r.rows -= l.ItemCount
 			il.Items = append(il.Items, core.ImportItem{Label: cmp.Or(l.Name, "A list") + ": its items are missing from the export"})
 			il.Items = append(il.Items, make([]core.ImportItem, l.ItemCount-1)...)
 		}
@@ -227,20 +231,58 @@ func readLists(z *zip.Reader, budget *int64) ([]core.ImportList, error) {
 	return out, nil
 }
 
-func readJSON[T any](f *zip.File, budget *int64) ([]T, error) {
+type reader struct {
+	budget int64
+	rows   int
+}
+
+func badFile(f *zip.File, err error) error {
+	if errors.Is(err, core.ErrTooManyRows) || errors.Is(err, core.ErrTooBig) {
+		return err
+	}
+	return BadFileError{Name: path.Base(f.Name), Err: err}
+}
+
+func readJSON[T any](f *zip.File, r *reader) ([]T, error) {
 	rc, err := f.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rc.Close() }()
-	limited := &io.LimitedReader{R: rc, N: *budget + 1}
-	var entries []T
-	err = json.NewDecoder(limited).Decode(&entries)
-	*budget = limited.N - 1
-	if *budget < 0 {
-		return nil, errors.New("the export is too big")
+	limited := &io.LimitedReader{R: rc, N: r.budget + 1}
+	defer func() { r.budget = limited.N - 1 }()
+	d := json.NewDecoder(limited)
+	tok, err := d.Token()
+	if err != nil {
+		return nil, tooBig(limited, err)
 	}
-	return entries, err
+	if tok == nil {
+		return nil, nil
+	}
+	if tok != json.Delim('[') {
+		return nil, errors.New("expected a list")
+	}
+	var entries []T
+	for d.More() {
+		if r.rows == 0 {
+			return nil, core.ErrTooManyRows
+		}
+		var v T
+		if err := d.Decode(&v); err != nil {
+			return nil, tooBig(limited, err)
+		}
+		r.rows--
+		entries = append(entries, v)
+	}
+	_, err = d.Token()
+	return entries, tooBig(limited, err)
+}
+
+func tooBig(limited *io.LimitedReader, err error) error {
+	if limited.N <= 0 {
+		return core.ErrTooBig
+	}
+	return err
 }
 
 func deref(s *string) string {

@@ -15,6 +15,11 @@ import (
 
 const maxUpload = 100 << 20
 
+// Each upload is held and parsed in memory, so only a couple are read at once.
+var parsing = make(chan struct{}, 2)
+
+var tooManyRows = problem("too_big", "Exports with up to 200,000 entries can be imported.")
+
 func (s *Server) profileCaller(ctx context.Context, profileID *int64) (core.Caller, bool, error) {
 	if _, bearer := ctx.Value(bearerKey).(string); bearer || profileID == nil {
 		return s.caller(ctx)
@@ -112,6 +117,12 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 	if req.Body == nil {
 		return CreateImport400JSONResponse{problem("not_an_export", "Send the export as a zip with Content-Type application/zip, or as JSON once it’s matched.")}, nil
 	}
+	select {
+	case parsing <- struct{}{}:
+		defer func() { <-parsing }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	body, err := io.ReadAll(io.LimitReader(req.Body, maxUpload+1))
 	if err != nil {
 		return nil, err
@@ -123,6 +134,10 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 	var traktBad traktexport.BadFileError
 	var simklBad simklexport.BadFileError
 	switch {
+	case errors.Is(err, core.ErrTooManyRows):
+		return CreateImport413JSONResponse(tooManyRows), nil
+	case errors.Is(err, core.ErrTooBig):
+		return CreateImport413JSONResponse(problem("too_big", "That export is too big to import once it’s unzipped.")), nil
 	case errors.Is(err, simklexport.ErrNotAnExport):
 		return CreateImport400JSONResponse{problem("not_an_export", "That isn’t an export file Tethr can read. Download the zip from your old tracker’s settings and send it as it is.")}, nil
 	case errors.As(err, &traktBad):
@@ -140,6 +155,8 @@ func (s *Server) createImport(ctx context.Context, profileID int64, source, file
 	switch {
 	case errors.Is(err, core.ErrEmptyImport):
 		return CreateImport400JSONResponse{problem("empty_export", "That export has no history, watchlist, resume points, ratings or hidden items Tethr can match.")}, nil
+	case errors.Is(err, core.ErrTooManyRows):
+		return CreateImport413JSONResponse(tooManyRows), nil
 	case errors.Is(err, core.ErrImportBusy):
 		return CreateImport409JSONResponse(problem("import_running", "An import is already running for this profile. Try again when it’s finished.")), nil
 	case err != nil:
@@ -269,7 +286,7 @@ func (s *Server) ListRatings(ctx context.Context, req ListRatingsRequestObject) 
 	}
 	out := make(ListRatings200JSONResponse, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, Rating{Id: e.ID, Rating: int(e.Rating), RatedAt: e.At, Item: toItem(e.Item)})
+		out = append(out, Rating{Id: e.ID, Rating: int(e.Rating), RatedAt: e.At, Item: toItem(ctx, e.Item)})
 	}
 	return out, nil
 }

@@ -25,7 +25,7 @@ func (s *Server) GetPopular(ctx context.Context, req GetPopularRequestObject) (G
 	}
 	out := make(GetPopular200JSONResponse, 0, len(titles))
 	for _, t := range titles {
-		out = append(out, PopularTitle{Item: toItem(t.Item), Households: t.Households})
+		out = append(out, PopularTitle{Item: toItem(ctx, t.Item), Households: t.Households})
 	}
 	return out, nil
 }

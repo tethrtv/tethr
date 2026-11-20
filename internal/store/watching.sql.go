@@ -178,6 +178,36 @@ func (q *Queries) CreateWatchEvent(ctx context.Context, arg CreateWatchEventPara
 	return i, err
 }
 
+const createWatchlist = `-- name: CreateWatchlist :one
+INSERT INTO lists (profile_id, kind, name, slug)
+VALUES ($1, 'watchlist', 'Watchlist', 'watchlist')
+ON CONFLICT (profile_id) WHERE kind = 'watchlist' DO UPDATE SET kind = lists.kind
+RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id
+`
+
+func (q *Queries) CreateWatchlist(ctx context.Context, profileID int64) (List, error) {
+	row := q.db.QueryRow(ctx, createWatchlist, profileID)
+	var i List
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.Kind,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Privacy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SortBy,
+		&i.SortHow,
+		&i.CoverItemID,
+		&i.KeptAt,
+		&i.Rule,
+		&i.ImportID,
+	)
+	return i, err
+}
+
 const deleteListItem = `-- name: DeleteListItem :one
 DELETE FROM list_items li
 USING lists l
@@ -1029,10 +1059,7 @@ func (q *Queries) Watching(ctx context.Context, profileID int64) (Watching, erro
 }
 
 const watchlist = `-- name: Watchlist :one
-INSERT INTO lists (profile_id, kind, name, slug)
-VALUES ($1, 'watchlist', 'Watchlist', 'watchlist')
-ON CONFLICT (profile_id) WHERE kind = 'watchlist' DO UPDATE SET kind = lists.kind
-RETURNING id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id
+SELECT id, profile_id, kind, name, slug, description, privacy, created_at, updated_at, sort_by, sort_how, cover_item_id, kept_at, rule, import_id FROM lists WHERE profile_id = $1 AND kind = 'watchlist'
 `
 
 func (q *Queries) Watchlist(ctx context.Context, profileID int64) (List, error) {

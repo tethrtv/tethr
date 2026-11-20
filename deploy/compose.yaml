@@ -47,8 +47,10 @@ services:
       DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable
       APP_URL: https://staging.tethr.tv
       API_URL: https://staging-api.tethr.tv
+      SMTP_PASSWORD: ${STAGING_RESEND_API_KEY:-${RESEND_API_KEY:?}}
       SESSION_COOKIE: tethr_staging_session
       WEBAUTHN_RP_ID: staging.tethr.tv
+      SIGNUPS: invite
       TMDB_TOKEN: ${TMDB_TOKEN:-}
 
   postgres:

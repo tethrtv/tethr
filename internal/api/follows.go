@@ -30,7 +30,7 @@ func (s *Server) ListFollowedLists(ctx context.Context, req ListFollowedListsReq
 	}
 	out := make(ListFollowedLists200JSONResponse, 0, len(lists))
 	for _, l := range lists {
-		out = append(out, s.toList(l))
+		out = append(out, s.toList(ctx, l))
 	}
 	return out, nil
 }
@@ -54,7 +54,7 @@ func (s *Server) FollowList(ctx context.Context, req FollowListRequestObject) (F
 	case err != nil:
 		return nil, err
 	}
-	return FollowList200JSONResponse(s.toList(l)), nil
+	return FollowList200JSONResponse(s.toList(ctx, l)), nil
 }
 
 func (s *Server) UnfollowList(ctx context.Context, req UnfollowListRequestObject) (UnfollowListResponseObject, error) {
@@ -123,7 +123,7 @@ func (s *Server) BrowseLists(ctx context.Context, req BrowseListsRequestObject) 
 	}
 	out := BrowseLists200JSONResponse{Lists: make([]List, 0, len(lists)), Total: total, Page: query.Page.Page, Limit: query.Page.Limit}
 	for _, l := range lists {
-		out.Lists = append(out.Lists, s.toList(l))
+		out.Lists = append(out.Lists, s.toList(ctx, l))
 	}
 	return out, nil
 }
@@ -147,7 +147,7 @@ func (s *Server) GetUser(ctx context.Context, req GetUserRequestObject) (GetUser
 	}
 	out := GetUser200JSONResponse{Username: page.Username, Name: optionalString(page.Name), Private: page.Private, Lists: make([]List, 0, len(page.Lists))}
 	for _, l := range page.Lists {
-		out.Lists = append(out.Lists, s.toList(l))
+		out.Lists = append(out.Lists, s.toList(ctx, l))
 	}
 	return out, nil
 }
@@ -228,5 +228,5 @@ func (s *Server) GetUserList(ctx context.Context, req GetUserListRequestObject) 
 	case err != nil:
 		return nil, err
 	}
-	return GetUserList200JSONResponse(s.toList(l)), nil
+	return GetUserList200JSONResponse(s.toList(ctx, l)), nil
 }

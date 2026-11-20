@@ -227,7 +227,7 @@ func resolveSeason(ctx context.Context, q *store.Queries, ref Ref, create bool) 
 			return resolved{}, err
 		}
 	}
-	if ref.Season == nil || *ref.Season < 0 {
+	if ref.Season == nil || !inRange(*ref.Season, maxSeason) {
 		return resolved{}, ErrNotFound
 	}
 	show, err := resolveTitle(ctx, q, "show", ref.Show, create)
@@ -278,6 +278,9 @@ func findEpisode(ctx context.Context, q *store.Queries, ref Ref, create bool) (s
 		}
 		return q.EpisodeByTMDB(ctx, int32ID(ref.IDs.TMDB))
 	}
+	if !inRange(*ref.Season, maxSeason) || !inRange(*ref.Number, maxEpisode) {
+		return store.Episode{}, ErrNotFound
+	}
 	show, err := resolveTitle(ctx, q, "show", ref.Show, create)
 	if err != nil {
 		return store.Episode{}, err
@@ -300,12 +303,20 @@ func findEpisode(ctx context.Context, q *store.Queries, ref Ref, create bool) (s
 		ShowID:        show.ID,
 		SeasonNumber:  *ref.Season,
 		EpisodeNumber: *ref.Number,
-		TmdbEpisodeID: int32ID(ref.IDs.TMDB),
 	})
 	if err != nil {
 		return e, err
 	}
 	return e, q.AddShowSeasons(ctx, show.ID)
+}
+
+const (
+	maxSeason  = 3000
+	maxEpisode = 100000
+)
+
+func inRange(n, most int32) bool {
+	return n >= 0 && n <= most
 }
 
 func int32ID(id int64) *int32 {

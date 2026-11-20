@@ -2,7 +2,6 @@ package simklexport
 
 import (
 	"archive/zip"
-	"bytes"
 	"cmp"
 	"encoding/json"
 	"errors"
@@ -26,7 +25,7 @@ type BadFileError struct {
 func (e BadFileError) Error() string { return e.Name + ": " + e.Err.Error() }
 func (e BadFileError) Unwrap() error { return e.Err }
 
-const maxUnpacked = 512 << 20
+const maxUnpacked = 32 << 20
 
 type id string
 
@@ -90,12 +89,6 @@ type entry struct {
 	} `json:"seasons"`
 }
 
-type library struct {
-	Shows  []entry `json:"shows"`
-	Movies []entry `json:"movies"`
-	Anime  []entry `json:"anime"`
-}
-
 func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 	var out core.ImportFile
 	z, err := zip.NewReader(r, size)
@@ -109,7 +102,10 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 		if f.FileInfo().IsDir() || !strings.EqualFold(path.Ext(name), ".json") {
 			continue
 		}
-		b, ok, err := readBackup(f, &budget)
+		ok, err := readBackup(f, &budget, &out)
+		if errors.Is(err, core.ErrTooManyRows) || errors.Is(err, core.ErrTooBig) {
+			return out, err
+		}
 		if err != nil && strings.HasPrefix(strings.ToLower(name), "simkl") {
 			return out, BadFileError{Name: name, Err: err}
 		}
@@ -117,15 +113,6 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 			continue
 		}
 		found = true
-		for _, e := range b.Shows {
-			e.add(&out, false)
-		}
-		for _, e := range b.Movies {
-			e.add(&out, false)
-		}
-		for _, e := range b.Anime {
-			e.add(&out, true)
-		}
 	}
 	if !found {
 		return out, ErrNotAnExport
@@ -133,33 +120,77 @@ func Read(r io.ReaderAt, size int64) (core.ImportFile, error) {
 	return out, nil
 }
 
-func readBackup(f *zip.File, budget *int64) (library, bool, error) {
-	var b library
+func readBackup(f *zip.File, budget *int64, out *core.ImportFile) (bool, error) {
 	rc, err := f.Open()
 	if err != nil {
-		return b, false, err
+		return false, err
 	}
 	defer func() { _ = rc.Close() }()
 	limited := &io.LimitedReader{R: rc, N: *budget + 1}
-	body, err := io.ReadAll(limited)
-	*budget = limited.N - 1
-	if *budget < 0 {
-		return b, false, errors.New("the backup is too big")
+	defer func() { *budget = limited.N - 1 }()
+	var file core.ImportFile
+	ok, err := decodeBackup(json.NewDecoder(limited), &file, rows(out))
+	if limited.N <= 0 {
+		return false, core.ErrTooBig
 	}
-	if err != nil {
-		return b, false, err
+	if err != nil || !ok {
+		return false, err
 	}
-	var keys map[string]json.RawMessage
-	if err := json.Unmarshal(body, &keys); err != nil {
-		return b, false, err
+	out.History = append(out.History, file.History...)
+	out.Watchlist = append(out.Watchlist, file.Watchlist...)
+	out.Ratings = append(out.Ratings, file.Ratings...)
+	out.Hidden = append(out.Hidden, file.Hidden...)
+	return true, nil
+}
+
+func rows(f *core.ImportFile) int {
+	return len(f.History) + len(f.Watchlist) + len(f.Playback) + len(f.Ratings) + len(f.Hidden)
+}
+
+func decodeBackup(d *json.Decoder, out *core.ImportFile, before int) (bool, error) {
+	if tok, err := d.Token(); err != nil || tok != json.Delim('{') {
+		return false, cmp.Or(err, errors.New("expected an object"))
 	}
-	_, shows := keys["shows"]
-	_, movies := keys["movies"]
-	_, anime := keys["anime"]
-	if !shows && !movies && !anime {
-		return b, false, nil
+	found := false
+	for d.More() {
+		tok, err := d.Token()
+		if err != nil {
+			return false, err
+		}
+		key, _ := tok.(string)
+		if key != "shows" && key != "movies" && key != "anime" {
+			var skip json.RawMessage
+			if err := d.Decode(&skip); err != nil {
+				return false, err
+			}
+			continue
+		}
+		found = true
+		tok, err = d.Token()
+		if err != nil {
+			return false, err
+		}
+		if tok == nil {
+			continue
+		}
+		if tok != json.Delim('[') {
+			return false, fmt.Errorf("expected a list of %s", key)
+		}
+		for d.More() {
+			var e entry
+			if err := d.Decode(&e); err != nil {
+				return false, err
+			}
+			e.add(out, key == "anime")
+			if before+rows(out) > core.MaxImportRows {
+				return false, core.ErrTooManyRows
+			}
+		}
+		if _, err := d.Token(); err != nil {
+			return false, err
+		}
 	}
-	return b, true, json.NewDecoder(bytes.NewReader(body)).Decode(&b)
+	return found, nil
 }
 
 func (e entry) add(out *core.ImportFile, anime bool) {

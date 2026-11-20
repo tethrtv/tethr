@@ -281,3 +281,86 @@ func TestImportTraktIDs(t *testing.T) {
 		t.Errorf("conflicts = %v, want %v", outcomes, want)
 	}
 }
+
+func TestFailedImportDoesntHoldTheQueue(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	accountID, _ := signedUpAccount(t, db)
+	_, profiles, err := Me(ctx, db, accountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sam, err := AddProfile(ctx, db, accountID, NewProfile{Name: "Sam", Kind: "person"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bad := ImportFile{History: []ImportItem{
+		{Ref: Ref{Kind: "show", IDs: IDs{TMDB: 1396}}, Label: "Breaking\x00Bad", At: at("2024-01-01T20:00:00Z")},
+		{Ref: inception(), Label: "Inception (2010)", At: at("2024-01-01T20:00:00Z")},
+	}}
+	first, err := CreateImport(ctx, db, profiles[0].ID, "trakt", "trakt.zip", bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := QueueImport(ctx, db, profiles[0].ID, first.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	second, err := CreateImport(ctx, db, sam.ID, "trakt", "trakt.zip", ImportFile{History: []ImportItem{{Ref: inception(), Label: "Inception (2010)", At: at("2024-01-01T20:00:00Z")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := QueueImport(ctx, db, sam.ID, second.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 3 {
+		_, _, _ = ApplyNextImport(ctx, db)
+	}
+	firstNow, err := ImportByID(ctx, db, profiles[0].ID, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondNow, err := ImportByID(ctx, db, sam.ID, second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstNow.Status == "queued" || secondNow.Status != "applied" {
+		t.Errorf("first import %s, second %s", firstNow.Status, secondNow.Status)
+	}
+}
+
+func TestImportCommitsCatalogueRowsFirst(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+
+	f := ImportFile{
+		History:   []ImportItem{{Ref: Ref{Kind: "movie", IDs: IDs{TMDB: 550}}, Label: "Fight Club (1999)", At: at("2024-01-01T20:00:00Z")}},
+		Watchlist: []ImportItem{{Ref: inception(), Label: "Inception (2010)", Notes: "with\x00Sam"}},
+	}
+	imp, err := CreateImport(ctx, db, caller.ProfileID, "trakt", "trakt.zip", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := QueueImport(ctx, db, caller.ProfileID, imp.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ApplyNextImport(ctx, db); err == nil {
+		t.Fatal("an import with a note Postgres can't store applied")
+	}
+	var titles, plays int
+	if err := db.QueryRow(ctx, "SELECT count(*) FROM titles WHERE tmdb_id IN (550, 27205)").Scan(&titles); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(ctx, "SELECT count(*) FROM watch_events WHERE profile_id = $1", caller.ProfileID).Scan(&plays); err != nil {
+		t.Fatal(err)
+	}
+	if titles != 2 || plays != 0 {
+		t.Errorf("after a failed apply: %d titles kept, %d plays kept; want the titles made outside the import's transaction and no plays", titles, plays)
+	}
+	failed, err := ImportByID(ctx, db, caller.ProfileID, imp.ID)
+	if err != nil || failed.Status != "failed" {
+		t.Errorf("import = %+v, %v", failed, err)
+	}
+}

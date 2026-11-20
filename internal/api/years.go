@@ -56,23 +56,23 @@ func (s *Server) GetYear(ctx context.Context, req GetYearRequestObject) (GetYear
 		out.Days = append(out.Days, YearDay{Plays: d.Plays, Minutes: d.Minutes})
 	}
 	for _, sh := range y.Shows {
-		out.Shows = append(out.Shows, YearShow{Show: toItem(sh.Show).Title, Episodes: sh.Episodes, Minutes: sh.Minutes, New: sh.New})
+		out.Shows = append(out.Shows, YearShow{Show: toItem(ctx, sh.Show).Title, Episodes: sh.Episodes, Minutes: sh.Minutes, New: sh.New})
 	}
 	for _, f := range y.FilmsSeen {
-		out.FilmPlays = append(out.FilmPlays, YearFilm{Film: toItem(f.Film).Title, WatchedAt: f.At, Precision: YearFilmPrecision(f.Precision), New: f.New, Again: f.Again})
+		out.FilmPlays = append(out.FilmPlays, YearFilm{Film: toItem(ctx, f.Film).Title, WatchedAt: f.At, Precision: YearFilmPrecision(f.Precision), New: f.New, Again: f.Again})
 	}
 	if y.Run.Days > 0 {
 		out.Run.From = &openapi_types.Date{Time: y.Run.From}
 	}
 	if b := y.Busiest; b != nil {
-		out.Busiest = &BusiestDay{Date: openapi_types.Date{Time: b.Date}, Plays: b.Plays, Minutes: b.Minutes, Item: toItem(b.Title), ItemPlays: b.TitlePlays}
+		out.Busiest = &BusiestDay{Date: openapi_types.Date{Time: b.Date}, Plays: b.Plays, Minutes: b.Minutes, Item: toItem(ctx, b.Title), ItemPlays: b.TitlePlays}
 	}
 	for _, e := range []struct {
 		from *core.Entry
 		to   **Watch
 	}{{y.First, &out.First}, {y.Latest, &out.Latest}} {
 		if e.from != nil {
-			*e.to = &Watch{Id: e.from.ID, WatchedAt: e.from.At, Precision: WatchPrecision(e.from.Precision), Action: WatchAction(e.from.Action), Item: toItem(e.from.Item)}
+			*e.to = &Watch{Id: e.from.ID, WatchedAt: e.from.At, Precision: WatchPrecision(e.from.Precision), Action: WatchAction(e.from.Action), Item: toItem(ctx, e.from.Item)}
 		}
 	}
 	return out, nil

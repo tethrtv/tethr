@@ -1494,6 +1494,7 @@ type EmailLinkRequest struct {
 
 // Episode defines model for Episode.
 type Episode struct {
+	// FirstAired Only sent to Tethr's own website. Apps get air dates from TMDB with their own key.
 	FirstAired *openapi_types.Date `json:"first_aired,omitempty"`
 
 	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.

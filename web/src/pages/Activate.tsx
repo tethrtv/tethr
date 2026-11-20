@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { Link, useSearch } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import { Button } from '../components/Button'
 import { CodeInput } from '../components/CodeInput'
@@ -33,21 +33,18 @@ export function Activate() {
     onSuccess: (device) => setStep({ kind: 'approve', app: device.app_name, official: device.official }),
   })
 
-  const started = useRef(false)
-  useEffect(() => {
-    if (started.current || !me || prefill?.length !== LENGTH) return
-    started.current = true
-    look.mutate(prefill)
-  }, [me, prefill, look])
+  const [fromLink, setFromLink] = useState(prefill?.length === LENGTH)
 
   const enter = (next: string) => {
     setCode(next)
+    setFromLink(false)
     look.reset()
     if (next.length === LENGTH) look.mutate(next)
   }
 
   const restart = () => {
     setCode('')
+    setFromLink(false)
     look.reset()
     setStep({ kind: 'code' })
   }
@@ -79,13 +76,26 @@ export function Activate() {
                 letters
                 disabled={look.isPending}
               />
-              <p className={look.isError ? `${auth.status} ${auth.error}` : auth.status} aria-live="polite">
-                {look.isPending
-                  ? 'Looking for your TV…'
-                  : look.isError
-                    ? problemMessage(look.error)
-                    : `${LENGTH - code.length} to go`}
-              </p>
+              {fromLink && look.isIdle ? (
+                <>
+                  <p className={auth.status}>
+                    This code came with the link you opened. Only carry on if your TV or app is showing it right now.
+                  </p>
+                  <div className={auth.actions}>
+                    <Button variant="primary" onClick={() => look.mutate(code)}>
+                      Carry on
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className={look.isError ? `${auth.status} ${auth.error}` : auth.status} aria-live="polite">
+                  {look.isPending
+                    ? 'Looking for your TV…'
+                    : look.isError
+                      ? problemMessage(look.error)
+                      : `${LENGTH - code.length} to go`}
+                </p>
+              )}
             </div>
           )}
           {step.kind === 'approve' && (

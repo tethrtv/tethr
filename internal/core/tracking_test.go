@@ -181,6 +181,81 @@ func TestWatchlist(t *testing.T) {
 	}
 }
 
+func TestClientEpisodeIDsDontBlockOutlines(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+
+	season, number := int32(99), int32(1)
+	squat := Ref{Kind: "episode", IDs: IDs{TMDB: 62085}, Show: IDs{TMDB: 900001}, Season: &season, Number: &number}
+	if _, err := AddHistory(ctx, db, caller, []Watch{{Ref: squat, At: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	other, err := LookUp(ctx, db, "show", IDs{TMDB: 900002}, true)
+	if err != nil || len(other) != 1 {
+		t.Fatalf("look up = %+v, %v", other, err)
+	}
+	if _, err := db.Exec(ctx, "INSERT INTO episodes (show_id, season_number, episode_number, tmdb_episode_id) VALUES ($1, 1, 1, 62086)", other[0].Title.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	shows, err := LookUp(ctx, db, "show", IDs{TMDB: 1396}, true)
+	if err != nil || len(shows) != 1 {
+		t.Fatalf("look up = %+v, %v", shows, err)
+	}
+	aired := time.Date(2008, 1, 20, 0, 0, 0, 0, time.UTC)
+	if err := SaveOutline(ctx, db, shows[0].Title.ID, []OutlineEpisode{
+		{TMDBID: 62085, Season: 1, Number: 1, FirstAired: &aired},
+		{TMDBID: 62086, Season: 1, Number: 2, FirstAired: &aired},
+	}); err != nil {
+		t.Fatalf("outline for the real show: %v", err)
+	}
+	var owners []int64
+	rows, err := db.Query(ctx, "SELECT show_id FROM episodes WHERE tmdb_episode_id IN (62085, 62086)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		owners = append(owners, id)
+	}
+	if len(owners) != 2 || owners[0] != shows[0].Title.ID || owners[1] != shows[0].Title.ID {
+		t.Errorf("episode ids belong to shows %v, want both on %d", owners, shows[0].Title.ID)
+	}
+}
+
+func TestWatchlistKeepsListIDs(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+
+	if _, err := Watchlist(ctx, db, caller.ProfileID, ""); err != nil {
+		t.Fatal(err)
+	}
+	var before int64
+	if err := db.QueryRow(ctx, "SELECT last_value FROM lists_id_seq").Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	for range 5 {
+		if _, err := Watchlist(ctx, db, caller.ProfileID, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := AddHistory(ctx, db, caller, []Watch{{Ref: inception(), At: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	var after int64
+	if err := db.QueryRow(ctx, "SELECT last_value FROM lists_id_seq").Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Errorf("reading the watchlist and adding a play moved lists_id_seq from %d to %d", before, after)
+	}
+}
+
 func TestDroppedStops(t *testing.T) {
 	db := dbtest.New(t)
 	ctx := context.Background()
@@ -250,5 +325,31 @@ func TestDroppedStops(t *testing.T) {
 	}
 	if got := plays(); len(got) != 2 {
 		t.Errorf("late stop counted again: %+v", got)
+	}
+}
+
+func TestMadeUpEpisodeNumbers(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+	when := time.Date(2024, 1, 1, 20, 0, 0, 0, time.UTC)
+	result, err := AddHistory(ctx, db, caller, []Watch{
+		{Ref: episode(0, 1), At: when},
+		{Ref: episode(3000, 100000), At: when},
+		{Ref: episode(3001, 1), At: when},
+		{Ref: episode(1, 100001), At: when},
+		{Ref: episode(-1, 1), At: when},
+		{Ref: episode(1, -1), At: when},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Added.Episodes != 2 || len(result.NotFound) != 4 {
+		t.Errorf("added %+v, not found %+v", result.Added, result.NotFound)
+	}
+	season := int32(5000)
+	rated, err := Rate(ctx, db, caller.ProfileID, []Rating{{Ref: Ref{Kind: "season", Show: IDs{TMDB: 1396}, Season: &season}, Rating: 8}})
+	if err != nil || len(rated.NotFound) != 1 {
+		t.Errorf("a made-up season = %+v, %v", rated, err)
 	}
 }

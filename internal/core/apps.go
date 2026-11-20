@@ -14,6 +14,7 @@ import (
 
 var (
 	ErrAppName     = errors.New("apps need a name of up to 60 characters")
+	ErrAppNameKept = errors.New("names with tethr or zuno in them are kept for those apps")
 	ErrRedirectURI = errors.New("redirect uris must be https, a custom scheme, or http on localhost")
 	ErrTooManyApps = errors.New("an account can register up to 10 apps")
 )
@@ -45,6 +46,9 @@ func RegisterApp(ctx context.Context, db *pgxpool.Pool, accountID int64, name st
 		if n >= maxApps {
 			return ErrTooManyApps
 		}
+		if kept(name) {
+			return ErrAppNameKept
+		}
 		app, row, err = createApp(ctx, q, &accountID, name, redirectURIs)
 		return err
 	})
@@ -73,6 +77,11 @@ func createApp(ctx context.Context, q *store.Queries, owner *int64, name string,
 		RedirectUris:     redirectURIs,
 	})
 	return App{ClientID: clientID, ClientSecret: secret}, row, err
+}
+
+func kept(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.Contains(lower, "tethr") || strings.Contains(lower, "zuno")
 }
 
 func cleanApp(name string, redirectURIs []string) (string, []string, error) {
@@ -129,6 +138,9 @@ func UpdateApp(ctx context.Context, db *pgxpool.Pool, accountID, id int64, c App
 		name, _, err := cleanApp(*c.Name, nil)
 		if err != nil {
 			return store.App{}, err
+		}
+		if kept(name) {
+			return store.App{}, ErrAppNameKept
 		}
 		params.Name = &name
 	}

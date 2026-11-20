@@ -26,7 +26,7 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 	if err != nil {
 		return nil, err
 	}
-	out := TitleDetail{Type: TitleDetailType(t.Item.Kind()), Title: toItem(t.Item).Title, Watches: toPlays(t.Watches), Resume: toResume(t.Resume), Facts: toFacts(t.Facts)}
+	out := TitleDetail{Type: TitleDetailType(t.Item.Kind()), Title: toItem(ctx, t.Item).Title, Watches: toPlays(t.Watches), Resume: toResume(t.Resume), Facts: toFacts(t.Facts)}
 	if r := t.Rating; r != nil {
 		out.Rating = &TitleRating{Id: r.ID, Rating: int(r.Rating), RatedAt: r.At}
 	}
@@ -48,7 +48,7 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 		for _, season := range t.Seasons {
 			episodes := make([]EpisodeDetail, 0, len(season.Episodes))
 			for _, e := range season.Episodes {
-				episodes = append(episodes, EpisodeDetail{Episode: toEpisode(e.Episode), Watches: toPlays(e.Watches), Resume: toResume(e.Resume)})
+				episodes = append(episodes, EpisodeDetail{Episode: toEpisode(ctx, e.Episode), Watches: toPlays(e.Watches), Resume: toResume(e.Resume)})
 			}
 			detail := SeasonDetail{Number: int(season.Number), Episodes: episodes}
 			if season.ID != 0 {
@@ -108,8 +108,8 @@ func (s *Server) UseAiredOrder(ctx context.Context, req UseAiredOrderRequestObje
 
 var noSuchShow = problem("not_found", "There’s no show with that ID or slug.")
 
-func toEpisode(e core.OrderedEpisode) Episode {
-	return *toItem(core.Item{Episode: &e}).Episode
+func toEpisode(ctx context.Context, e core.OrderedEpisode) Episode {
+	return *toItem(ctx, core.Item{Episode: &e}).Episode
 }
 
 func (s *Server) Search(ctx context.Context, req SearchRequestObject) (SearchResponseObject, error) {
@@ -137,7 +137,7 @@ func (s *Server) Search(ctx context.Context, req SearchRequestObject) (SearchRes
 	}
 	out := make(Search200JSONResponse, 0, len(items))
 	for _, i := range items {
-		out = append(out, toItem(i))
+		out = append(out, toItem(ctx, i))
 	}
 	return out, nil
 }
@@ -219,10 +219,10 @@ func (s *Server) MatchFilms(ctx context.Context, req MatchFilmsRequestObject) (M
 	for i, f := range found {
 		out.Results[i].Candidates = make([]Item, len(f.Candidates))
 		for j, c := range f.Candidates {
-			out.Results[i].Candidates[j] = toItem(c)
+			out.Results[i].Candidates[j] = toItem(ctx, c)
 		}
 		if f.Match != nil {
-			m := toItem(*f.Match)
+			m := toItem(ctx, *f.Match)
 			out.Results[i].Match = &m
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -16,6 +17,7 @@ var (
 	ErrInvalidEmail    = errors.New("invalid email address")
 	ErrInvalidUsername = errors.New("usernames are 2 to 24 lowercase letters, numbers and dashes")
 	ErrNameRequired    = errors.New("name is required")
+	ErrNameTooLong     = errors.New("names are up to 60 characters")
 	ErrEmailTaken      = errors.New("email address already has an account")
 	ErrUsernameTaken   = errors.New("username is taken")
 	ErrInviteRequired  = errors.New("sign-ups need an invite for now")
@@ -67,8 +69,8 @@ func (in SignUp) clean() (SignUp, error) {
 	if !validEmail(in.Email) {
 		return in, ErrInvalidEmail
 	}
-	if in.Name == "" {
-		return in, ErrNameRequired
+	if err := validName(in.Name); err != nil {
+		return in, err
 	}
 	return in, ValidUsername(in.Username)
 }
@@ -101,6 +103,18 @@ func CreateOfficialAccount(ctx context.Context, db *pgxpool.Pool, email string) 
 		return store.Account{}, err
 	}
 	return account, nil
+}
+
+const maxName = 60
+
+func validName(name string) error {
+	switch {
+	case name == "":
+		return ErrNameRequired
+	case utf8.RuneCountInString(name) > maxName:
+		return ErrNameTooLong
+	}
+	return nil
 }
 
 func validEmail(s string) bool {
