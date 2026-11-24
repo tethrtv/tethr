@@ -29,7 +29,7 @@ services:
     image: ghcr.io/tethrtv/tethr:${PRODUCTION_TAG:-main}
     environment:
       <<: *mail
-      DATABASE_URL: postgres://tethr:${TETHR_DB_PASSWORD:?}@postgres:5432/tethr?sslmode=disable
+      DATABASE_URL: postgres://tethr:${TETHR_DB_PASSWORD:?}@postgres:5432/tethr?sslmode=disable&pool_max_conns=20
       APP_URL: https://tethr.tv
       API_URL: https://api.tethr.tv
       SESSION_COOKIE: tethr_session
@@ -45,7 +45,7 @@ services:
     command:
       - postgres
       - -c
-      - shared_buffers=1GB
+      - shared_buffers=3GB
       - -c
       - archive_mode=on
       - -c
