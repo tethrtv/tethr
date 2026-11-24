@@ -2,6 +2,7 @@ package migrations_test
 
 import (
 	"context"
+	"net/url"
 	"testing"
 	"time"
 
@@ -25,6 +26,20 @@ func TestDownAndUpAgain(t *testing.T) {
 	}
 	if _, err := p.Up(ctx); err != nil {
 		t.Fatalf("up again: %v", err)
+	}
+}
+
+func TestUpAcceptsPoolSettings(t *testing.T) {
+	u, err := url.Parse(dbtest.New(t).Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	q.Set("pool_max_conns", "3")
+	u.RawQuery = q.Encode()
+
+	if _, err := migrations.Up(context.Background(), u.String()); err != nil {
+		t.Fatalf("up with pool settings: %v", err)
 	}
 }
 
