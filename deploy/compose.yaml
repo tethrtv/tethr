@@ -37,22 +37,6 @@ services:
       SIGNUPS: invite
       TMDB_TOKEN: ${TMDB_TOKEN:-}
 
-  tethr-staging:
-    <<: *tethr
-    image: ghcr.io/tethrtv/tethr:${STAGING_TAG:-main}
-    mem_limit: 2g
-    cpus: 0.5
-    environment:
-      <<: *mail
-      DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable
-      APP_URL: https://staging.tethr.tv
-      API_URL: https://staging-api.tethr.tv
-      SMTP_PASSWORD: ${STAGING_RESEND_API_KEY:-${RESEND_API_KEY:?}}
-      SESSION_COOKIE: tethr_staging_session
-      WEBAUTHN_RP_ID: staging.tethr.tv
-      SIGNUPS: invite
-      TMDB_TOKEN: ${TMDB_TOKEN:-}
-
   postgres:
     <<: *logging
     image: postgres:18
@@ -108,9 +92,6 @@ configs:
       CREATE ROLE tethr LOGIN PASSWORD '${TETHR_DB_PASSWORD:?}';
       CREATE DATABASE tethr OWNER tethr;
       REVOKE CONNECT ON DATABASE tethr FROM PUBLIC;
-      CREATE ROLE tethr_staging LOGIN PASSWORD '${STAGING_DB_PASSWORD:?}';
-      CREATE DATABASE tethr_staging OWNER tethr_staging;
-      REVOKE CONNECT ON DATABASE tethr_staging FROM PUBLIC;
 
 volumes:
   postgres:
