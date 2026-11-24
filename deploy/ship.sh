@@ -8,7 +8,12 @@ printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
 chmod 600 ~/.ssh/deploy
 
-ssh -i ~/.ssh/deploy "deploy@$DEPLOY_HOST" "$env" "$version" < deploy/compose.yaml
+case $env in
+  staging) compose=deploy/staging/compose.yaml ;;
+  *) compose=deploy/compose.yaml ;;
+esac
+
+ssh -i ~/.ssh/deploy "deploy@$DEPLOY_HOST" "$env" "$version" < "$compose"
 
 for _ in $(seq 1 30); do
   if curl -fsS "$url/" | grep -q "\"version\":\"$version\""; then

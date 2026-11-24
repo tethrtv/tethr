@@ -1,0 +1,74 @@
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  tethr-staging:
+    <<: *logging
+    image: ghcr.io/tethrtv/tethr:${STAGING_TAG:-main}
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COOKIE_DOMAIN: .tethr.tv
+      CLIENT_IP_HEADER: CF-Connecting-IP
+      SMTP_ADDR: smtp.resend.com:587
+      SMTP_USERNAME: resend
+      SMTP_PASSWORD: ${STAGING_RESEND_API_KEY:?}
+      MAIL_FROM: Tethr <sign-in@mail.tethr.tv>
+      DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable
+      APP_URL: https://staging.tethr.tv
+      API_URL: https://staging-api.tethr.tv
+      SESSION_COOKIE: tethr_staging_session
+      WEBAUTHN_RP_ID: staging.tethr.tv
+      SIGNUPS: invite
+      TMDB_TOKEN: ${TMDB_TOKEN:-}
+
+  postgres:
+    <<: *logging
+    image: postgres:18
+    restart: unless-stopped
+    shm_size: 128m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      PGHOST: /var/run/postgresql
+      PGUSER: postgres
+    volumes:
+      - postgres:/var/lib/postgresql
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: pg_isready
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  cloudflared:
+    <<: *logging
+    image: cloudflare/cloudflared:2026.11.1
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?}
+    restart: unless-stopped
+
+configs:
+  postgres-init:
+    content: |
+      CREATE ROLE tethr_staging LOGIN PASSWORD '${STAGING_DB_PASSWORD:?}';
+      CREATE DATABASE tethr_staging OWNER tethr_staging;
+      REVOKE CONNECT ON DATABASE tethr_staging FROM PUBLIC;
+
+volumes:
+  postgres:
