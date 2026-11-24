@@ -23,7 +23,7 @@ services:
       SMTP_USERNAME: resend
       SMTP_PASSWORD: ${STAGING_RESEND_API_KEY:?}
       MAIL_FROM: Tethr <sign-in@mail.tethr.tv>
-      DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable
+      DATABASE_URL: postgres://tethr_staging:${STAGING_DB_PASSWORD:?}@postgres:5432/tethr_staging?sslmode=disable&pool_max_conns=5
       APP_URL: https://staging.tethr.tv
       API_URL: https://staging-api.tethr.tv
       SESSION_COOKIE: tethr_staging_session
