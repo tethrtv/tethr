@@ -76,11 +76,27 @@ docker exec -u postgres tethr-postgres-1 sh -c 'wal-g backup-push "$PGDATA" && w
 url=$(sed -n 's/^HEALTHCHECK_URL=//p' /srv/tethr/.env)
 [ -z "$url" ] || curl -fsS -m 10 --retry 3 "$url" >/dev/null
 SCRIPT
-  chmod 755 /usr/local/bin/tethr-backup
-  echo '30 3 * * * deploy /usr/local/bin/tethr-backup 2>&1 | logger -t tethr-backup' > /etc/cron.d/tethr-backup
 else
-  rm -f /etc/cron.d/tethr-backup /usr/local/bin/tethr-backup /usr/local/bin/wal-g
+  rm -f /usr/local/bin/wal-g
+  cat > /usr/local/bin/tethr-backup <<'SCRIPT'
+#!/bin/sh
+set -eu
+setting() { sed -n "s/^$1=//p" /srv/tethr/.env; }
+for k in BACKUP_ENDPOINT BACKUP_BUCKET BACKUP_ACCESS_KEY_ID BACKUP_SECRET_ACCESS_KEY; do
+  [ -n "$(setting "$k")" ] || { echo "$k is not set in /srv/tethr/.env" >&2; exit 1; }
+done
+dump=$(mktemp)
+trap 'rm -f "$dump"' EXIT
+docker exec tethr-postgres-1 pg_dump -U postgres -Fc tethr_staging > "$dump"
+printf 'user = "%s:%s"\n' "$(setting BACKUP_ACCESS_KEY_ID)" "$(setting BACKUP_SECRET_ACCESS_KEY)" |
+  curl -fsS -m 600 --retry 3 -K - --aws-sigv4 aws:amz:auto:s3 -T "$dump" \
+    "$(setting BACKUP_ENDPOINT)/$(setting BACKUP_BUCKET)/tethr_staging-$(date +%a).dump" >/dev/null
+url=$(setting HEALTHCHECK_URL)
+[ -z "$url" ] || curl -fsS -m 10 --retry 3 "$url" >/dev/null
+SCRIPT
 fi
+chmod 755 /usr/local/bin/tethr-backup
+echo '30 3 * * * deploy /usr/local/bin/tethr-backup 2>&1 | logger -t tethr-backup' > /etc/cron.d/tethr-backup
 
 ufw allow OpenSSH
 ufw --force enable
