@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/migrations"
 )
 
 func watch(t *testing.T, db *pgxpool.Pool, ref core.Ref) {
@@ -200,4 +201,73 @@ func reviewEntries(t *testing.T, db *pgxpool.Pool) []core.ReviewEntry {
 		t.Fatal(err)
 	}
 	return open
+}
+
+func TestTwinsNobodyEditsGoAfterTheirWeek(t *testing.T) {
+	db, fake, job := editsSetup(t)
+	ctx := context.Background()
+	twins := func(qid, name string, movie, show int32, classes ...string) (int64, int64) {
+		w := core.WikidataTitle{QID: qid, Name: name, Year: 1997, InstanceOf: classes}
+		w.TMDB = movie
+		film := seedTitle(t, db, "movie", w)
+		w.TMDB = show
+		series := seedTitle(t, db, "show", w)
+		var p31 []string
+		for _, c := range classes {
+			p31 = append(p31, fmt.Sprintf(`{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":%q}}}}`, c))
+		}
+		fake.set(qid, name, stringClaim("P4947", strconv.Itoa(int(movie))), stringClaim("P4983", strconv.Itoa(int(show))), `"P31":[`+strings.Join(p31, ",")+`]`)
+		return film, series
+	}
+	wallace, wallaceShow := twins("Q30", "George Wallace", 30, 3030, "Q11424")
+	bagpussFilm, bagpuss := twins("Q32", "Bagpuss", 32, 3232, "Q5398426")
+	madeFilm, madeShow := twins("Q33", "Made in America", 33, 3333, "Q11424", "Q5398426")
+	seedTitle(t, db, "movie", core.WikidataTitle{QID: "Q34", Name: "Just a Film", Year: 1997, TMDB: 34, InstanceOf: []string{"Q11424"}})
+
+	upMigration(t, db, "00042_queue_film_and_show_items.sql")
+	if p := pendingItems(t, db); fmt.Sprint(p) != "[Q30 Q32 Q33]" {
+		t.Errorf("queued = %v, want every item with a film and a show", p)
+	}
+
+	if err := job.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if p := pendingItems(t, db); fmt.Sprint(p) != "[Q30 Q32]" {
+		t.Errorf("held = %v, want the twins whose classes give one kind held for a week", p)
+	}
+	if !titleExists(t, db, wallaceShow) || !titleExists(t, db, bagpussFilm) {
+		t.Error("a twin went before its week")
+	}
+
+	aWeekLater(t, db)
+	if err := job.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct {
+		id   int64
+		want bool
+	}{
+		"the film the classes give": {wallace, true}, "its unused show": {wallaceShow, false},
+		"the show the classes give": {bagpuss, true}, "its unused film": {bagpussFilm, false},
+		"a film that's also a show": {madeFilm, true}, "a show that's also a film": {madeShow, true},
+	} {
+		if got := titleExists(t, db, c.id); got != c.want {
+			t.Errorf("%s exists = %v, want %v", name, got, c.want)
+		}
+	}
+	if p := pendingItems(t, db); len(p) != 0 {
+		t.Errorf("still pending: %v", p)
+	}
+}
+
+func upMigration(t *testing.T, db *pgxpool.Pool, name string) {
+	t.Helper()
+	raw, err := migrations.FS.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, _, _ := strings.Cut(string(raw), "-- +goose Down")
+	if _, err := db.Exec(context.Background(), up); err != nil {
+		t.Fatal(err)
+	}
 }
