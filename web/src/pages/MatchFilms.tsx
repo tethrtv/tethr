@@ -54,17 +54,33 @@ async function matchFilms(films: Film[], signal: AbortSignal, onWait: (waiting: 
   }
 }
 
+export type Known = {
+  history: Item[]
+  watchlist: Item[]
+  ratings: Item[]
+  dropped: Item[]
+  shows: number
+  unread: number
+  undated: number
+}
+
+const services = { letterboxd: 'Letterboxd', tvtime: 'TV Time' }
+
 export function MatchFilms({
+  source,
   films,
   lists,
+  known,
   unreadable,
   filename,
   profileID,
   onDone,
   onAnother,
 }: {
+  source: 'letterboxd' | 'tvtime'
   films: Film[]
   lists: FilmList[]
+  known?: Known
   unreadable: string[]
   filename: string
   profileID: number
@@ -93,9 +109,9 @@ export function MatchFilms({
 
   const send = useMutation({
     mutationFn: async () => {
-      const history: Item[] = []
-      const watchlist: Item[] = []
-      const ratings: Item[] = []
+      const history: Item[] = [...(known?.history ?? [])]
+      const watchlist: Item[] = [...(known?.watchlist ?? [])]
+      const ratings: Item[] = [...(known?.ratings ?? [])]
       const base = films.map((f, i) => {
         const pick = i in picks ? picks[i] : matched[i]?.match
         return { type: 'movie' as const, tethr: pick?.tethr, tmdb: pick?.tmdb, label: label(f) }
@@ -112,7 +128,7 @@ export function MatchFilms({
       }))
       const { error } = await api.POST('/v1/imports', {
         params: { query: { profile_id: profileID, filename } },
-        body: { source: 'letterboxd', history, watchlist, ratings, lists: imported },
+        body: { source, history, watchlist, ratings, dropped: known?.dropped, lists: imported },
       })
       if (error) throw error
     },
@@ -139,7 +155,7 @@ export function MatchFilms({
     return (
       <div className={styles.review}>
         <p>
-          Matching {matched.length.toLocaleString('en-GB')} of {plural(films.length, 'film')} from Letterboxd…
+          Matching {matched.length.toLocaleString('en-GB')} of {plural(films.length, 'film')} from {services[source]}…
           {waiting && ' That’s a lot of films at once, so Tethr is waiting a moment before carrying on.'}
         </p>
         <span className={styles.meter}>
@@ -153,12 +169,24 @@ export function MatchFilms({
 
   return (
     <div className={styles.review}>
-      <p>
-        {plural(films.length, 'film')} in the file.{' '}
-        {unsure.length
-          ? `${(films.length - unsure.length).toLocaleString('en-GB')} matched by name and year. ${unsure.length === 1 ? 'Pick the right film for the last one, or leave it out.' : `Pick the right film for each of the other ${unsure.length.toLocaleString('en-GB')}, or leave them out.`}`
-          : 'Every one matched by name and year.'}
-      </p>
+      {known && known.history.length > 0 && (
+        <p>
+          {plural(known.history.length, 'episode play')} of {plural(known.shows, 'show')} in the file. Shows are matched
+          by their TVDB ID, so they don’t need checking here.
+          {known.undated > 0 &&
+            ` ${plural(known.undated, 'play has a date Tethr can’t read, so it comes', 'plays have a date Tethr can’t read, so they come')} across without one.`}
+          {known.unread > 0 &&
+            ` ${plural(known.unread, 'other entry', 'other entries')} in the file couldn’t be read and won’t come across.`}
+        </p>
+      )}
+      {films.length > 0 && (
+        <p>
+          {plural(films.length, 'film')} in the file.{' '}
+          {unsure.length
+            ? `${(films.length - unsure.length).toLocaleString('en-GB')} matched by name and year. ${unsure.length === 1 ? 'Pick the right film for the last one, or leave it out.' : `Pick the right film for each of the other ${unsure.length.toLocaleString('en-GB')}, or leave them out.`}`
+            : 'Every one matched by name and year.'}
+        </p>
+      )}
       {unsure.length > 0 && (
         <ol className={styles.films}>
           {unsure.map(({ film, i }) => (

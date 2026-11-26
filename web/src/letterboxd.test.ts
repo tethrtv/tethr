@@ -137,6 +137,22 @@ test('unzips stored and deflated CSVs and skips everything else', async () => {
   expect(files.get('watched.csv')).toBe('Name,Year\nHeat,1995\n')
 })
 
+test('only opens the files it is asked for', async () => {
+  const seen: string[][] = []
+  const files = await unzip(
+    await zip([
+      ['gdpr-data/tracking-prod-records-v2.csv', 'key\n', true],
+      ['gdpr-data/access_token.csv', 'token\nsecret\n', true],
+    ]),
+    (name, names) => {
+      seen.push(names)
+      return name.endsWith('records-v2.csv')
+    },
+  )
+  expect([...files.keys()]).toEqual(['gdpr-data/tracking-prod-records-v2.csv'])
+  expect(seen[0]).toEqual(['gdpr-data/tracking-prod-records-v2.csv', 'gdpr-data/access_token.csv'])
+})
+
 test('refuses things that are not zips', async () => {
   await expect(unzip(new Blob(['hello']))).rejects.toThrow()
 })
