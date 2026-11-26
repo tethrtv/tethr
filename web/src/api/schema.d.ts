@@ -1357,7 +1357,7 @@ export interface paths {
         put?: never;
         /**
          * Read someone's MDBList account before importing it
-         * @description MDBList has no export file, so send the person's own MDBList API key instead. Tethr uses it once to read their plays, ratings, watchlist, resume points, dropped and on-hold shows, and their lists, then forgets it. The import is kept for 24 hours and works like an export: nothing is written until it's applied. A big account can take up to a minute to read.
+         * @description MDBList has no export file, so send the person's own MDBList API key instead. Tethr uses it once to read their plays, ratings, watchlist, resume points, dropped and on-hold shows, and their lists, then forgets it. The import is kept for 24 hours and works like an export: nothing is written until it's applied. A big account can take up to a minute and a half to read.
          *
          *     Dynamic lists come across as they are now and won't refill, so they're marked `snapshot` in the summary.
          */

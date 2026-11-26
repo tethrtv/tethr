@@ -186,7 +186,9 @@ func TestTitleReportsInSummary(t *testing.T) {
 
 	var sent outbox
 	job := Reports{DB: db, Mail: &sent, To: "reports@example.com", AppURL: "https://tethr.example", Zone: time.UTC, Log: slog.New(slog.DiscardHandler)}
-	if err := job.summarise(ctx, time.Now().Add(time.Hour)); err != nil || len(sent) != 1 {
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
+	morning := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), summaryHour, 20, 0, 0, time.UTC)
+	if err := job.summarise(ctx, morning); err != nil || len(sent) != 1 {
 		t.Fatalf("summary = %d emails, %v", len(sent), err)
 	}
 	m := sent[0]
