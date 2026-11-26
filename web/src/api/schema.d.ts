@@ -1337,7 +1337,7 @@ export interface paths {
          *
          *     Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
          *
-         *     Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched. Lists in the JSON become private lists with their films in the order given, or are added to the profile's list of the same name. A rule list is never added to.
+         *     Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. TV Time's export is sent this way too, with shows by their TVDB ID, episodes by the show's TVDB ID with `season` and `number`, and films matched by name and year. Items without a `tethr`, `tmdb` or `tvdb` ID are listed as unmatched. Lists in the JSON become private lists with their films in the order given, or are added to the profile's list of the same name. A rule list is never added to.
          */
         post: operations["createImport"];
         delete?: never;
@@ -2657,7 +2657,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            source: "trakt" | "simkl" | "letterboxd" | "mdblist";
+            source: "trakt" | "simkl" | "letterboxd" | "mdblist" | "tvtime";
             filename: string;
             /** @enum {string} */
             status: "parsed" | "queued" | "applied" | "failed" | "undone";
@@ -2684,10 +2684,12 @@ export interface components {
         };
         NewImport: {
             /** @enum {string} */
-            source: "letterboxd";
+            source: "letterboxd" | "tvtime";
             history?: components["schemas"]["ImportedItem"][];
             watchlist?: components["schemas"]["ImportedItem"][];
             ratings?: components["schemas"]["ImportedItem"][];
+            /** @description Shows the person stopped watching. They're hidden from Up next. */
+            dropped?: components["schemas"]["ImportedItem"][];
             lists?: components["schemas"]["ImportedList"][];
         };
         ImportedList: {
@@ -2730,7 +2732,7 @@ export interface components {
         };
         ImportedItem: {
             /** @enum {string} */
-            type: "movie";
+            type: "movie" | "show" | "episode";
             /**
              * Format: int64
              * @description Tethr's ID for it, from `/v1/match` or search. Used before `tmdb`.
@@ -2738,6 +2740,18 @@ export interface components {
             tethr?: number;
             /** Format: int32 */
             tmdb?: number;
+            /**
+             * Format: int32
+             * @description The TVDB ID of the show, for a show or an episode.
+             */
+            tvdb?: number;
+            /**
+             * Format: int32
+             * @description For an episode, with `number`.
+             */
+            season?: number;
+            /** Format: int32 */
+            number?: number;
             /** @description The name the export gave it, shown if it can't be matched. */
             label: string;
             /**

@@ -845,6 +845,45 @@ func TestMDBListImport(t *testing.T) {
 	}
 }
 
+func TestTVTimeImport(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+
+	rec := do(t, h, "POST", "/v1/imports?filename=gdpr-data.zip", `{"source":"tvtime",
+		"history":[
+			{"type":"episode","tvdb":81189,"season":1,"number":2,"label":"Breaking Bad 1x02","at":"2024-02-01T20:00:00Z"},
+			{"type":"episode","tvdb":81189,"season":1,"number":2,"label":"Breaking Bad 1x02","at":"2024-05-01T20:00:00Z"},
+			{"type":"episode","label":"Unknown show 3x01"},
+			{"type":"movie","tmdb":27205,"label":"Inception (2010)","at":"2024-01-01T20:00:00Z"}
+		],
+		"watchlist":[{"type":"show","tvdb":79126,"label":"The Wire"}],
+		"ratings":[{"type":"show","tvdb":81189,"label":"Breaking Bad","rating":9}],
+		"dropped":[{"type":"show","tvdb":121361,"label":"Game of Thrones"}]}`, cookie)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", rec.Code, rec.Body)
+	}
+	var imp Import
+	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
+	if imp.Source != ImportSourceTvtime || imp.Summary.History.Total != 4 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Unknown show 3x01" ||
+		imp.Summary.Watchlist.Total != 1 || imp.Summary.Ratings.Total != 1 || imp.Summary.Hidden.Total != 1 {
+		t.Fatalf("import = %+v", imp)
+	}
+
+	id := strconv.FormatInt(imp.Id, 10)
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", "", cookie); rec.Code != http.StatusAccepted {
+		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
+	}
+	if _, _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
+	if imp.Status != Applied || imp.Summary.History.Added != 3 || imp.Summary.Watchlist.Added != 1 || imp.Summary.Ratings.Added != 1 || imp.Summary.Hidden.Added != 1 {
+		t.Errorf("applied = %+v", imp.Summary)
+	}
+}
+
 func TestMatchedImport(t *testing.T) {
 	mail := &fakeMail{}
 	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}

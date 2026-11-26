@@ -107,8 +107,8 @@ func (s *Server) CreateImport(ctx context.Context, req CreateImportRequestObject
 		return CreateImport401JSONResponse(notConnected), err
 	}
 	if req.JSONBody != nil {
-		if req.JSONBody.Source != NewImportSourceLetterboxd {
-			return CreateImport400JSONResponse{problem("unknown_source", "Only Letterboxd exports are sent as JSON.")}, nil
+		if req.JSONBody.Source != NewImportSourceLetterboxd && req.JSONBody.Source != NewImportSourceTvtime {
+			return CreateImport400JSONResponse{problem("unknown_source", "Only Letterboxd and TV Time exports are sent as JSON.")}, nil
 		}
 		for _, r := range value(req.JSONBody.Ratings) {
 			if n := value(r.Rating); n < 1 || n > 10 {
@@ -225,15 +225,22 @@ func (s *Server) ImportMDBList(ctx context.Context, req ImportMDBListRequestObje
 }
 
 func matchedImport(in NewImport) core.ImportFile {
-	items := func(list *[]ImportedItem) []core.ImportItem {
+	items := func(list *[]ImportedItem, section string) []core.ImportItem {
 		var out []core.ImportItem
 		for _, i := range value(list) {
-			item := core.ImportItem{Ref: core.Ref{Kind: string(i.Type)}, Label: i.Label, At: i.At, Rating: int16(value(i.Rating)), Notes: value(i.Notes)}
+			item := core.ImportItem{Ref: core.Ref{Kind: string(i.Type)}, Label: i.Label, At: i.At, Rating: int16(value(i.Rating)), Notes: value(i.Notes), Section: section}
 			if i.Tethr != nil && *i.Tethr > 0 {
 				item.Ref.IDs.Tethr = *i.Tethr
 			}
 			if i.Tmdb != nil && *i.Tmdb > 0 {
 				item.Ref.IDs.TMDB = int64(*i.Tmdb)
+			}
+			if i.Tvdb != nil && *i.Tvdb > 0 {
+				item.Ref.IDs.TVDB = int64(*i.Tvdb)
+			}
+			if i.Type == ImportedItemTypeEpisode {
+				item.Ref.Show, item.Ref.IDs = item.Ref.IDs, core.IDs{}
+				item.Ref.Season, item.Ref.Number = i.Season, i.Number
 			}
 			if i.Precision != nil && *i.Precision == ImportedItemPrecisionDay {
 				item.Precision = "day"
@@ -244,9 +251,9 @@ func matchedImport(in NewImport) core.ImportFile {
 	}
 	var lists []core.ImportList
 	for _, l := range value(in.Lists) {
-		lists = append(lists, core.ImportList{Name: l.Name, Description: value(l.Description), Items: items(&l.Items)})
+		lists = append(lists, core.ImportList{Name: l.Name, Description: value(l.Description), Items: items(&l.Items, "")})
 	}
-	return core.ImportFile{History: items(in.History), Watchlist: items(in.Watchlist), Ratings: items(in.Ratings), Lists: lists}
+	return core.ImportFile{History: items(in.History, ""), Watchlist: items(in.Watchlist, ""), Ratings: items(in.Ratings, ""), Hidden: items(in.Dropped, "dropped"), Lists: lists}
 }
 
 func readExport(body []byte) (string, core.ImportFile, error) {

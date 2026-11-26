@@ -65,6 +65,7 @@ const (
 	ImportSourceMdblist    ImportSource = "mdblist"
 	ImportSourceSimkl      ImportSource = "simkl"
 	ImportSourceTrakt      ImportSource = "trakt"
+	ImportSourceTvtime     ImportSource = "tvtime"
 )
 
 // Valid indicates whether the value is a known member of the ImportSource enum.
@@ -77,6 +78,8 @@ func (e ImportSource) Valid() bool {
 	case ImportSourceSimkl:
 		return true
 	case ImportSourceTrakt:
+		return true
+	case ImportSourceTvtime:
 		return true
 	default:
 		return false
@@ -148,13 +151,19 @@ func (e ImportedItemPrecision) Valid() bool {
 
 // Defines values for ImportedItemType.
 const (
-	ImportedItemTypeMovie ImportedItemType = "movie"
+	ImportedItemTypeEpisode ImportedItemType = "episode"
+	ImportedItemTypeMovie   ImportedItemType = "movie"
+	ImportedItemTypeShow    ImportedItemType = "show"
 )
 
 // Valid indicates whether the value is a known member of the ImportedItemType enum.
 func (e ImportedItemType) Valid() bool {
 	switch e {
+	case ImportedItemTypeEpisode:
+		return true
 	case ImportedItemTypeMovie:
+		return true
+	case ImportedItemTypeShow:
 		return true
 	default:
 		return false
@@ -335,12 +344,15 @@ func (e MediaServerKind) Valid() bool {
 // Defines values for NewImportSource.
 const (
 	NewImportSourceLetterboxd NewImportSource = "letterboxd"
+	NewImportSourceTvtime     NewImportSource = "tvtime"
 )
 
 // Valid indicates whether the value is a known member of the NewImportSource enum.
 func (e NewImportSource) Valid() bool {
 	switch e {
 	case NewImportSourceLetterboxd:
+		return true
+	case NewImportSourceTvtime:
 		return true
 	default:
 		return false
@@ -1696,16 +1708,23 @@ type ImportedItem struct {
 	Label string `json:"label"`
 
 	// Notes The note on a list entry, cut to 500 characters.
-	Notes *string `json:"notes,omitempty"`
+	Notes  *string `json:"notes,omitempty"`
+	Number *int32  `json:"number,omitempty"`
 
 	// Precision Set `day` when only the date of `at` is known.
 	Precision *ImportedItemPrecision `json:"precision,omitempty"`
 	Rating    *int                   `json:"rating,omitempty"`
 
+	// Season For an episode, with `number`.
+	Season *int32 `json:"season,omitempty"`
+
 	// Tethr Tethr's ID for it, from `/v1/match` or search. Used before `tmdb`.
-	Tethr *int64           `json:"tethr,omitempty"`
-	Tmdb  *int32           `json:"tmdb,omitempty"`
-	Type  ImportedItemType `json:"type"`
+	Tethr *int64 `json:"tethr,omitempty"`
+	Tmdb  *int32 `json:"tmdb,omitempty"`
+
+	// Tvdb The TVDB ID of the show, for a show or an episode.
+	Tvdb *int32           `json:"tvdb,omitempty"`
+	Type ImportedItemType `json:"type"`
 }
 
 // ImportedItemPrecision Set `day` when only the date of `at` is known.
@@ -2038,6 +2057,8 @@ type NewApp struct {
 
 // NewImport defines model for NewImport.
 type NewImport struct {
+	// Dropped Shows the person stopped watching. They're hidden from Up next.
+	Dropped   *[]ImportedItem `json:"dropped,omitempty"`
 	History   *[]ImportedItem `json:"history,omitempty"`
 	Lists     *[]ImportedList `json:"lists,omitempty"`
 	Ratings   *[]ImportedItem `json:"ratings,omitempty"`

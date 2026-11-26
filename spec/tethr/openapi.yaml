@@ -2407,7 +2407,7 @@ paths:
 
         Items are matched by their TMDB, IMDb and TVDB IDs. Anything without one of those is listed as unmatched rather than guessed. Simkl lists anime by its own seasons with anime-site IDs only, so anime episodes are listed as unmatched. Plays already in history at the same time are skipped, so importing the same file twice is safe.
 
-        Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. Items without a `tmdb` ID are listed as unmatched. Lists in the JSON become private lists with their films in the order given, or are added to the profile's list of the same name. A rule list is never added to.
+        Exports without IDs, like Letterboxd's, are matched first and sent as JSON instead, which is how the website does it. TV Time's export is sent this way too, with shows by their TVDB ID, episodes by the show's TVDB ID with `season` and `number`, and films matched by name and year. Items without a `tethr`, `tmdb` or `tvdb` ID are listed as unmatched. Lists in the JSON become private lists with their films in the order given, or are added to the profile's list of the same name. A rule list is never added to.
       security:
         - session: []
         - bearer: []
@@ -4651,7 +4651,7 @@ components:
           format: int64
         source:
           type: string
-          enum: [trakt, simkl, letterboxd, mdblist]
+          enum: [trakt, simkl, letterboxd, mdblist, tvtime]
         filename:
           type: string
         status:
@@ -4702,10 +4702,10 @@ components:
       properties:
         source:
           type: string
-          enum: [letterboxd]
+          enum: [letterboxd, tvtime]
         history:
           type: array
-          maxItems: 50000
+          maxItems: 200000
           items:
             $ref: '#/components/schemas/ImportedItem'
         watchlist:
@@ -4716,6 +4716,12 @@ components:
         ratings:
           type: array
           maxItems: 50000
+          items:
+            $ref: '#/components/schemas/ImportedItem'
+        dropped:
+          type: array
+          maxItems: 50000
+          description: Shows the person stopped watching. They're hidden from Up next.
           items:
             $ref: '#/components/schemas/ImportedItem'
         lists:
@@ -4798,7 +4804,7 @@ components:
       properties:
         type:
           type: string
-          enum: [movie]
+          enum: [movie, show, episode]
         tethr:
           type: integer
           format: int64
@@ -4806,6 +4812,21 @@ components:
         tmdb:
           type: integer
           format: int32
+        tvdb:
+          type: integer
+          format: int32
+          description: The TVDB ID of the show, for a show or an episode.
+        season:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 3000
+          description: For an episode, with `number`.
+        number:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100000
         label:
           type: string
           maxLength: 300
