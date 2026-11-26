@@ -856,7 +856,8 @@ func TestTVTimeImport(t *testing.T) {
 			{"type":"episode","tvdb":81189,"season":1,"number":2,"label":"Breaking Bad 1x02","at":"2024-02-01T20:00:00Z"},
 			{"type":"episode","tvdb":81189,"season":1,"number":2,"label":"Breaking Bad 1x02","at":"2024-05-01T20:00:00Z"},
 			{"type":"episode","label":"Unknown show 3x01"},
-			{"type":"movie","tmdb":27205,"label":"Inception (2010)","at":"2024-01-01T20:00:00Z"}
+			{"type":"movie","tmdb":27205,"label":"Inception (2010)","at":"2024-01-01T20:00:00Z"},
+			{"type":"movie","imdb":"tt0100404","label":"Présumé innocent (1990)","at":"2024-07-27T09:26:07Z"}
 		],
 		"watchlist":[{"type":"show","tvdb":79126,"label":"The Wire"}],
 		"ratings":[{"type":"show","tvdb":81189,"label":"Breaking Bad","rating":9}],
@@ -866,7 +867,7 @@ func TestTVTimeImport(t *testing.T) {
 	}
 	var imp Import
 	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
-	if imp.Source != ImportSourceTvtime || imp.Summary.History.Total != 4 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Unknown show 3x01" ||
+	if imp.Source != ImportSourceTvtime || imp.Summary.History.Total != 5 || imp.Summary.History.Unmatched != 1 || imp.Summary.Unmatched[0] != "Unknown show 3x01" ||
 		imp.Summary.Watchlist.Total != 1 || imp.Summary.Ratings.Total != 1 || imp.Summary.Hidden.Total != 1 {
 		t.Fatalf("import = %+v", imp)
 	}
@@ -879,7 +880,7 @@ func TestTVTimeImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
-	if imp.Status != Applied || imp.Summary.History.Added != 3 || imp.Summary.Watchlist.Added != 1 || imp.Summary.Ratings.Added != 1 || imp.Summary.Hidden.Added != 1 {
+	if imp.Status != Applied || imp.Summary.History.Added != 4 || imp.Summary.Watchlist.Added != 1 || imp.Summary.Ratings.Added != 1 || imp.Summary.Hidden.Added != 1 {
 		t.Errorf("applied = %+v", imp.Summary)
 	}
 }

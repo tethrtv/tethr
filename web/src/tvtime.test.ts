@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { hasHistory, isTVTime, readTVTime, tvtimeFile } from './tvtime'
+import { hasHistory, isTVTime, readTVTime, tvtimeFile, unreadableOut } from './tvtime'
 
 const v2 =
   's_no,season_number,key,user_id,episode_id,ep_id,episode_number,gsi,s_id,created_at,series_name,ep_no,is_followed,is_archived,is_for_later,followed_at,bulk_type\n' +
@@ -112,4 +112,90 @@ test('leaves out dates that can’t be right', () => {
   )
   expect(t.episodes.map((e) => e.at)).toEqual([undefined, undefined])
   expect(t.undated).toBe(2)
+})
+
+const series = JSON.stringify([
+  {
+    uuid: 'a',
+    id: { tvdb: 372264, imdb: null },
+    created_at: '2022-05-14T22:04:29.464987Z',
+    title: 'Slow Horses',
+    status: 'continuing',
+    seasons: [
+      {
+        number: 0,
+        is_specials: true,
+        episodes: [{ id: { tvdb: 1 }, number: 1, is_watched: false, watched_at: null, rewatch_count: 0 }],
+      },
+      {
+        number: 1,
+        episodes: [
+          { id: { tvdb: 2 }, number: 1, is_watched: true, watched_at: '2022-05-15T20:00:00Z', rewatch_count: 1 },
+          { id: { tvdb: 3 }, number: 2, is_watched: true, watched_at: null, rewatch_count: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: { tvdb: 79126 },
+    title: 'The Wire',
+    status: 'not_started_yet',
+    created_at: '2023-01-01T00:00:00Z',
+    seasons: [],
+  },
+  { id: { tvdb: 121361 }, title: 'Game of Thrones', status: 'stopped', seasons: [] },
+])
+
+const movies = JSON.stringify([
+  {
+    id: { tvdb: 56719, imdb: 'tt4119270' },
+    title: '1989',
+    year: 2014,
+    is_watched: true,
+    watched_at: '2022-11-22T19:35:27Z',
+    rewatch_count: 0,
+  },
+  {
+    tvdbId: 3647,
+    imdbId: 'tt0100404',
+    title: 'Présumé innocent',
+    year: 1990,
+    isWatched: false,
+    watchedAt: '2024-07-27T09:26:07Z',
+  },
+  { id: { tvdb: 9, imdb: 'tt12' }, title: 'Lola', is_watched: true, watched_at: 'soon' },
+])
+
+test('spots a TV Time Out export', () => {
+  const names = ['tvtime-movies-2026-07-02.json', 'tvtime-series-2026-07-02.json', 'tvtime-summary-2026-07-02.html']
+  expect(isTVTime(names)).toBe(true)
+  expect(names.map(tvtimeFile)).toEqual([true, true, false])
+  expect(hasHistory(new Map([['tvtime-movies-2026-07-02.json', '[]']]))).toBe(true)
+})
+
+test('reads a TV Time Out export', () => {
+  const t = readTVTime(
+    new Map([
+      ['tvtime-series-2026-07-02.json', series],
+      ['tvtime-movies-2026-07-02.json', movies],
+    ]),
+  )
+  expect(t.episodes).toEqual([
+    { tvdb: 372264, season: 1, number: 1, label: 'Slow Horses 1x01', at: '2022-05-15T20:00:00.000Z' },
+    { tvdb: 372264, season: 1, number: 2, label: 'Slow Horses 1x02', at: undefined },
+  ])
+  expect(t.later).toEqual([{ tvdb: 79126, label: 'The Wire', at: '2023-01-01T00:00:00.000Z' }])
+  expect(t.dropped).toEqual([{ tvdb: 121361, label: 'Game of Thrones' }])
+  expect(t.idFilms).toEqual([
+    { imdb: 'tt4119270', label: '1989 (2014)', plays: ['2022-11-22T19:35:27.000Z'], listedAt: undefined },
+    { imdb: 'tt0100404', label: 'Présumé innocent (1990)', plays: [], listedAt: '2024-07-27T09:26:07.000Z' },
+  ])
+  expect(t.films).toEqual([{ name: 'Lola', year: undefined, plays: [{ at: undefined }], listedAt: undefined }])
+  expect(t.undated).toBe(1)
+})
+
+test('stops on a TV Time Out file it cannot read', () => {
+  expect(() => readTVTime(new Map([['tvtime-series-2026-07-02.json', '{oops']]))).toThrow(unreadableOut)
+  expect(() => readTVTime(new Map([['tvtime-series-2026-07-02.json', '[null]']]))).toThrow(unreadableOut)
+  expect(() => readTVTime(new Map([['tvtime-series-2026-07-02.json', '[{"seasons":{}}]']]))).toThrow(unreadableOut)
 })

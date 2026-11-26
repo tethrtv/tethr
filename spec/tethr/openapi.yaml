@@ -4816,6 +4816,10 @@ components:
           type: integer
           format: int32
           description: The TVDB ID of the show, for a show or an episode.
+        imdb:
+          type: string
+          maxLength: 20
+          description: The IMDb ID, like `tt0100404`.
         season:
           type: integer
           format: int32

@@ -1704,6 +1704,9 @@ type ImportedItem struct {
 	// At When it was watched, listed or rated. Leave it out for a play with no date.
 	At *time.Time `json:"at,omitempty"`
 
+	// Imdb The IMDb ID, like `tt0100404`.
+	Imdb *string `json:"imdb,omitempty"`
+
 	// Label The name the export gave it, shown if it can't be matched.
 	Label string `json:"label"`
 
