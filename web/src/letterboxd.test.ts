@@ -153,6 +153,17 @@ test('only opens the files it is asked for', async () => {
   expect(seen[0]).toEqual(['gdpr-data/tracking-prod-records-v2.csv', 'gdpr-data/access_token.csv'])
 })
 
+test('opens other files when asked', async () => {
+  const files = await unzip(
+    await zip([
+      ['tvtime-series-2026-07-02.json', '[]', true],
+      ['tvtime-summary-2026-07-02.html', '<p>', false],
+    ]),
+    (name) => name.endsWith('.json'),
+  )
+  expect([...files.keys()]).toEqual(['tvtime-series-2026-07-02.json'])
+})
+
 test('refuses things that are not zips', async () => {
   await expect(unzip(new Blob(['hello']))).rejects.toThrow()
 })

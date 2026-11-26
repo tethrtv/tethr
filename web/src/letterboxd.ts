@@ -16,7 +16,7 @@ export type FilmList = {
 
 export async function unzip(
   blob: Blob,
-  keep: (name: string, names: string[]) => boolean = () => true,
+  keep: (name: string, names: string[]) => boolean = (name) => name.toLowerCase().endsWith('.csv'),
 ): Promise<Map<string, string>> {
   const bytes = new Uint8Array(await blob.arrayBuffer())
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -46,7 +46,7 @@ export async function unzip(
   const names = entries.map((e) => e.name)
   const files = new Map<string, string>()
   for (const { name, method, size, local } of entries) {
-    if (name.endsWith('/') || !name.toLowerCase().endsWith('.csv') || !keep(name, names)) continue
+    if (name.endsWith('/') || !keep(name, names)) continue
     const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
     const data = bytes.subarray(start, start + size)
     if (method === 0) files.set(name, text.decode(data))

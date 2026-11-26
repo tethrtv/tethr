@@ -59,7 +59,9 @@ export type Known = {
   watchlist: Item[]
   ratings: Item[]
   dropped: Item[]
+  episodes: number
   shows: number
+  films: number
   unread: number
   undated: number
 }
@@ -169,10 +171,12 @@ export function MatchFilms({
 
   return (
     <div className={styles.review}>
-      {known && known.history.length > 0 && (
+      {known && (known.shows > 0 || known.films > 0) && (
         <p>
-          {plural(known.history.length, 'episode play')} of {plural(known.shows, 'show')} in the file. Shows are matched
-          by their TVDB ID, so they don’t need checking here.
+          {known.shows > 0 &&
+            `${plural(known.episodes, 'episode play')} of ${plural(known.shows, 'show')} in the file. Shows are matched by their TVDB ID, so they don’t need checking here.`}
+          {known.films > 0 &&
+            ` ${plural(known.films, 'film')} in the file ${known.films === 1 ? 'has an IMDb ID, so it doesn’t' : 'have IMDb IDs, so they don’t'} need checking.`}
           {known.undated > 0 &&
             ` ${plural(known.undated, 'play has a date Tethr can’t read, so it comes', 'plays have a date Tethr can’t read, so they come')} across without one.`}
           {known.unread > 0 &&

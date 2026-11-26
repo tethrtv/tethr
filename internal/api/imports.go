@@ -238,6 +238,9 @@ func matchedImport(in NewImport) core.ImportFile {
 			if i.Tvdb != nil && *i.Tvdb > 0 {
 				item.Ref.IDs.TVDB = int64(*i.Tvdb)
 			}
+			if i.Imdb != nil {
+				item.Ref.IDs.IMDB = *i.Imdb
+			}
 			if i.Type == ImportedItemTypeEpisode {
 				item.Ref.Show, item.Ref.IDs = item.Ref.IDs, core.IDs{}
 				item.Ref.Season, item.Ref.Number = i.Season, i.Number

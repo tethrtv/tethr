@@ -8,7 +8,7 @@ import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { plural } from '../format'
 import { type Film, type FilmList, isLetterboxd, readLetterboxd, unzip } from '../letterboxd'
-import { hasHistory, isTVTime, readTVTime, tvtimeFile } from '../tvtime'
+import { hasHistory, isTVTime, readTVTime, tvtimeFile, unreadableOut } from '../tvtime'
 import { ProfilePicker } from './connect'
 import home from './Home.module.css'
 import styles from './Import.module.css'
@@ -106,7 +106,7 @@ function Imports({ profileID }: { profileID: number }) {
       let tvtime = false
       const keep = (name: string, names: string[]) => {
         tvtime = isTVTime(names)
-        return !tvtime || tvtimeFile(name)
+        return tvtime ? tvtimeFile(name) : name.toLowerCase().endsWith('.csv')
       }
       const files = await unzip(file, keep).catch((e) => {
         if (e instanceof Error && e.message === 'not a zip') return null
@@ -118,7 +118,7 @@ function Imports({ profileID }: { profileID: number }) {
         setLetterboxd({ source: 'letterboxd', ...readLetterboxd(files), filename: file.name })
       else upload.mutate(file)
     },
-    onError: (e) => e.message !== noHistory && console.error(e),
+    onError: (e) => !explained.includes(e.message) && console.error(e),
   })
 
   const choose = (e: ChangeEvent<HTMLInputElement>) => {
@@ -223,8 +223,8 @@ function Imports({ profileID }: { profileID: number }) {
         {upload.isError && <p className={home.error}>{problemMessage(upload.error)}</p>}
         {read.isError && (
           <p className={home.error}>
-            {read.error.message === noHistory
-              ? noHistory
+            {explained.includes(read.error.message)
+              ? read.error.message
               : 'This browser couldn’t open the export. Try again in an up-to-date browser.'}
           </p>
         )}
@@ -247,20 +247,32 @@ function Imports({ profileID }: { profileID: number }) {
 const noHistory =
   'This looks like a TV Time export, but it doesn’t have the history files Tethr reads, so nothing was sent. Check it’s the whole zip from TV Time.'
 
+const explained = [noHistory, unreadableOut]
+
 function fromTVTime(t: ReturnType<typeof readTVTime>, filename: string) {
   const known: Known = {
-    history: t.episodes.map((e) => ({
-      type: 'episode',
-      tvdb: e.tvdb,
-      season: e.season,
-      number: e.number,
-      label: e.label,
-      at: e.at,
-    })),
-    watchlist: t.later.map((s) => ({ type: 'show', tvdb: s.tvdb, label: s.label, at: s.at })),
+    history: [
+      ...t.episodes.map((e) => ({
+        type: 'episode' as const,
+        tvdb: e.tvdb,
+        season: e.season,
+        number: e.number,
+        label: e.label,
+        at: e.at,
+      })),
+      ...t.idFilms.flatMap((f) => f.plays.map((at) => ({ type: 'movie' as const, imdb: f.imdb, label: f.label, at }))),
+    ],
+    watchlist: [
+      ...t.later.map((s) => ({ type: 'show' as const, tvdb: s.tvdb, label: s.label, at: s.at })),
+      ...t.idFilms.flatMap((f) =>
+        f.listedAt ? [{ type: 'movie' as const, imdb: f.imdb, label: f.label, at: f.listedAt }] : [],
+      ),
+    ],
     ratings: t.ratings.map((s) => ({ type: 'show', tvdb: s.tvdb, label: s.label, rating: s.rating, at: s.at })),
     dropped: t.dropped.map((s) => ({ type: 'show', tvdb: s.tvdb, label: s.label })),
+    episodes: t.episodes.length,
     shows: new Set(t.episodes.flatMap((e) => (e.tvdb ? [e.tvdb] : []))).size,
+    films: t.idFilms.length,
     unread: t.unread,
     undated: t.undated,
   }

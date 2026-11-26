@@ -2745,6 +2745,8 @@ export interface components {
              * @description The TVDB ID of the show, for a show or an episode.
              */
             tvdb?: number;
+            /** @description The IMDb ID, like `tt0100404`. */
+            imdb?: string;
             /**
              * Format: int32
              * @description For an episode, with `number`.
