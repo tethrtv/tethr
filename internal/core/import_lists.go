@@ -21,6 +21,7 @@ type ImportList struct {
 	Privacy     string
 	SortBy      string
 	SortHow     string
+	Snapshot    bool
 	Items       []ImportItem
 }
 
@@ -28,6 +29,7 @@ type ImportedList struct {
 	ImportCount
 	Name     string `json:"name"`
 	Privacy  string `json:"privacy"`
+	Snapshot bool   `json:"snapshot"`
 	Full     int    `json:"full"`
 	Existing bool   `json:"existing"`
 	Chosen   bool   `json:"chosen"`
