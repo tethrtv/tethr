@@ -25,6 +25,7 @@ import (
 	"github.com/tethrtv/tethr/internal/jobs"
 	"github.com/tethrtv/tethr/internal/limit"
 	"github.com/tethrtv/tethr/internal/mail"
+	"github.com/tethrtv/tethr/internal/mdblist"
 	"github.com/tethrtv/tethr/internal/meta"
 	"github.com/tethrtv/tethr/internal/tmdb"
 	"github.com/tethrtv/tethr/internal/traktcompat"
@@ -382,6 +383,7 @@ func serve(log *slog.Logger) error {
 		},
 		ReportsTo: envOr("REPORTS_EMAIL", "reports@tethr.tv"),
 		Mail:      mailer(),
+		MDBList:   (&mdblist.Client{}).Fetch,
 	}
 
 	go jobs.Imports{DB: db, Log: log}.Run(ctx)

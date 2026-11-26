@@ -62,6 +62,7 @@ func (e ExportFormat) Valid() bool {
 // Defines values for ImportSource.
 const (
 	ImportSourceLetterboxd ImportSource = "letterboxd"
+	ImportSourceMdblist    ImportSource = "mdblist"
 	ImportSourceSimkl      ImportSource = "simkl"
 	ImportSourceTrakt      ImportSource = "trakt"
 )
@@ -70,6 +71,8 @@ const (
 func (e ImportSource) Valid() bool {
 	switch e {
 	case ImportSourceLetterboxd:
+		return true
+	case ImportSourceMdblist:
 		return true
 	case ImportSourceSimkl:
 		return true
@@ -1641,16 +1644,19 @@ type ImportListSummary struct {
 	Full int    `json:"full"`
 	Name string `json:"name"`
 
-	// Privacy What a new list gets. Public lists in a Trakt export stay public, except on kids and guest profiles. A list that's added to keeps its own.
+	// Privacy What a new list gets. Public lists from Trakt and MDBList stay public, except on kids and guest profiles. A list that's added to keeps its own.
 	Privacy ImportListSummaryPrivacy `json:"privacy"`
 
 	// Skipped Already on the list.
-	Skipped   int `json:"skipped"`
-	Total     int `json:"total"`
-	Unmatched int `json:"unmatched"`
+	Skipped int `json:"skipped"`
+
+	// Snapshot A list that fills itself on the old service, like an MDBList dynamic list. Its items come across as they are now and won't change.
+	Snapshot  bool `json:"snapshot"`
+	Total     int  `json:"total"`
+	Unmatched int  `json:"unmatched"`
 }
 
-// ImportListSummaryPrivacy What a new list gets. Public lists in a Trakt export stay public, except on kids and guest profiles. A list that's added to keeps its own.
+// ImportListSummaryPrivacy What a new list gets. Public lists from Trakt and MDBList stay public, except on kids and guest profiles. A list that's added to keeps its own.
 type ImportListSummaryPrivacy string
 
 // ImportSummary defines model for ImportSummary.
@@ -1972,6 +1978,12 @@ type ListsPage struct {
 
 	// Total How many lists match, across every page.
 	Total int `json:"total"`
+}
+
+// MDBListKey defines model for MDBListKey.
+type MDBListKey struct {
+	// Key The API key from the person's MDBList preferences. It isn't stored.
+	Key string `json:"key"`
 }
 
 // Me defines model for Me.
@@ -2787,6 +2799,12 @@ type CreateImportParams struct {
 	Filename  *string    `form:"filename,omitempty" json:"filename,omitempty"`
 }
 
+// ImportMDBListParams defines parameters for ImportMDBList.
+type ImportMDBListParams struct {
+	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
+	ProfileId *ProfileId `form:"profile_id,omitempty" json:"profile_id,omitempty"`
+}
+
 // GetImportParams defines parameters for GetImport.
 type GetImportParams struct {
 	// ProfileId With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for.
@@ -3265,6 +3283,9 @@ type AddHistoryJSONRequestBody = NewWatches
 // CreateImportJSONRequestBody defines body for CreateImport for application/json ContentType.
 type CreateImportJSONRequestBody = NewImport
 
+// ImportMDBListJSONRequestBody defines body for ImportMDBList for application/json ContentType.
+type ImportMDBListJSONRequestBody = MDBListKey
+
 // ApplyImportJSONRequestBody defines body for ApplyImport for application/json ContentType.
 type ApplyImportJSONRequestBody = ApplyImport
 
@@ -3432,6 +3453,9 @@ type ServerInterface interface {
 	// CreateImport Read a Trakt export or Simkl backup before importing it
 	// (POST /v1/imports)
 	CreateImport(w http.ResponseWriter, r *http.Request, params CreateImportParams)
+	// ImportMDBList Read someone's MDBList account before importing it
+	// (POST /v1/imports/mdblist)
+	ImportMDBList(w http.ResponseWriter, r *http.Request, params ImportMDBListParams)
 	// GetImport One import and its counts
 	// (GET /v1/imports/{id})
 	GetImport(w http.ResponseWriter, r *http.Request, id Id, params GetImportParams)
@@ -4669,6 +4693,39 @@ func (siw *ServerInterfaceWrapper) CreateImport(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateImport(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportMDBList operation middleware
+func (siw *ServerInterfaceWrapper) ImportMDBList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ImportMDBListParams
+
+	// ------------- Optional query parameter "profile_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "profile_id", r.URL.Query(), &params.ProfileId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "profile_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profile_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportMDBList(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7748,6 +7805,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/ratings/{id}", wrapper.RemoveRating)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/imports", wrapper.ListImports)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports", wrapper.CreateImport)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports/mdblist", wrapper.ImportMDBList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/imports/{id}", wrapper.GetImport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports/{id}/apply", wrapper.ApplyImport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/imports/{id}/undo", wrapper.UndoImport)
@@ -9462,6 +9520,127 @@ func (response CreateImport413JSONResponse) VisitCreateImportResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBListRequestObject struct {
+	Params ImportMDBListParams
+	Body   *ImportMDBListJSONRequestBody
+}
+
+type ImportMDBListResponseObject interface {
+	VisitImportMDBListResponse(w http.ResponseWriter) error
+}
+
+type ImportMDBList201JSONResponse Import
+
+func (response ImportMDBList201JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBList400JSONResponse struct{ ProblemJSONResponse }
+
+func (response ImportMDBList400JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBList401JSONResponse Problem
+
+func (response ImportMDBList401JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBList404JSONResponse Problem
+
+func (response ImportMDBList404JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBList409JSONResponse Problem
+
+func (response ImportMDBList409JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBList413JSONResponse Problem
+
+func (response ImportMDBList413JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBList429JSONResponse Problem
+
+func (response ImportMDBList429JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportMDBList503JSONResponse Problem
+
+func (response ImportMDBList503JSONResponse) VisitImportMDBListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -13480,6 +13659,9 @@ type StrictServerInterface interface {
 	// CreateImport Read a Trakt export or Simkl backup before importing it
 	// (POST /v1/imports)
 	CreateImport(ctx context.Context, request CreateImportRequestObject) (CreateImportResponseObject, error)
+	// ImportMDBList Read someone's MDBList account before importing it
+	// (POST /v1/imports/mdblist)
+	ImportMDBList(ctx context.Context, request ImportMDBListRequestObject) (ImportMDBListResponseObject, error)
 	// GetImport One import and its counts
 	// (GET /v1/imports/{id})
 	GetImport(ctx context.Context, request GetImportRequestObject) (GetImportResponseObject, error)
@@ -14648,6 +14830,39 @@ func (sh *strictHandler) CreateImport(w http.ResponseWriter, r *http.Request, pa
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateImportResponseObject); ok {
 		if err := validResponse.VisitCreateImportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportMDBList operation middleware
+func (sh *strictHandler) ImportMDBList(w http.ResponseWriter, r *http.Request, params ImportMDBListParams) {
+	var request ImportMDBListRequestObject
+
+	request.Params = params
+
+	var body ImportMDBListJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportMDBList(ctx, request.(ImportMDBListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportMDBList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportMDBListResponseObject); ok {
+		if err := validResponse.VisitImportMDBListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
