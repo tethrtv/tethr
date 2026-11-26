@@ -42,10 +42,12 @@ func TestFetch(t *testing.T) {
 			{"watched_at":"2024-02-02T20:00:00Z","episode":{"season":3,"number":1}}],"pagination":{"next_cursor":null}}`,
 		"/sync/ratings": `{"movies":[{"rated_at":"2024-01-02T10:00:00Z","rating":9,"movie":{"title":"Inception","ids":{"tmdb":27205}}}],
 			"shows":[{"rating":0,"show":{"title":"Unrated","ids":{"tmdb":1}}}],
-			"seasons":[{"rating":7,"show":{"title":"Breaking Bad","ids":{"tmdb":1396}},"season":{"number":1}}]}`,
+			"seasons":[{"rating":"7","show":{"title":"Breaking Bad","ids":{"tmdb":1396}},"season":{"number":1}}]}`,
 		"/watchlist/items": `{"movies":[{"title":"Heat","release_year":1995,"mediatype":"movie","imdb_id":"tt0113277","watchlist_at":"2026-11-26T07:19:20.208Z","ids":{"tmdb":949}}],
 			"shows":[{"title":"The Wire","release_year":2002,"ids":{"tmdb":1438,"tvdb":79126}}]}`,
-		"/sync/playback": `[{"progress":42.5,"paused_at":"2024-03-01T20:00:00Z","type":"movie","movie":{"title":"Heat","ids":{"tmdb":949}}}]`,
+		"/sync/playback": `[{"progress":42.5,"paused_at":"2024-03-01T20:00:00Z","type":"movie","movie":{"title":"Heat","ids":{"tmdb":949}}},
+			{"progress":"12.5","type":"movie","movie":{"title":"Inception","ids":{"tmdb":27205}}},
+			{"progress":"","type":"movie","movie":{"title":"Lola","ids":{"tmdb":1}}}]`,
 		"/sync/dropped": `{"shows":[{"dropped_at":"2024-04-01T00:00:00Z","on_hold":false,"show":{"title":"Lost","ids":{"tmdb":4607}}},
 			{"on_hold":true,"show":{"title":"Dark","ids":{"tmdb":70523}}}]}`,
 		"/lists/user": `[{"id":11,"name":"Heists","private":false,"dynamic":false},{"id":12,"name":"Top films","dynamic":true}]`,
@@ -71,7 +73,7 @@ func TestFetch(t *testing.T) {
 	if len(f.Watchlist) != 2 || f.Watchlist[0].Ref.IDs.IMDB != "tt0113277" || f.Watchlist[0].At == nil || f.Watchlist[1].Ref.Kind != "show" || f.Watchlist[1].Ref.IDs.TVDB != 79126 {
 		t.Errorf("watchlist = %+v", f.Watchlist)
 	}
-	if len(f.Playback) != 1 || f.Playback[0].Progress != 42.5 {
+	if len(f.Playback) != 2 || f.Playback[0].Progress != 42.5 || f.Playback[1].Progress != 12.5 {
 		t.Errorf("playback = %+v", f.Playback)
 	}
 	if len(f.Hidden) != 2 || f.Hidden[0].Section != "dropped" || f.Hidden[1].Section != "progress_watched" {
