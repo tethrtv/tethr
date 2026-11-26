@@ -6,6 +6,14 @@
   margin-top: 16px;
 }
 
+.mdblist {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 28px;
+  max-width: 560px;
+}
+
 .review {
   display: grid;
   gap: 16px;

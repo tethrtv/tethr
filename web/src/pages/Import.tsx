@@ -3,6 +3,7 @@ import { type ChangeEvent, useRef, useState } from 'react'
 import { api, problemMessage } from '../api/client'
 import type { components } from '../api/schema'
 import { Button } from '../components/Button'
+import { Field } from '../components/Field'
 import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { plural } from '../format'
@@ -43,7 +44,8 @@ export function ImportSection() {
         Bring your plays, watchlist, resume points, ratings, hidden shows and lists across from your old tracker.
         Download its data export from your settings there, then add the zip here as it is. If it offers more than one
         kind, choose the full backup, not a simple CSV. Some trackers only give you one backup a month, so download it
-        when you’re ready to move. Nothing is saved until you’ve checked what was found.
+        when you’re ready to move. MDBList has no export, so it takes your API key instead. Nothing is saved until
+        you’ve checked what was found.
       </p>
       <ProfilePicker legend="Import into" profiles={me.profiles} value={profileID} onChange={setProfile} />
       <Imports key={profileID} profileID={profileID} />
@@ -75,6 +77,21 @@ function Imports({ profileID }: { profileID: number }) {
     onSuccess: refresh,
   })
 
+  const [key, setKey] = useState('')
+  const mdblist = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST('/v1/imports/mdblist', {
+        params: { query: { profile_id: profileID } },
+        body: { key: key.trim() },
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setKey('')
+      refresh()
+    },
+  })
+
   const [letterboxd, setLetterboxd] = useState<{
     films: Film[]
     lists: FilmList[]
@@ -97,6 +114,7 @@ function Imports({ profileID }: { profileID: number }) {
     e.target.value = ''
     upload.reset()
     read.reset()
+    mdblist.reset()
     setLetterboxd(null)
     if (file) read.mutate(file)
   }
@@ -148,6 +166,42 @@ function Imports({ profileID }: { profileID: number }) {
             </span>
           </div>
         )}
+        {!waiting && !letterboxd && (
+          <form
+            className={styles.mdblist}
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (key.trim()) mdblist.mutate()
+            }}
+          >
+            <Field
+              label="Or paste your MDBList API key"
+              value={key}
+              onChange={setKey}
+              spellCheck={false}
+              autoCapitalize="none"
+              autoComplete="off"
+              hint={
+                <>
+                  It’s under API access in your{' '}
+                  <a href="https://mdblist.com/preferences/" target="_blank" rel="noreferrer">
+                    MDBList preferences
+                  </a>
+                  . Tethr reads your account once and doesn’t keep the key.
+                </>
+              }
+            />
+            <Button
+              variant="plain"
+              type="submit"
+              aria-busy={mdblist.isPending}
+              disabled={!key.trim() || mdblist.isPending || running}
+            >
+              {mdblist.isPending ? 'Reading MDBList…' : 'Read my MDBList'}
+            </Button>
+            {mdblist.isError && <p className={home.error}>{problemMessage(mdblist.error)}</p>}
+          </form>
+        )}
         {upload.isError && <p className={home.error}>{problemMessage(upload.error)}</p>}
         {read.isError && (
           <p className={home.error}>This browser couldn’t open the export. Try again in an up-to-date browser.</p>
@@ -183,7 +237,8 @@ function Review({
   const [chosen, setChosen] = useState(() => {
     let room = imp.summary.list_room
     const picked: number[] = []
-    lists.forEach((_, i) => {
+    lists.forEach((l, i) => {
+      if (l.snapshot) return
       if (!needsRoom(lists, picked, i) || room-- > 0) picked.push(i)
     })
     return picked
@@ -209,7 +264,7 @@ function Review({
             <th scope="col">
               <span className={home.visuallyHidden}>Type</span>
             </th>
-            <th scope="col">In the file</th>
+            <th scope="col">{imp.source === 'mdblist' ? 'On MDBList' : 'In the file'}</th>
             <th scope="col">Can’t match</th>
           </tr>
         </thead>
@@ -236,7 +291,8 @@ function Review({
         />
       )}
       <p className={home.note}>
-        Plays already in your history are skipped, so importing the same file twice is safe.
+        Plays already in your history are skipped, so importing{' '}
+        {imp.source === 'mdblist' ? 'again' : 'the same file twice'} is safe.
         {lists.length > 0 && ' Films already on the list they’re going into are skipped too.'} You can undo the whole
         import for 30 days.
       </p>
@@ -270,6 +326,7 @@ function listNote(l: ImportList, earlier: boolean, films: boolean) {
   else if (l.existing) note += ' Adds to your list with this name.'
   else if (!matched) note += ' Nothing to bring across.'
   else if (l.privacy === 'public') note += ' Comes across public.'
+  if (l.snapshot && matched) note += ' Fills itself on MDBList, so this is a copy of what’s on it now.'
   if (matched > 1000) note += ` A list holds up to 1,000 ${films ? 'films' : 'items'}.`
   return note
 }

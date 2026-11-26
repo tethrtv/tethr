@@ -1346,6 +1346,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/imports/mdblist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read someone's MDBList account before importing it
+         * @description MDBList has no export file, so send the person's own MDBList API key instead. Tethr uses it once to read their plays, ratings, watchlist, resume points, dropped and on-hold shows, and their lists, then forgets it. The import is kept for 24 hours and works like an export: nothing is written until it's applied. A big account can take up to a minute to read.
+         *
+         *     Dynamic lists come across as they are now and won't refill, so they're marked `snapshot` in the summary.
+         */
+        post: operations["importMDBList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/imports/{id}": {
         parameters: {
             query?: never;
@@ -2635,7 +2657,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            source: "trakt" | "simkl" | "letterboxd";
+            source: "trakt" | "simkl" | "letterboxd" | "mdblist";
             filename: string;
             /** @enum {string} */
             status: "parsed" | "queued" | "applied" | "failed" | "undone";
@@ -2676,13 +2698,19 @@ export interface components {
             /** @description In list order. A list holds up to 1,000. */
             items: components["schemas"]["ImportedItem"][];
         };
+        MDBListKey: {
+            /** @description The API key from the person's MDBList preferences. It isn't stored. */
+            key: string;
+        };
         ImportListSummary: {
             name: string;
             /**
-             * @description What a new list gets. Public lists in a Trakt export stay public, except on kids and guest profiles. A list that's added to keeps its own.
+             * @description What a new list gets. Public lists from Trakt and MDBList stay public, except on kids and guest profiles. A list that's added to keeps its own.
              * @enum {string}
              */
             privacy: "private" | "public";
+            /** @description A list that fills itself on the old service, like an MDBList dynamic list. Its items come across as they are now and won't change. */
+            snapshot: boolean;
             total: number;
             added: number;
             /** @description Already on the list. */
@@ -5225,6 +5253,40 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+        };
+    };
+    importMDBList: {
+        parameters: {
+            query?: {
+                /** @description With a session, which profile in the household to use. Left out, it's the owner's. Ignored with an access token, which always uses the profile it was granted for. */
+                profile_id?: components["parameters"]["ProfileId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDBListKey"];
+            };
+        };
+        responses: {
+            /** @description The import, ready to apply */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getImport: {

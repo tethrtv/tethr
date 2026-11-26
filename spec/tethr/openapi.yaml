@@ -2445,6 +2445,46 @@ paths:
           $ref: '#/components/responses/Problem'
         '413':
           $ref: '#/components/responses/Problem'
+  /v1/imports/mdblist:
+    post:
+      operationId: importMDBList
+      summary: Read someone's MDBList account before importing it
+      description: |
+        MDBList has no export file, so send the person's own MDBList API key instead. Tethr uses it once to read their plays, ratings, watchlist, resume points, dropped and on-hold shows, and their lists, then forgets it. The import is kept for 24 hours and works like an export: nothing is written until it's applied. A big account can take up to a minute and a half to read.
+
+        Dynamic lists come across as they are now and won't refill, so they're marked `snapshot` in the summary.
+      security:
+        - session: []
+        - bearer: []
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MDBListKey'
+      responses:
+        '201':
+          description: The import, ready to apply
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Import'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
   /v1/imports/{id}:
     get:
       operationId: getImport
@@ -4611,7 +4651,7 @@ components:
           format: int64
         source:
           type: string
-          enum: [trakt, simkl, letterboxd]
+          enum: [trakt, simkl, letterboxd, mdblist]
         filename:
           type: string
         status:
@@ -4701,16 +4741,28 @@ components:
           description: In list order. A list holds up to 1,000.
           items:
             $ref: '#/components/schemas/ImportedItem'
+    MDBListKey:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The API key from the person's MDBList preferences. It isn't stored.
     ImportListSummary:
       type: object
-      required: [name, privacy, total, added, skipped, unmatched, full, existing, chosen, created]
+      required: [name, privacy, snapshot, total, added, skipped, unmatched, full, existing, chosen, created]
       properties:
         name:
           type: string
         privacy:
           type: string
           enum: [private, public]
-          description: What a new list gets. Public lists in a Trakt export stay public, except on kids and guest profiles. A list that's added to keeps its own.
+          description: What a new list gets. Public lists from Trakt and MDBList stay public, except on kids and guest profiles. A list that's added to keeps its own.
+        snapshot:
+          type: boolean
+          description: A list that fills itself on the old service, like an MDBList dynamic list. Its items come across as they are now and won't change.
         total:
           type: integer
         added:

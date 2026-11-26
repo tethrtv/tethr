@@ -17,6 +17,7 @@ import (
 	"github.com/tethrtv/tethr/internal/core"
 	"github.com/tethrtv/tethr/internal/dbtest"
 	"github.com/tethrtv/tethr/internal/mail"
+	"github.com/tethrtv/tethr/internal/mdblist"
 )
 
 type sentMail struct{ to, subject, body, html string }
@@ -787,6 +788,60 @@ func TestSimklImport(t *testing.T) {
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
 	if imp.Status != Applied || imp.Summary.History.Added != 1 || imp.Summary.Watchlist.Added != 1 || imp.Summary.Ratings.Added != 1 {
 		t.Errorf("applied = %+v", imp)
+	}
+}
+
+func TestMDBListImport(t *testing.T) {
+	mail := &fakeMail{}
+	s := &Server{DB: dbtest.New(t), Mail: mail, AppURL: "https://staging.tethr.tv", AllowedOrigins: []string{"https://staging.tethr.tv"}, Cookie: CookieConfig{Name: "tethr_session"}}
+	s.MDBList = func(_ context.Context, key string) (core.ImportFile, error) {
+		if key != "secret" {
+			return core.ImportFile{}, mdblist.ErrBadKey
+		}
+		at := time.Date(2024, 1, 1, 20, 0, 0, 0, time.UTC)
+		inception := core.Ref{Kind: "movie", IDs: core.IDs{TMDB: 27205, IMDB: "tt1375666"}}
+		return core.ImportFile{
+			History: []core.ImportItem{{Ref: inception, Label: "Inception (2010)", At: &at, Action: "watch"}},
+			Ratings: []core.ImportItem{{Ref: inception, Label: "Inception (2010)", At: &at, Rating: 9}},
+			Lists: []core.ImportList{
+				{Name: "Heists", Privacy: "public", Items: []core.ImportItem{{Ref: core.Ref{Kind: "movie", IDs: core.IDs{TMDB: 949}}, Label: "Heat (1995)"}}},
+				{Name: "Top films", Snapshot: true, Items: []core.ImportItem{{Ref: inception, Label: "Inception (2010)"}}},
+			},
+		}, nil
+	}
+	h := s.Handler()
+	cookie := signIn(t, h, mail)
+
+	if rec := do(t, h, "POST", "/v1/imports/mdblist", `{"key":"wrong"}`, cookie); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "bad_key") {
+		t.Errorf("wrong key = %d %s", rec.Code, rec.Body)
+	}
+	rec := do(t, h, "POST", "/v1/imports/mdblist", `{"key":" secret "}`, cookie)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", rec.Code, rec.Body)
+	}
+	var imp Import
+	_ = json.Unmarshal(rec.Body.Bytes(), &imp)
+	lists := imp.Summary.Lists
+	if imp.Source != ImportSourceMdblist || imp.Filename != "MDBList" || imp.Summary.History.Total != 1 || imp.Summary.Ratings.Total != 1 ||
+		len(lists) != 2 || lists[0].Snapshot || lists[0].Privacy != ImportListSummaryPrivacyPublic || !lists[1].Snapshot {
+		t.Fatalf("import = %+v", imp)
+	}
+
+	id := strconv.FormatInt(imp.Id, 10)
+	if rec := do(t, h, "POST", "/v1/imports/"+id+"/apply", `{"lists":[0]}`, cookie); rec.Code != http.StatusAccepted {
+		t.Fatalf("apply = %d %s", rec.Code, rec.Body)
+	}
+	if _, _, err := core.ApplyNextImport(context.Background(), s.DB); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/v1/imports/"+id, "", cookie).Body.Bytes(), &imp)
+	if imp.Status != Applied || imp.Summary.History.Added != 1 || imp.Summary.Ratings.Added != 1 || !imp.Summary.Lists[0].Created || imp.Summary.Lists[1].Created {
+		t.Errorf("applied = %+v", imp)
+	}
+
+	s.MDBList = nil
+	if rec := do(t, h, "POST", "/v1/imports/mdblist", `{"key":"secret"}`, cookie); rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("not set up = %d %s", rec.Code, rec.Body)
 	}
 }
 

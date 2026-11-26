@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/tethrtv/tethr/internal/core"
+	"github.com/tethrtv/tethr/internal/mdblist"
 	"github.com/tethrtv/tethr/internal/simklexport"
 	"github.com/tethrtv/tethr/internal/traktexport"
 )
@@ -50,6 +52,7 @@ func toImport(i core.Import) Import {
 			Unmatched: l.Unmatched,
 			Full:      l.Full,
 			Existing:  l.Existing,
+			Snapshot:  l.Snapshot,
 			Chosen:    l.Chosen,
 			Created:   l.Created,
 		})
@@ -163,6 +166,62 @@ func (s *Server) createImport(ctx context.Context, profileID int64, source, file
 		return nil, err
 	}
 	return CreateImport201JSONResponse(toImport(imp)), nil
+}
+
+func (s *Server) ImportMDBList(ctx context.Context, req ImportMDBListRequestObject) (ImportMDBListResponseObject, error) {
+	c, ok, err := s.profileCaller(ctx, req.Params.ProfileId)
+	if errors.Is(err, core.ErrNotFound) {
+		return ImportMDBList404JSONResponse(noSuchProfile), nil
+	}
+	if !ok {
+		return ImportMDBList401JSONResponse(notConnected), err
+	}
+	key := strings.TrimSpace(req.Body.Key)
+	if key == "" {
+		return ImportMDBList400JSONResponse{problem("bad_key", "Paste the API key from your MDBList preferences.")}, nil
+	}
+	if s.MDBList == nil {
+		return ImportMDBList503JSONResponse(problem("unavailable", "Importing from MDBList isn’t set up on this server.")), nil
+	}
+	select {
+	case parsing <- struct{}{}:
+		defer func() { <-parsing }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	fetching, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	file, err := s.MDBList(fetching, key)
+	switch {
+	case errors.Is(err, mdblist.ErrBadKey):
+		return ImportMDBList400JSONResponse{problem("bad_key", "MDBList didn’t accept that API key. Copy it again from your MDBList preferences.")}, nil
+	case errors.Is(err, mdblist.ErrLimited):
+		return ImportMDBList429JSONResponse(problem("mdblist_limit", "Your MDBList account has reached its API limit for now. Try again later.")), nil
+	case errors.Is(err, core.ErrTooManyRows):
+		s.Log.Warn("mdblist import too big", "err", err)
+		return ImportMDBList413JSONResponse(tooManyRows), nil
+	case errors.Is(err, mdblist.ErrUnavailable):
+		s.Log.Warn("mdblist import", "err", err)
+		return ImportMDBList503JSONResponse(problem("mdblist_unavailable", "MDBList didn’t answer properly. Try again in a few minutes.")), nil
+	case err != nil:
+		return nil, err
+	}
+	res, err := s.createImport(ctx, c.ProfileID, "mdblist", "MDBList", file)
+	if err != nil {
+		return nil, err
+	}
+	switch r := res.(type) {
+	case CreateImport201JSONResponse:
+		return ImportMDBList201JSONResponse(r), nil
+	case CreateImport400JSONResponse:
+		r.Message = "Your MDBList account has no plays, watchlist, resume points, ratings, dropped shows or lists Tethr can match."
+		return ImportMDBList400JSONResponse(r), nil
+	case CreateImport409JSONResponse:
+		return ImportMDBList409JSONResponse(r), nil
+	case CreateImport413JSONResponse:
+		return ImportMDBList413JSONResponse(r), nil
+	}
+	return nil, errors.New("unexpected import response")
 }
 
 func matchedImport(in NewImport) core.ImportFile {

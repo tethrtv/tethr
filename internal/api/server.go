@@ -40,6 +40,7 @@ type Server struct {
 	Cookie         CookieConfig
 	Limits         *limit.Limits
 	FetchOrder     func(context.Context, string) (core.EpisodeOrder, error)
+	MDBList        func(context.Context, string) (core.ImportFile, error)
 	Version        string
 	ReportsTo      string
 	exporting      sync.Map

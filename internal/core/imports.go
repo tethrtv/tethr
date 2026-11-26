@@ -113,7 +113,7 @@ func CreateImport(ctx context.Context, db *pgxpool.Pool, profileID int64, source
 	listed := 0
 	for i, l := range f.Lists {
 		l = cleanList(l)
-		s := ImportedList{Name: l.Name, Privacy: l.Privacy, Chosen: true}
+		s := ImportedList{Name: l.Name, Privacy: l.Privacy, Snapshot: l.Snapshot, Chosen: true}
 		l.Items = keep(l.Items, &s.ImportCount)
 		summary.ListEntries.Total += s.Total
 		summary.ListEntries.Unmatched += s.Unmatched
