@@ -8,11 +8,12 @@ import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { plural } from '../format'
 import { type Film, type FilmList, isLetterboxd, readLetterboxd, unzip } from '../letterboxd'
+import { hasHistory, isTVTime, readTVTime, tvtimeFile } from '../tvtime'
 import { ProfilePicker } from './connect'
 import home from './Home.module.css'
 import styles from './Import.module.css'
 import listStyles from './Lists.module.css'
-import { MatchFilms } from './MatchFilms'
+import { type Known, MatchFilms } from './MatchFilms'
 
 type Import = components['schemas']['Import']
 type ImportList = components['schemas']['ImportListSummary']
@@ -44,8 +45,8 @@ export function ImportSection() {
         Bring your plays, watchlist, resume points, ratings, hidden shows and lists across from your old tracker.
         Download its data export from your settings there, then add the zip here as it is. If it offers more than one
         kind, choose the full backup, not a simple CSV. Some trackers only give you one backup a month, so download it
-        when you’re ready to move. MDBList has no export, so it takes your API key instead. Nothing is saved until
-        you’ve checked what was found.
+        when you’re ready to move. If you kept your TV Time export from before it closed, add that zip. MDBList has no
+        export, so it takes your API key instead. Nothing is saved until you’ve checked what was found.
       </p>
       <ProfilePicker legend="Import into" profiles={me.profiles} value={profileID} onChange={setProfile} />
       <Imports key={profileID} profileID={profileID} />
@@ -93,20 +94,31 @@ function Imports({ profileID }: { profileID: number }) {
   })
 
   const [letterboxd, setLetterboxd] = useState<{
+    source: 'letterboxd' | 'tvtime'
     films: Film[]
     lists: FilmList[]
+    known?: Known
     unreadable: string[]
     filename: string
   } | null>(null)
   const read = useMutation({
     mutationFn: async (file: File) => {
-      const files = await unzip(file).catch((e) => {
+      let tvtime = false
+      const keep = (name: string, names: string[]) => {
+        tvtime = isTVTime(names)
+        return !tvtime || tvtimeFile(name)
+      }
+      const files = await unzip(file, keep).catch((e) => {
         if (e instanceof Error && e.message === 'not a zip') return null
         throw e
       })
-      if (files && isLetterboxd(files)) setLetterboxd({ ...readLetterboxd(files), filename: file.name })
+      if (files && tvtime && !hasHistory(files)) throw new Error(noHistory)
+      if (files && tvtime) setLetterboxd(fromTVTime(readTVTime(files), file.name))
+      else if (files && isLetterboxd(files))
+        setLetterboxd({ source: 'letterboxd', ...readLetterboxd(files), filename: file.name })
       else upload.mutate(file)
     },
+    onError: (e) => e.message !== noHistory && console.error(e),
   })
 
   const choose = (e: ChangeEvent<HTMLInputElement>) => {
@@ -127,19 +139,17 @@ function Imports({ profileID }: { profileID: number }) {
     <>
       <section>
         <h2 className={home.sectionTitle}>
-          {waiting ? 'Check what was found' : letterboxd ? 'Match your films' : 'Add your export'}
+          {letterboxd?.films.length
+            ? 'Match your films'
+            : letterboxd || waiting
+              ? 'Check what was found'
+              : 'Add your export'}
         </h2>
         <input ref={input} type="file" accept=".zip,application/zip" hidden onChange={choose} />
-        {waiting ? (
-          <Review
-            key={waiting.id}
-            imp={waiting}
-            profileID={profileID}
-            onAnother={() => input.current?.click()}
-            onDone={refresh}
-          />
-        ) : letterboxd ? (
+        {letterboxd ? (
           <MatchFilms
+            source={letterboxd.source}
+            known={letterboxd.known}
             films={letterboxd.films}
             lists={letterboxd.lists}
             unreadable={letterboxd.unreadable}
@@ -150,6 +160,14 @@ function Imports({ profileID }: { profileID: number }) {
               refresh()
             }}
             onAnother={() => input.current?.click()}
+          />
+        ) : waiting ? (
+          <Review
+            key={waiting.id}
+            imp={waiting}
+            profileID={profileID}
+            onAnother={() => input.current?.click()}
+            onDone={refresh}
           />
         ) : (
           <div className={styles.pick}>
@@ -204,7 +222,11 @@ function Imports({ profileID }: { profileID: number }) {
         )}
         {upload.isError && <p className={home.error}>{problemMessage(upload.error)}</p>}
         {read.isError && (
-          <p className={home.error}>This browser couldn’t open the export. Try again in an up-to-date browser.</p>
+          <p className={home.error}>
+            {read.error.message === noHistory
+              ? noHistory
+              : 'This browser couldn’t open the export. Try again in an up-to-date browser.'}
+          </p>
         )}
       </section>
 
@@ -220,6 +242,29 @@ function Imports({ profileID }: { profileID: number }) {
       )}
     </>
   )
+}
+
+const noHistory =
+  'This looks like a TV Time export, but it doesn’t have the history files Tethr reads, so nothing was sent. Check it’s the whole zip from TV Time.'
+
+function fromTVTime(t: ReturnType<typeof readTVTime>, filename: string) {
+  const known: Known = {
+    history: t.episodes.map((e) => ({
+      type: 'episode',
+      tvdb: e.tvdb,
+      season: e.season,
+      number: e.number,
+      label: e.label,
+      at: e.at,
+    })),
+    watchlist: t.later.map((s) => ({ type: 'show', tvdb: s.tvdb, label: s.label, at: s.at })),
+    ratings: t.ratings.map((s) => ({ type: 'show', tvdb: s.tvdb, label: s.label, rating: s.rating, at: s.at })),
+    dropped: t.dropped.map((s) => ({ type: 'show', tvdb: s.tvdb, label: s.label })),
+    shows: new Set(t.episodes.flatMap((e) => (e.tvdb ? [e.tvdb] : []))).size,
+    unread: t.unread,
+    undated: t.undated,
+  }
+  return { source: 'tvtime' as const, films: t.films, lists: [], known, unreadable: [], filename }
 }
 
 function Review({
@@ -278,9 +323,7 @@ function Review({
           ))}
         </tbody>
       </table>
-      {unmatched > 0 && (
-        <Unmatched names={imp.summary.unmatched} total={unmatched} leftOut={imp.source === 'letterboxd'} />
-      )}
+      {unmatched > 0 && <Unmatched names={imp.summary.unmatched} total={unmatched} source={imp.source} />}
       {lists.length > 0 && (
         <ListPicker
           lists={lists}
@@ -398,17 +441,19 @@ function ListPicker({
   )
 }
 
-function Unmatched({ names, total, leftOut }: { names: string[]; total: number; leftOut: boolean }) {
+function Unmatched({ names, total, source }: { names: string[]; total: number; source: Import['source'] }) {
   return (
     <details className={styles.unmatched}>
       <summary>
-        {leftOut
+        {source === 'letterboxd'
           ? `${count(total, 'item', 'items')} from films you left out won’t come across`
-          : `${
-              total === 1
-                ? '1 item has no TMDB, IMDb or TVDB ID, so it'
-                : `${total.toLocaleString('en-GB')} items have no TMDB, IMDb or TVDB ID, so they`
-            } won’t come across`}
+          : source === 'tvtime'
+            ? `${count(total, 'item won’t', 'items won’t')} come across: films you left out, or shows and episodes Tethr couldn’t find`
+            : `${
+                total === 1
+                  ? '1 item has no TMDB, IMDb or TVDB ID, so it'
+                  : `${total.toLocaleString('en-GB')} items have no TMDB, IMDb or TVDB ID, so they`
+              } won’t come across`}
       </summary>
       <ul>
         {names.map((name, i) => (

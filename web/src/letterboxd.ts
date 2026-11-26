@@ -14,7 +14,10 @@ export type FilmList = {
   entries: { film: number; notes: string }[]
 }
 
-export async function unzip(blob: Blob): Promise<Map<string, string>> {
+export async function unzip(
+  blob: Blob,
+  keep: (name: string, names: string[]) => boolean = () => true,
+): Promise<Map<string, string>> {
   const bytes = new Uint8Array(await blob.arrayBuffer())
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   let end = -1
@@ -27,19 +30,23 @@ export async function unzip(blob: Blob): Promise<Map<string, string>> {
   if (end < 0) throw new Error('not a zip')
   const count = view.getUint16(end + 10, true)
   let at = view.getUint32(end + 16, true)
-  const files = new Map<string, string>()
   const text = new TextDecoder()
+  const entries: { name: string; method: number; size: number; local: number }[] = []
   for (let n = 0; n < count; n++) {
     if (view.getUint32(at, true) !== 0x02014b50) throw new Error('not a zip')
-    const method = view.getUint16(at + 10, true)
-    const size = view.getUint32(at + 20, true)
     const nameLength = view.getUint16(at + 28, true)
-    const extra = view.getUint16(at + 30, true)
-    const comment = view.getUint16(at + 32, true)
-    const local = view.getUint32(at + 42, true)
-    const name = text.decode(bytes.subarray(at + 46, at + 46 + nameLength))
-    at += 46 + nameLength + extra + comment
-    if (name.endsWith('/') || !name.toLowerCase().endsWith('.csv')) continue
+    entries.push({
+      name: text.decode(bytes.subarray(at + 46, at + 46 + nameLength)),
+      method: view.getUint16(at + 10, true),
+      size: view.getUint32(at + 20, true),
+      local: view.getUint32(at + 42, true),
+    })
+    at += 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true)
+  }
+  const names = entries.map((e) => e.name)
+  const files = new Map<string, string>()
+  for (const { name, method, size, local } of entries) {
+    if (name.endsWith('/') || !name.toLowerCase().endsWith('.csv') || !keep(name, names)) continue
     const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
     const data = bytes.subarray(start, start + size)
     if (method === 0) files.set(name, text.decode(data))
