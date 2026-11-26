@@ -90,8 +90,8 @@ type entry struct {
 	RatedAt   *time.Time `json:"rated_at"`
 	PausedAt  *time.Time `json:"paused_at"`
 	DroppedAt *time.Time `json:"dropped_at"`
-	Rating    float64    `json:"rating"`
-	Progress  float64    `json:"progress"`
+	Rating    number     `json:"rating"`
+	Progress  number     `json:"progress"`
 	OnHold    bool       `json:"on_hold"`
 	Movie     *media     `json:"movie"`
 	Show      *media     `json:"show"`
@@ -100,6 +100,22 @@ type entry struct {
 		IDs    ids   `json:"ids"`
 	} `json:"season"`
 	Episode *episode `json:"episode"`
+}
+
+// MDBList sends some numbers as strings, and one odd value shouldn't stop the whole import.
+type number float64
+
+func (n *number) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) != nil {
+		s = string(b)
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		f = 0
+	}
+	*n = number(f)
+	return nil
 }
 
 func (e entry) ref() (core.Ref, string, bool) {
@@ -201,7 +217,7 @@ func (c *Client) Fetch(ctx context.Context, key string) (core.ImportFile, error)
 
 	err = f.pages("/sync/ratings", nil, func(p page) error {
 		for _, e := range append(append(append(p.Movies, p.Shows...), p.Seasons...), p.Episodes...) {
-			if rating := int16(e.Rating + 0.5); rating != 0 {
+			if rating := int16(float64(e.Rating) + 0.5); rating != 0 {
 				ref, label, _ := e.ref()
 				out.Ratings = append(out.Ratings, core.ImportItem{Ref: ref, Label: label, At: e.RatedAt, Rating: rating})
 			}
@@ -232,7 +248,7 @@ func (c *Client) Fetch(ctx context.Context, key string) (core.ImportFile, error)
 	for _, e := range paused {
 		if e.Progress > 0 {
 			ref, label, _ := e.ref()
-			out.Playback = append(out.Playback, core.ImportItem{Ref: ref, Label: label, At: e.PausedAt, Progress: e.Progress})
+			out.Playback = append(out.Playback, core.ImportItem{Ref: ref, Label: label, At: e.PausedAt, Progress: float64(e.Progress)})
 		}
 	}
 	if err := f.count(len(paused)); err != nil {
@@ -371,7 +387,7 @@ func (f *fetch) get(path string, q url.Values, into any) error {
 		return fmt.Errorf("%w: %s: status %d", ErrUnavailable, path, res.StatusCode)
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, 64<<20)).Decode(into); err != nil {
-		return fmt.Errorf("%w: %s: %w", ErrUnavailable, path, err)
+		return fmt.Errorf("%w: %s sent something unexpected: %w", ErrUnavailable, path, err)
 	}
 	return nil
 }
