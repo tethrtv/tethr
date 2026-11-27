@@ -8,6 +8,7 @@ import { Cover } from '../components/Cover'
 import { Field } from '../components/Field'
 import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
+import { Stars } from '../components/Stars'
 import { useToast } from '../components/Toast'
 import { useLogWatch } from '../components/WatchDate'
 import { countries, elsewhere, genres, languages, runYears, types } from '../facts'
@@ -21,8 +22,10 @@ import { SomethingWrong } from './TitleReport'
 
 type Detail = components['schemas']['TitleDetail']
 type EpisodeDetail = components['schemas']['EpisodeDetail']
+type SeasonDetail = components['schemas']['SeasonDetail']
 type Play = components['schemas']['Play']
 type ItemRef = components['schemas']['ItemRef']
+type OwnRating = components['schemas']['TitleRating']
 
 type Kind = 'movie' | 'show'
 
@@ -113,6 +116,77 @@ function useRefresh(profileID: number) {
     }
     queries.invalidateQueries({ queryKey: ['list'] })
   }
+}
+
+const clearing = new Set<number>()
+
+function RateIt({
+  item,
+  rating,
+  label,
+  name,
+  profileID,
+  small,
+}: {
+  item: ItemRef
+  rating?: OwnRating
+  label: string
+  name: string
+  profileID: number
+  small?: boolean
+}) {
+  const refresh = useRefresh(profileID)
+  const toast = useToast()
+  const [, redraw] = useState(0)
+  const params = { query: { profile_id: profileID } }
+  const rate = useMutation({
+    mutationFn: async (n: number) => {
+      const { data, error } = await api.POST('/v1/ratings', { params, body: { items: [{ item, rating: n }] } })
+      if (error) throw error
+      if (data.not_found?.length) throw new Error('Tethr couldn’t find that to rate it. Try again in a moment.')
+    },
+    onSettled: refresh,
+  })
+  const cleared = !!rating && clearing.has(rating.id)
+  const value = rate.isPending ? rate.variables : cleared ? undefined : rating?.rating
+
+  const change = (n: number | null) => {
+    if (n !== null) {
+      if (rating) clearing.delete(rating.id)
+      rate.mutate(n)
+      return
+    }
+    if (!rating) return
+    const id = rating.id
+    clearing.add(id)
+    redraw((r) => r + 1)
+    toast({
+      text: `Took your rating off ${name}.`,
+      commit: () => {
+        if (!clearing.has(id)) return undefined
+        return api
+          .DELETE('/v1/ratings/{id}', { params: { ...params, path: { id } } })
+          .then(({ error }) => {
+            if (error) throw error
+          })
+          .finally(() => {
+            clearing.delete(id)
+            refresh()
+          })
+      },
+      undo: () => {
+        clearing.delete(id)
+        redraw((r) => r + 1)
+      },
+    })
+  }
+
+  return (
+    <>
+      <Stars value={value} label={label} onChange={change} small={small} disabled={rate.isPending} />
+      {rate.isError && <span className={lists.error}>{problemMessage(rate.error)}</span>}
+    </>
+  )
 }
 
 function useLog(profileID: number) {
@@ -361,7 +435,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           {outlined && (rewatching || (out.length > 0 && !left)) && (
             <Rewatch show={d} rewatching={rewatching} profileID={profileID} />
           )}
-          <Yours detail={d} profileID={profileID} />
+          <Yours detail={d} name={name} profileID={profileID} />
         </div>
       </header>
 
@@ -383,6 +457,7 @@ function Show({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           <Episodes
             show={d}
             episodes={seasons.find((s) => s.number === current)?.episodes ?? []}
+            detail={seasons.find((s) => s.number === current)}
             season={current}
             group={d.episode_order ? (group ?? undefined) : undefined}
             behind={behind}
@@ -424,6 +499,7 @@ function Rewatch({ show, rewatching, profileID }: { show: Detail; rewatching: bo
 function Episodes({
   show,
   episodes,
+  detail,
   season,
   group,
   behind,
@@ -431,6 +507,7 @@ function Episodes({
 }: {
   show: Detail
   episodes: EpisodeDetail[]
+  detail?: SeasonDetail
   season: number
   group?: Group
   behind: boolean
@@ -442,8 +519,23 @@ function Episodes({
   const log = useLog(profileID)
   const rows = merge(episodes, info ?? undefined, season)
   const rest = rows.filter((e) => aired(e) && !e.watches.length)
+  const seasonID = detail?.ids?.tethr
+  const seasonName = season ? `season ${season}` : 'the specials'
   return (
     <>
+      {seasonID && (
+        <div className={`${styles.rating} ${styles.seasonRating}`}>
+          <span className={lists.faint}>Your rating of {seasonName}</span>
+          <RateIt
+            key={seasonID}
+            item={{ type: 'season', ids: { tethr: seasonID } }}
+            rating={detail?.rating}
+            label={`Your rating of ${seasonName}`}
+            name={seasonName}
+            profileID={profileID}
+          />
+        </div>
+      )}
       {info?.overview && (
         <Synopsis
           text={info.overview}
@@ -694,6 +786,18 @@ function Episode({
             .join('. ')}
           {(log.error || unlog.error) && problemMessage(log.error ?? unlog.error)}
         </span>
+        {seen && (
+          <span className={styles.epRating}>
+            <RateIt
+              item={episodeRef(show, e)}
+              rating={e.rating}
+              label={`Your rating of ${label}`}
+              name={label}
+              profileID={profileID}
+              small
+            />
+          </span>
+        )}
       </td>
       <td className={`${lists.code} ${styles.colAired}`}>
         {e.episode.first_aired && (due ? `Due ${day(e.episode.first_aired)}` : date(e.episode.first_aired))}
@@ -760,7 +864,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
             </Button>
           </p>
           {log.isError && <p className={lists.error}>{problemMessage(log.error)}</p>}
-          <Yours detail={d} profileID={profileID} />
+          <Yours detail={d} name={name} profileID={profileID} />
         </div>
       </header>
 
@@ -790,21 +894,11 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
   )
 }
 
-function Yours({ detail: d, profileID }: { detail: Detail; profileID: number }) {
+function Yours({ detail: d, name, profileID }: { detail: Detail; name: string; profileID: number }) {
   const refresh = useRefresh(profileID)
   const self = titleRef(d)
   const params = { query: { profile_id: profileID } }
 
-  const rate = useMutation({
-    mutationFn: async (rating: number | null) => {
-      const { error } =
-        rating === null
-          ? await api.DELETE('/v1/ratings/{id}', { params: { ...params, path: { id: d.rating?.id ?? 0 } } })
-          : await api.POST('/v1/ratings', { params, body: { items: [{ item: self, rating }] } })
-      if (error) throw error
-    },
-    onSuccess: refresh,
-  })
   const list = useMutation({
     mutationFn: async () => {
       const { error } = d.listing
@@ -819,27 +913,7 @@ function Yours({ detail: d, profileID }: { detail: Detail; profileID: number }) 
     <div className={styles.yours}>
       <div className={styles.rating}>
         <span className={lists.faint}>Your rating</span>
-        <fieldset className={lists.options} disabled={rate.isPending}>
-          <legend className={lists.hidden}>Your rating out of 10</legend>
-          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-            <label
-              key={n}
-              className={
-                n === d.rating?.rating
-                  ? `${lists.option} ${lists.chosen} ${styles.score}`
-                  : `${lists.option} ${styles.score}`
-              }
-            >
-              <input type="radio" name="rating" checked={n === d.rating?.rating} onChange={() => rate.mutate(n)} />
-              {n}
-            </label>
-          ))}
-        </fieldset>
-        {d.rating && (
-          <button type="button" className={lists.textButton} onClick={() => rate.mutate(null)}>
-            Clear
-          </button>
-        )}
+        <RateIt item={self} rating={d.rating} label={`Your rating of ${name}`} name={name} profileID={profileID} />
       </div>
       <p className={lists.small}>
         {d.listing ? (
@@ -856,7 +930,7 @@ function Yours({ detail: d, profileID }: { detail: Detail; profileID: number }) 
         )}
       </p>
       <OnLists detail={d} profileID={profileID} />
-      {(rate.isError || list.isError) && <p className={lists.error}>{problemMessage(rate.error ?? list.error)}</p>}
+      {list.isError && <p className={lists.error}>{problemMessage(list.error)}</p>}
     </div>
   )
 }

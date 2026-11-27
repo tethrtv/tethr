@@ -1546,6 +1546,9 @@ type Episode struct {
 type EpisodeDetail struct {
 	Episode Episode `json:"episode"`
 
+	// Rating Your own rating, out of 10.
+	Rating *TitleRating `json:"rating,omitempty"`
+
 	// Resume Where it was paused, if it was started.
 	Resume *Resume `json:"resume,omitempty"`
 
@@ -2408,6 +2411,9 @@ type SeasonDetail struct {
 	// Ids Send whichever IDs you have. Tethr matches on `tethr` first, then TMDB, IMDb and TVDB, and doesn't match on the others yet. Films and shows come back with every ID Tethr knows, most of them from Wikidata.
 	Ids    *Ids `json:"ids,omitempty"`
 	Number int  `json:"number"`
+
+	// Rating Your own rating, out of 10.
+	Rating *TitleRating `json:"rating,omitempty"`
 }
 
 // ServerUserMatch defines model for ServerUserMatch.
@@ -2484,7 +2490,7 @@ type TitleDetail struct {
 	// Lists Lists in your household that you can see and that the film or show itself is on, including rule lists that show it now. On a rule list, `item_id` is the title's own ID.
 	Lists *[]TitleInList `json:"lists,omitempty"`
 
-	// Rating Your rating of the film or show itself.
+	// Rating Your own rating, out of 10.
 	Rating *TitleRating `json:"rating,omitempty"`
 
 	// Resume Where it was paused, if it was started.
@@ -2550,7 +2556,7 @@ type TitleListing struct {
 	ListedAt time.Time `json:"listed_at"`
 }
 
-// TitleRating Your rating of the film or show itself.
+// TitleRating Your own rating, out of 10.
 type TitleRating struct {
 	Id      int64     `json:"id"`
 	RatedAt time.Time `json:"rated_at"`

@@ -27,7 +27,7 @@ func TestTitleState(t *testing.T) {
 	if _, err := ScrobblePause(ctx, db, caller, Scrobble{Ref: episode(1, 2), Progress: 40}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Rate(ctx, db, profile, []Rating{{Ref: Ref{Kind: "show", IDs: IDs{TMDB: 1396}}, Rating: 9}, {Ref: episode(1, 1), Rating: 7}}); err != nil {
+	if _, err := Rate(ctx, db, profile, []Rating{{Ref: Ref{Kind: "show", IDs: IDs{TMDB: 1396}}, Rating: 9}, {Ref: episode(1, 1), Rating: 7}, {Ref: Ref{Kind: "season", Show: IDs{TMDB: 1396}, Season: ptr(int32(1))}, Rating: 8}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := AddToWatchlist(ctx, db, profile, []Listing{{Ref: inception()}}); err != nil {
@@ -69,6 +69,12 @@ func TestTitleState(t *testing.T) {
 	if len(first.Watches) != 2 || first.Watches[0].At.Before(first.Watches[1].At) {
 		t.Errorf("1x01 plays = %+v, want two, newest first", first.Watches)
 	}
+	if first.Rating == nil || first.Rating.Rating != 7 || second.Rating != nil {
+		t.Errorf("episode ratings = %+v, %+v, want 7 on 1x01 only", first.Rating, second.Rating)
+	}
+	if r := s.Seasons[0].Rating; r == nil || r.Rating != 8 || s.Seasons[1].Rating != nil {
+		t.Errorf("season ratings = %+v, %+v, want 8 on season 1 only", r, s.Seasons[1].Rating)
+	}
 	if len(second.Watches) != 0 || second.Resume == nil || second.Resume.Progress != 40 {
 		t.Errorf("1x02 = %+v, want paused at 40%%", second)
 	}
@@ -96,7 +102,7 @@ func TestTitleState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, err := Title(ctx, db, other.ID, "breaking-bad-2008", ""); err != nil || s.Rating != nil || len(s.Seasons[0].Episodes[0].Watches) != 0 {
+	if s, err := Title(ctx, db, other.ID, "breaking-bad-2008", ""); err != nil || s.Rating != nil || s.Seasons[0].Rating != nil || s.Seasons[0].Episodes[0].Rating != nil || len(s.Seasons[0].Episodes[0].Watches) != 0 {
 		t.Errorf("someone else's state leaked: %+v, %v", s, err)
 	}
 	if byTMDB, err := Title(ctx, db, profile, "tmdb-1396", "show"); err != nil || byTMDB.Item.Title.ID != show {

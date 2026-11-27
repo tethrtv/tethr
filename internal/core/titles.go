@@ -45,6 +45,7 @@ type InList struct {
 type SeasonState struct {
 	ID       int64
 	Number   int32
+	Rating   *Entry
 	Episodes []EpisodeState
 }
 
@@ -52,6 +53,7 @@ type EpisodeState struct {
 	Episode OrderedEpisode
 	Watches []Entry
 	Resume  *Entry
+	Rating  *Entry
 }
 
 func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind string) (TitleState, error) {
@@ -151,12 +153,25 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 		return 0
 	}
 	slices.SortStableFunc(shown, func(a, b OrderedEpisode) int { return cmp.Compare(special(a), special(b)) })
+	parts, err := q.ShowPartRatings(ctx, store.ShowPartRatingsParams{ProfileID: profileID, TitleID: t.ID})
+	if err != nil {
+		return s, err
+	}
+	episodeRatings, seasonRatings := map[int64]*Entry{}, map[int64]*Entry{}
+	for _, r := range parts {
+		entry := &Entry{ID: r.ID, At: r.RatedAt, Rating: r.Rating}
+		if r.EpisodeID != nil {
+			episodeRatings[*r.EpisodeID] = entry
+		} else if r.SeasonID != nil {
+			seasonRatings[*r.SeasonID] = entry
+		}
+	}
 	for _, e := range shown {
 		if len(s.Seasons) == 0 || s.Seasons[len(s.Seasons)-1].Number != e.Season {
 			s.Seasons = append(s.Seasons, SeasonState{Number: e.Season})
 		}
 		season := &s.Seasons[len(s.Seasons)-1]
-		season.Episodes = append(season.Episodes, EpisodeState{Episode: e, Watches: plays[e.ID], Resume: resume[e.ID]})
+		season.Episodes = append(season.Episodes, EpisodeState{Episode: e, Watches: plays[e.ID], Resume: resume[e.ID], Rating: episodeRatings[e.ID]})
 	}
 	if s.Order != "" {
 		return s, nil
@@ -171,6 +186,7 @@ func Title(ctx context.Context, db *pgxpool.Pool, profileID int64, id, kind stri
 	}
 	for i := range s.Seasons {
 		s.Seasons[i].ID = ids[s.Seasons[i].Number]
+		s.Seasons[i].Rating = seasonRatings[s.Seasons[i].ID]
 	}
 	return s, nil
 }

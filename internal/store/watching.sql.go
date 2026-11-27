@@ -834,6 +834,50 @@ func (q *Queries) SetWatching(ctx context.Context, arg SetWatchingParams) error 
 	return err
 }
 
+const showPartRatings = `-- name: ShowPartRatings :many
+SELECT id, season_id, episode_id, rating, rated_at FROM ratings
+WHERE profile_id = $1 AND title_id = $2 AND (season_id IS NOT NULL OR episode_id IS NOT NULL)
+`
+
+type ShowPartRatingsParams struct {
+	ProfileID int64
+	TitleID   int64
+}
+
+type ShowPartRatingsRow struct {
+	ID        int64
+	SeasonID  *int64
+	EpisodeID *int64
+	Rating    int16
+	RatedAt   time.Time
+}
+
+func (q *Queries) ShowPartRatings(ctx context.Context, arg ShowPartRatingsParams) ([]ShowPartRatingsRow, error) {
+	rows, err := q.db.Query(ctx, showPartRatings, arg.ProfileID, arg.TitleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ShowPartRatingsRow
+	for rows.Next() {
+		var i ShowPartRatingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeasonID,
+			&i.EpisodeID,
+			&i.Rating,
+			&i.RatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const startRewatch = `-- name: StartRewatch :exec
 INSERT INTO hidden_items (profile_id, section, title_id, hidden_at)
 VALUES ($1, 'progress_watched_reset', $2, $3)
