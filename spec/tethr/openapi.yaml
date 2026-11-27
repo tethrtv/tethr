@@ -4455,7 +4455,7 @@ components:
           type: string
     TitleRating:
       type: object
-      description: Your rating of the film or show itself.
+      description: Your own rating, out of 10.
       required: [id, rating, rated_at]
       properties:
         id:
@@ -4496,6 +4496,8 @@ components:
           $ref: '#/components/schemas/Ids'
         number:
           type: integer
+        rating:
+          $ref: '#/components/schemas/TitleRating'
         episodes:
           type: array
           items:
@@ -4513,6 +4515,8 @@ components:
             $ref: '#/components/schemas/Play'
         resume:
           $ref: '#/components/schemas/Resume'
+        rating:
+          $ref: '#/components/schemas/TitleRating'
     Play:
       type: object
       required: [id, watched_at, precision, action]

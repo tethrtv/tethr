@@ -185,6 +185,10 @@ WHERE profile_id = $1 AND title_id = $2;
 SELECT id, rating, rated_at FROM ratings
 WHERE profile_id = $1 AND title_id = $2 AND season_id IS NULL AND episode_id IS NULL;
 
+-- name: ShowPartRatings :many
+SELECT id, season_id, episode_id, rating, rated_at FROM ratings
+WHERE profile_id = $1 AND title_id = $2 AND (season_id IS NOT NULL OR episode_id IS NOT NULL);
+
 -- name: TitleListing :one
 SELECT i.id, i.listed_at
 FROM list_items i

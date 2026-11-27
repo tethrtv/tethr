@@ -27,9 +27,7 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 		return nil, err
 	}
 	out := TitleDetail{Type: TitleDetailType(t.Item.Kind()), Title: toItem(ctx, t.Item).Title, Watches: toPlays(t.Watches), Resume: toResume(t.Resume), Facts: toFacts(t.Facts)}
-	if r := t.Rating; r != nil {
-		out.Rating = &TitleRating{Id: r.ID, Rating: int(r.Rating), RatedAt: r.At}
-	}
+	out.Rating = toTitleRating(t.Rating)
 	if l := t.Listing; l != nil {
 		out.Listing = &TitleListing{Id: l.ID, ListedAt: l.At}
 	}
@@ -48,9 +46,9 @@ func (s *Server) GetTitle(ctx context.Context, req GetTitleRequestObject) (GetTi
 		for _, season := range t.Seasons {
 			episodes := make([]EpisodeDetail, 0, len(season.Episodes))
 			for _, e := range season.Episodes {
-				episodes = append(episodes, EpisodeDetail{Episode: toEpisode(ctx, e.Episode), Watches: toPlays(e.Watches), Resume: toResume(e.Resume)})
+				episodes = append(episodes, EpisodeDetail{Episode: toEpisode(ctx, e.Episode), Watches: toPlays(e.Watches), Resume: toResume(e.Resume), Rating: toTitleRating(e.Rating)})
 			}
-			detail := SeasonDetail{Number: int(season.Number), Episodes: episodes}
+			detail := SeasonDetail{Number: int(season.Number), Episodes: episodes, Rating: toTitleRating(season.Rating)}
 			if season.ID != 0 {
 				detail.Ids = &Ids{Tethr: &season.ID}
 			}
@@ -270,4 +268,11 @@ func toCompanies(cs []core.Company) *[]Company {
 		out = append(out, Company{Wikidata: c.QID, Name: c.Name})
 	}
 	return &out
+}
+
+func toTitleRating(r *core.Entry) *TitleRating {
+	if r == nil {
+		return nil
+	}
+	return &TitleRating{Id: r.ID, Rating: int(r.Rating), RatedAt: r.At}
 }

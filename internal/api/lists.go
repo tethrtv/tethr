@@ -409,9 +409,9 @@ func (s *Server) RemoveManyFromList(ctx context.Context, req RemoveManyFromListR
 
 var autoListWords = map[string][2]string{
 	"stopped":    {"Stopped watching", "Shows you started and haven’t watched for 90 days, or took out of Up next."},
-	"favourites": {"Favourites", "Films and shows you rated 9 or 10."},
-	"rewatch":    {"Due a rewatch", "Things you rated 8 or more and last watched over a year ago."},
-	"household":  {"Household favourites", "Anything someone in the household rated 9 or 10."},
+	"favourites": {"Favourites", "Films and shows you gave 4½ or 5 stars."},
+	"rewatch":    {"Due a rewatch", "Things you gave 4 stars or more and last watched over a year ago."},
+	"household":  {"Household favourites", "Anything someone in the household gave 4½ or 5 stars."},
 }
 
 var noSuchAutoList = problem("not_found", "There’s no list of that kind for this profile.")

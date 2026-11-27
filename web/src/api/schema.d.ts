@@ -2565,7 +2565,7 @@ export interface components {
             wikidata: string;
             name: string;
         };
-        /** @description Your rating of the film or show itself. */
+        /** @description Your own rating, out of 10. */
         TitleRating: {
             /** Format: int64 */
             id: number;
@@ -2590,6 +2590,7 @@ export interface components {
         SeasonDetail: {
             ids?: components["schemas"]["Ids"];
             number: number;
+            rating?: components["schemas"]["TitleRating"];
             episodes: components["schemas"]["EpisodeDetail"][];
         };
         EpisodeDetail: {
@@ -2597,6 +2598,7 @@ export interface components {
             /** @description Newest first. */
             watches: components["schemas"]["Play"][];
             resume?: components["schemas"]["Resume"];
+            rating?: components["schemas"]["TitleRating"];
         };
         Play: {
             /** Format: int64 */

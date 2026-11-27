@@ -225,19 +225,17 @@
 .rating {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px 14px;
 }
 
-.rating fieldset {
-  gap: 2px;
+.seasonRating {
+  margin-bottom: 14px;
 }
 
-.score {
-  justify-content: center;
-  min-width: 32px;
-  padding: 0 6px;
-  font-variant-numeric: tabular-nums;
+.epRating {
+  display: flex;
+  margin-top: 4px;
 }
 
 .episodes {

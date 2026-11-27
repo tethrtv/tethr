@@ -6,6 +6,7 @@ import type { components } from '../api/schema'
 import { Cover } from '../components/Cover'
 import { TethrCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
+import { Rated } from '../components/Stars'
 import { TitleLink } from '../components/TitleLink'
 import { ago, plural } from '../format'
 import { useNear } from '../near'
@@ -170,9 +171,7 @@ function Row({ item: i, kind, showRank }: { item: Item; kind: Kind; showRank: bo
   const name = title?.name ?? i.item.title.name ?? 'Untitled'
   const progress = progressWords(i)
   const done = progress === 'Watched'
-  const facts = [what(i), title?.year ?? i.item.title.year, i.rating && `you rated it ${i.rating}`]
-    .filter(Boolean)
-    .join(', ')
+  const facts = [what(i), title?.year ?? i.item.title.year].filter(Boolean).join(', ')
   return (
     <li ref={ref} className={own.item}>
       <span className={own.grip} />
@@ -182,7 +181,15 @@ function Row({ item: i, kind, showRank }: { item: Item; kind: Kind; showRank: bo
         <TitleLink type={i.item.type} slug={i.item.title.slug} className={`${styles.rowTitle} ${styles.titleLink}`}>
           {name}
         </TitleLink>
-        <p className={styles.quiet}>{facts}</p>
+        <p className={styles.quiet}>
+          {facts}
+          {i.rating ? (
+            <>
+              {facts && ', '}
+              <Rated rating={i.rating} small />
+            </>
+          ) : null}
+        </p>
         {title?.overview && <p className={`${styles.small} ${own.synopsis}`}>{title.overview}</p>}
       </div>
       <span className={done ? `${own.progress} ${own.done}` : own.progress}>

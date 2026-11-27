@@ -589,10 +589,16 @@ func TestUpNextEndpoints(t *testing.T) {
 	if len(next) != 1 || next[0].RewatchFrom == nil || next[0].Next.Number != 1 || next[0].Watched != 0 {
 		t.Errorf("up next while rewatching = %+v", next)
 	}
+	if rec := do(t, h, "POST", "/v1/ratings", `{"items":[{"item":{"type":"episode","show":{"tmdb":1396},"season":1,"number":1},"rating":3},{"item":{"type":"season","show":{"tmdb":1396},"season":1},"rating":6}]}`, cookie); !strings.Contains(rec.Body.String(), `"added":2`) {
+		t.Errorf("rate an episode and a season = %s", rec.Body)
+	}
 	var detail TitleDetail
 	_ = json.Unmarshal(do(t, h, "GET", "/v1/titles/"+strconv.FormatInt(show, 10), "", cookie).Body.Bytes(), &detail)
 	if detail.RewatchFrom == nil {
 		t.Errorf("title while rewatching = %+v", detail)
+	}
+	if s := (*detail.Seasons)[0]; s.Rating == nil || s.Rating.Rating != 6 || s.Episodes[0].Rating == nil || s.Episodes[0].Rating.Rating != 3 || s.Episodes[1].Rating != nil {
+		t.Errorf("season and episode ratings on the title = %+v", s)
 	}
 	if rec := do(t, h, "DELETE", rewatch, "", cookie); rec.Code != http.StatusNoContent {
 		t.Errorf("stop a rewatch = %d %s", rec.Code, rec.Body)
