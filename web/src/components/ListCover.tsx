@@ -1,4 +1,5 @@
 import type { components } from '../api/schema'
+import { useNear } from '../near'
 import { useDetails } from '../tmdb'
 import { Cover } from './Cover'
 import styles from './ListCover.module.css'
@@ -9,17 +10,22 @@ const key = (i: Item) =>
   [i.type, i.title.ids.tethr ?? i.title.ids.tmdb, i.season?.number, i.episode?.season, i.episode?.number].join('-')
 
 export function ListCover({ items, size = 's' }: { items: Item[]; size?: 's' | 'l' }) {
+  const [ref, near] = useNear<HTMLSpanElement>()
   return (
-    <span className={`${styles.cover} ${styles[size]} ${items.length > 1 ? styles.grid : ''}`} aria-hidden="true">
+    <span
+      ref={ref}
+      className={`${styles.cover} ${styles[size]} ${items.length > 1 ? styles.grid : ''}`}
+      aria-hidden="true"
+    >
       {items.map((i) => (
-        <Poster key={key(i)} item={i} size={size} />
+        <Poster key={key(i)} item={i} size={size} near={near} />
       ))}
     </span>
   )
 }
 
-function Poster({ item, size }: { item: Item; size: 's' | 'l' }) {
-  const title = useDetails(item.type === 'movie' ? 'movie' : 'show', item.title.ids.tmdb)
+function Poster({ item, size, near }: { item: Item; size: 's' | 'l'; near: boolean }) {
+  const title = useDetails(item.type === 'movie' ? 'movie' : 'show', item.title.ids.tmdb, near)
   return (
     <Cover
       id={item.title.ids.tethr ?? 0}

@@ -8,6 +8,7 @@ import { useWatching } from '../components/Shell'
 import { Television } from '../components/Television'
 import { TitleLink } from '../components/TitleLink'
 import { duration, ep, plural } from '../format'
+import { useNear } from '../near'
 import { image, useDetails } from '../tmdb'
 import styles from './Year.module.css'
 
@@ -389,11 +390,16 @@ function Wall({ y }: { y: Summary }) {
 }
 
 function WallTile({ tile, index }: { tile: Tile; index: number }) {
-  const meta = useDetails(tile.kind, tile.title.ids.tmdb)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const meta = useDetails(tile.kind, tile.title.ids.tmdb, near)
   const id = tile.title.ids.tethr ?? index
   const name = meta?.name ?? tile.title.name ?? 'Untitled'
   return (
-    <li className={styles.tile} style={{ '--i': index, '--r': `${spin(id, 7).toFixed(2)}deg` } as CSSProperties}>
+    <li
+      ref={ref}
+      className={styles.tile}
+      style={{ '--i': index, '--r': `${spin(id, 7).toFixed(2)}deg` } as CSSProperties}
+    >
       <TitleLink type={tile.kind} slug={tile.title.slug} className={styles.tileLink}>
         <Cover id={id} name={name} poster={meta?.poster} />
         <span className={styles.tileName}>{name}</span>
@@ -449,9 +455,10 @@ function TopShows({ shows }: { shows: Summary['shows'] }) {
 }
 
 function TopShow({ show, rank, share }: { show: Summary['shows'][number]; rank: number; share: number }) {
-  const meta = useDetails('show', show.show.ids.tmdb)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const meta = useDetails('show', show.show.ids.tmdb, near)
   return (
-    <li className={styles.topRow} style={{ '--i': rank, '--share': share } as CSSProperties}>
+    <li ref={ref} className={styles.topRow} style={{ '--i': rank, '--share': share } as CSSProperties}>
       <span className={styles.rank}>{rank}</span>
       <span className={styles.topMain}>
         <TitleLink type="show" slug={show.show.slug} className={styles.topName}>
@@ -577,10 +584,11 @@ function Films({ films }: { films: Summary['film_plays'] }) {
 }
 
 function FilmRow({ film, index }: { film: Summary['film_plays'][number]; index: number }) {
-  const meta = useDetails('movie', film.film.ids.tmdb)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const meta = useDetails('movie', film.film.ids.tmdb, near)
   const name = meta?.name ?? film.film.name ?? 'Untitled'
   return (
-    <li className={styles.film} style={{ '--i': index } as CSSProperties}>
+    <li ref={ref} className={styles.film} style={{ '--i': index } as CSSProperties}>
       <span className={styles.filmDate}>
         {new Date(film.watched_at).toLocaleDateString('en-GB', {
           day: 'numeric',

@@ -5,6 +5,7 @@ import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
 import { date, ep, plural } from '../format'
+import { useNear } from '../near'
 import { useDetails } from '../tmdb'
 import styles from './Lists.module.css'
 
@@ -45,7 +46,8 @@ export function Watchlist() {
 function Row({ listing: l, profileID }: { listing: Listing; profileID: number }) {
   const queries = useQueryClient()
   const kind = l.item.type === 'movie' ? 'movie' : 'show'
-  const title = useDetails(kind, l.item.title.ids.tmdb)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const title = useDetails(kind, l.item.title.ids.tmdb, near)
   const name = title?.name ?? l.item.title.name ?? 'Untitled'
   const what =
     l.item.type === 'movie'
@@ -64,7 +66,7 @@ function Row({ listing: l, profileID }: { listing: Listing; profileID: number })
   })
 
   return (
-    <li className={styles.listing}>
+    <li ref={ref} className={styles.listing}>
       <span className={`${styles.code} ${styles.rank}`}>{l.rank}</span>
       <Cover id={l.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} />
       <div className={styles.main}>

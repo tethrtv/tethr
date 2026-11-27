@@ -8,6 +8,7 @@ import { TethrCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
 import { ago, plural } from '../format'
+import { useNear } from '../near'
 import { useDetails } from '../tmdb'
 import { kinds, Option, progressWords, what } from './List'
 import own from './List.module.css'
@@ -164,7 +165,8 @@ export function AutoListPage({ kind }: { kind: string }) {
 }
 
 function Row({ item: i, kind, showRank }: { item: Item; kind: Kind; showRank: boolean }) {
-  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb, near)
   const name = title?.name ?? i.item.title.name ?? 'Untitled'
   const progress = progressWords(i)
   const done = progress === 'Watched'
@@ -172,7 +174,7 @@ function Row({ item: i, kind, showRank }: { item: Item; kind: Kind; showRank: bo
     .filter(Boolean)
     .join(', ')
   return (
-    <li className={own.item}>
+    <li ref={ref} className={own.item}>
       <span className={own.grip} />
       <span className={`${styles.code} ${styles.rank}`}>{showRank ? i.rank : undefined}</span>
       <Cover id={i.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} />

@@ -10,6 +10,7 @@ import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
 import { countries, genres, languages, types } from '../facts'
 import { plural } from '../format'
+import { useNear } from '../near'
 import {
   type Choice,
   choiceOf,
@@ -584,10 +585,11 @@ function YesNo({
 }
 
 function Tile({ item: i }: { item: components['schemas']['ListItem'] }) {
-  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb, near)
   const name = title?.name ?? i.item.title.name ?? 'Untitled'
   return (
-    <li className={page.tile}>
+    <li ref={ref} className={page.tile}>
       <TitleLink type={i.item.type} slug={i.item.title.slug} className={page.tileLink}>
         <Cover id={i.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} />
         <span className={page.tileName}>{name}</span>
