@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/tethrtv/tethr/internal/core"
 )
 
 type jellyfinEvent struct {
@@ -84,6 +86,12 @@ func plex(r *http.Request) (event, error) {
 	}
 	e := event{server: p.Server.Title, userID: strconv.FormatInt(p.Account.ID, 10), userName: p.Account.Title, tvdb: ids["tvdb"], imdb: ids["imdb"]}
 	e.ref = ref(p.Metadata.Type, ids["tmdb"], ids["imdb"], ids["tvdb"])
+	if e.ref.Kind == "" {
+		e.ref = oldAgent(p.Metadata.Type, p.Metadata.PlexGUID)
+	}
+	if p.Metadata.Type == "movie" || p.Metadata.Type == "episode" {
+		e.guid = p.Metadata.PlexGUID
+	}
 	if p.Metadata.Duration > 0 {
 		e.progress = 100 * float64(p.Metadata.ViewOffset) / float64(p.Metadata.Duration)
 		seconds := float64(p.Metadata.Duration) / 1000
@@ -101,6 +109,38 @@ func plex(r *http.Request) (event, error) {
 		e.action = finished
 	}
 	return e, nil
+}
+
+// Libraries on Plex's old agents send no Guid list, only one guid naming the agent, like com.plexapp.agents.thetvdb://81189/1/1?lang=en.
+func oldAgent(kind, guid string) core.Ref {
+	agent, rest, ok := strings.Cut(strings.TrimPrefix(guid, "com.plexapp.agents."), "://")
+	if !ok {
+		return core.Ref{}
+	}
+	rest, _, _ = strings.Cut(rest, "?")
+	parts := strings.Split(rest, "/")
+	switch {
+	case kind == "movie" && len(parts) == 1 && agent == "imdb" && strings.HasPrefix(parts[0], "tt"):
+		return core.Ref{Kind: "movie", IDs: core.IDs{IMDB: parts[0]}}
+	case kind == "movie" && len(parts) == 1 && agent == "themoviedb":
+		if id, err := strconv.ParseInt(parts[0], 10, 64); err == nil && id > 0 {
+			return core.Ref{Kind: "movie", IDs: core.IDs{TMDB: id}}
+		}
+	case kind == "episode" && len(parts) == 3 && (agent == "thetvdb" || agent == "themoviedb"):
+		show, err1 := strconv.ParseInt(parts[0], 10, 64)
+		season, err2 := strconv.ParseInt(parts[1], 10, 32)
+		number, err3 := strconv.ParseInt(parts[2], 10, 32)
+		if err1 != nil || err2 != nil || err3 != nil || show <= 0 {
+			return core.Ref{}
+		}
+		ids := core.IDs{TVDB: show}
+		if agent == "themoviedb" {
+			ids = core.IDs{TMDB: show}
+		}
+		s, n := int32(season), int32(number)
+		return core.Ref{Kind: "episode", Show: ids, Season: &s, Number: &n}
+	}
+	return core.Ref{}
 }
 
 type embyEvent struct {

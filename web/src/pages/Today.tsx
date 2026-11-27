@@ -8,6 +8,7 @@ import { ListCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { Television } from '../components/Television'
 import { TitleLink } from '../components/TitleLink'
+import { WaitingPlays } from '../components/WaitingPlays'
 import { ago, ep, playedAgo, plural } from '../format'
 import { image, useDetails, useTrending } from '../tmdb'
 import { listParams, ownerName } from './MyLists'
@@ -127,6 +128,8 @@ export function Today() {
         </div>
         <Room pick={fresh ? undefined : picks[0]} />
       </header>
+
+      <WaitingPlays />
 
       {fresh && <GetStarted />}
 

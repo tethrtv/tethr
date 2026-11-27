@@ -49,6 +49,7 @@ type event struct {
 	imdb     string
 	progress float64
 	duration *float64
+	guid     string
 }
 
 func (s *Server) Routes(mux *http.ServeMux) {
@@ -73,6 +74,9 @@ func (s *Server) receive(kind string, read func(*http.Request) (event, error)) h
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		if e.ref.Kind == "" && e.guid != "" {
+			s.Log.Info("media server sent something without ids tethr can read", "kind", kind, "guid", e.guid)
+		}
 		ctx := r.Context()
 		c, hold, err := core.ServerCaller(ctx, s.DB, core.ServerEvent{Kind: kind, Secret: secret, ServerName: e.server, UserID: e.userID, UserName: e.userName})
 		if errors.Is(err, core.ErrNotFound) {
@@ -91,7 +95,7 @@ func (s *Server) receive(kind string, read func(*http.Request) (event, error)) h
 		switch {
 		case err == nil, errors.As(err, &already), errors.Is(err, core.ErrProgressTooLow):
 		case errors.Is(err, core.ErrNotFound):
-			s.Log.Info("media server sent something tethr can't match", "kind", kind, "type", e.ref.Kind, "tmdb", e.ref.IDs.TMDB, "tvdb", e.tvdb, "imdb", e.imdb)
+			s.Log.Info("media server sent something tethr can't match", "kind", kind, "type", e.ref.Kind, "tmdb", e.ref.IDs.TMDB, "tvdb", e.tvdb, "imdb", e.imdb, "guid", e.guid)
 		default:
 			s.Log.Error("media server event failed", "kind", kind, "err", err)
 			http.Error(w, "something went wrong", http.StatusInternalServerError)
@@ -109,6 +113,9 @@ func (s *Server) log(ctx context.Context, c core.Caller, e event) error {
 		case started:
 			_, err = core.ScrobbleStart(ctx, s.DB, c, scrobble)
 		case paused:
+			if e.progress < 1 {
+				return core.StopWatching(ctx, s.DB, c)
+			}
 			_, err = core.ScrobblePause(ctx, s.DB, c, scrobble)
 		case finished:
 			scrobble.Progress = 100
