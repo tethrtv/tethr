@@ -433,6 +433,7 @@ type Title struct {
 	SearchOriginal     *string
 	Studios            []string
 	Networks           []string
+	Released           *time.Time
 }
 
 type UpNextList struct {

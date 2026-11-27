@@ -28,14 +28,15 @@ type Client struct {
 }
 
 type Title struct {
-	QID      string
-	Name     string
-	Original string
-	Year     int
-	Released time.Time
-	Runtime  int
-	TMDB     int32
-	IDs      map[string][]string
+	QID        string
+	Name       string
+	Original   string
+	Year       int
+	Released   time.Time
+	ReleaseDay time.Time
+	Runtime    int
+	TMDB       int32
+	IDs        map[string][]string
 
 	InstanceOf []string
 	Genres     []string
@@ -346,6 +347,9 @@ func (e entity) title(kind string) Title {
 		}
 		if t.Released.IsZero() || released.Before(t.Released) {
 			t.Released = released
+		}
+		if _, m, d, _ := parseDate(raw); kind == "movie" && m > 0 && d > 0 && (t.ReleaseDay.IsZero() || released.Before(t.ReleaseDay)) {
+			t.ReleaseDay = released
 		}
 	}
 

@@ -423,3 +423,34 @@ func TestWikidataOutsideIDs(t *testing.T) {
 		t.Errorf("a show sharing a film's item shouldn't take the film's IDs: %v, %v", conflicts, err)
 	}
 }
+
+func TestWikidataReleaseDay(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	items, err := LookUp(ctx, db, "movie", IDs{TMDB: 603}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := items[0].Title.ID
+	released := func() *time.Time {
+		t.Helper()
+		var d *time.Time
+		if err := db.QueryRow(ctx, `SELECT released FROM titles WHERE id = $1`, id).Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	day := time.Date(1999, 3, 31, 0, 0, 0, 0, time.UTC)
+	if _, err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999, ReleaseDay: day}); err != nil {
+		t.Fatal(err)
+	}
+	if d := released(); d == nil || !d.Equal(day) {
+		t.Errorf("release day = %v, want %v", d, day)
+	}
+	if _, err := SaveWikidata(ctx, db, id, "movie", WikidataTitle{QID: "Q83495", Name: "The Matrix", Year: 1999}); err != nil {
+		t.Fatal(err)
+	}
+	if d := released(); d != nil {
+		t.Errorf("a date taken off Wikidata should go, got %v", d)
+	}
+}
