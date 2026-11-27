@@ -128,14 +128,18 @@ func (s *Server) AddHistory(ctx context.Context, req AddHistoryRequestObject) (A
 		if w.WatchedAt != nil {
 			at = *w.WatchedAt
 		}
-		watches = append(watches, core.Watch{Ref: fromRef(w.Item), At: at})
+		watch := core.Watch{Ref: fromRef(w.Item), At: at, Released: w.Released != nil && *w.Released}
+		if w.Precision != nil {
+			watch.Precision = string(*w.Precision)
+		}
+		watches = append(watches, watch)
 	}
 	result, err := core.AddHistory(ctx, s.DB, c, watches)
 	if err != nil {
 		return nil, err
 	}
 	added := total(result.Added)
-	return AddHistory200JSONResponse(SyncResult{Added: added, Existing: len(watches) - added - len(result.NotFound), NotFound: toRefs(result.NotFound)}), nil
+	return AddHistory200JSONResponse(SyncResult{Added: added, Existing: len(watches) - added - len(result.NotFound), NotFound: toRefs(result.NotFound), Ids: &result.IDs}), nil
 }
 
 func (s *Server) RemoveWatch(ctx context.Context, req RemoveWatchRequestObject) (RemoveWatchResponseObject, error) {
@@ -400,6 +404,9 @@ func toItem(ctx context.Context, i core.Item) Item {
 	if t.RuntimeMinutes != nil {
 		runtime := int(*t.RuntimeMinutes)
 		title.RuntimeMinutes = &runtime
+	}
+	if t.Released != nil {
+		title.Released = &openapi_types.Date{Time: *t.Released}
 	}
 	if t.TmdbID != nil {
 		tmdb := int(*t.TmdbID)

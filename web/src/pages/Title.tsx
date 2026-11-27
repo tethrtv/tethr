@@ -9,6 +9,7 @@ import { Field } from '../components/Field'
 import { useWatching } from '../components/Shell'
 import { Slip, SlipBody, SlipFoot } from '../components/Slip'
 import { useToast } from '../components/Toast'
+import { useLogWatch } from '../components/WatchDate'
 import { countries, elsewhere, genres, languages, runYears, types } from '../facts'
 import { date, duration, ep, playedAgo, playedOn, plural } from '../format'
 import { type Details, type Group, type Season, useDetails, useGroup, useOrders, useSeason } from '../tmdb'
@@ -115,17 +116,7 @@ function useRefresh(profileID: number) {
 }
 
 function useLog(profileID: number) {
-  const refresh = useRefresh(profileID)
-  return useMutation({
-    mutationFn: async (items: ItemRef[]) => {
-      const { error } = await api.POST('/v1/history', {
-        params: { query: { profile_id: profileID } },
-        body: { items: items.map((item) => ({ item })) },
-      })
-      if (error) throw error
-    },
-    onSuccess: refresh,
-  })
+  return useLogWatch(profileID, useRefresh(profileID))
 }
 
 function useUnlog(profileID: number) {
@@ -464,7 +455,16 @@ function Episodes({
       <EpisodeTable show={show} episodes={rows} info={info ?? undefined} profileID={profileID} />
       {rest.length > 1 && (
         <p>
-          <Button onClick={() => log.mutate(rest.map((e) => episodeRef(show, e)))} disabled={log.isPending}>
+          <Button
+            onClick={() =>
+              log.mutate({
+                items: rest.map((e) => episodeRef(show, e)),
+                label: season ? `the rest of season ${season}` : 'the rest of the specials',
+                released: rest.every((e) => e.episode.first_aired),
+              })
+            }
+            disabled={log.isPending}
+          >
             Tick off the rest of {season ? `season ${season}` : 'the specials'}
           </Button>
         </p>
@@ -646,7 +646,7 @@ function Episode({
 
   const toggle = () => {
     if (!seen) {
-      log.mutate([episodeRef(show, e)])
+      log.mutate({ items: [episodeRef(show, e)], label, released: e.episode.first_aired })
       return
     }
     const n = e.watches.length
@@ -725,7 +725,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           <Facts
             facts={[
               ['Original title', d.title.original_name !== name ? d.title.original_name : undefined],
-              ['Released', (d.title.year ?? meta?.year)?.toString()],
+              ['Released', d.title.released ? date(d.title.released) : (d.title.year ?? meta?.year)?.toString()],
               ['Runtime', runtime ? duration(runtime) : undefined],
               ['Studio', companyLinks(d.facts?.studios, 'studio')],
               ['Genre', genreLinks('movie', d.facts?.genres)],
@@ -753,7 +753,7 @@ function Film({ detail: d, profileID }: { detail: Detail; profileID: number }) {
           <p className={styles.actions}>
             <Button
               variant={plays.length ? 'plain' : 'primary'}
-              onClick={() => log.mutate([self])}
+              onClick={() => log.mutate({ items: [self], label: name, released: d.title.released })}
               disabled={log.isPending}
             >
               {plays.length ? 'Log another watch' : 'Tick off as watched'}

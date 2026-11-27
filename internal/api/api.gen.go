@@ -512,6 +512,27 @@ func (e NewTitleReportReason) Valid() bool {
 	}
 }
 
+// Defines values for NewWatchesItemsPrecision.
+const (
+	NewWatchesItemsPrecisionDay  NewWatchesItemsPrecision = "day"
+	NewWatchesItemsPrecisionNone NewWatchesItemsPrecision = "none"
+	NewWatchesItemsPrecisionTime NewWatchesItemsPrecision = "time"
+)
+
+// Valid indicates whether the value is a known member of the NewWatchesItemsPrecision enum.
+func (e NewWatchesItemsPrecision) Valid() bool {
+	switch e {
+	case NewWatchesItemsPrecisionDay:
+		return true
+	case NewWatchesItemsPrecisionNone:
+		return true
+	case NewWatchesItemsPrecisionTime:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PlayAction.
 const (
 	PlayActionCheckin  PlayAction = "checkin"
@@ -2169,10 +2190,19 @@ type NewWatches struct {
 		// Item A film or show by its IDs, a season by its own IDs or its show and `season`, or an episode by its own IDs or its show, `season` and `number`.
 		Item ItemRef `json:"item"`
 
+		// Precision How much of `watched_at` is known, `time` if left out. With `day` only its date in UTC is kept. With `none` the date isn't known and `watched_at` is ignored.
+		Precision *NewWatchesItemsPrecision `json:"precision,omitempty"`
+
+		// Released Log it on the day it came out instead of `watched_at`, using a film's release date or each episode's first air date. Anything without a known date is logged with precision `none`.
+		Released *bool `json:"released,omitempty"`
+
 		// WatchedAt Left out, it's now.
 		WatchedAt *time.Time `json:"watched_at,omitempty"`
 	} `json:"items"`
 }
+
+// NewWatchesItemsPrecision How much of `watched_at` is known, `time` if left out. With `day` only its date in UTC is kept. With `none` the date isn't known and `watched_at` is ignored.
+type NewWatchesItemsPrecision string
 
 // OrderNumber The episode's season and number in the episode order the profile picked for the show, when they differ from aired order.
 type OrderNumber struct {
@@ -2408,8 +2438,11 @@ type SignUp struct {
 
 // SyncResult defines model for SyncResult.
 type SyncResult struct {
-	Added    int       `json:"added"`
-	Existing int       `json:"existing"`
+	Added    int `json:"added"`
+	Existing int `json:"existing"`
+
+	// Ids The IDs of any watches this added, which can be removed again through `DELETE /v1/history/{id}`.
+	Ids      *[]int64  `json:"ids,omitempty"`
 	NotFound []ItemRef `json:"not_found"`
 }
 
@@ -2423,6 +2456,9 @@ type Title struct {
 
 	// OriginalName The title in its original language, from Wikidata.
 	OriginalName *string `json:"original_name,omitempty"`
+
+	// Released A film's first release date, from Wikidata, when it's known to the day.
+	Released *openapi_types.Date `json:"released,omitempty"`
 
 	// RuntimeMinutes From Wikidata. For a show, roughly how long an episode runs.
 	RuntimeMinutes *int `json:"runtime_minutes,omitempty"`

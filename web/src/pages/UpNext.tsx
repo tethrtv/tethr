@@ -7,6 +7,7 @@ import { ListCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
 import { WaitingPlays } from '../components/WaitingPlays'
+import { useLogWatch } from '../components/WatchDate'
 import { ago, date, ep, plural } from '../format'
 import { useNear } from '../near'
 import { useDetails, useEpisode } from '../tmdb'
@@ -194,19 +195,16 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
   const name = show?.name ?? e.show.name ?? 'Untitled show'
   const left = e.aired - e.watched
 
-  const watched = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.POST('/v1/history', {
-        params: { query: { profile_id: profileID } },
-        body: { items: [{ item: { type: 'episode', ids: e.next.ids } }] },
-      })
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queries.invalidateQueries({ queryKey: ['up-next', profileID] })
-      queries.invalidateQueries({ queryKey: ['history', profileID] })
-    },
+  const watched = useLogWatch(profileID, () => {
+    queries.invalidateQueries({ queryKey: ['up-next', profileID] })
+    queries.invalidateQueries({ queryKey: ['history', profileID] })
   })
+  const tick = () =>
+    watched.mutate({
+      items: [{ type: 'episode', ids: e.next.ids }],
+      label: `${name} ${ep(numbered.season, numbered.number)}`,
+      released: e.next.first_aired,
+    })
 
   return (
     <li ref={ref} className={styles.next}>
@@ -214,7 +212,7 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
         type="button"
         aria-label={`Mark ${name} ${ep(numbered.season, numbered.number)} as watched`}
         className={watched.isPending ? `${styles.tickbox} ${styles.on}` : styles.tickbox}
-        onClick={() => watched.mutate()}
+        onClick={tick}
         disabled={watched.isPending}
       >
         <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
@@ -267,23 +265,21 @@ function ListNext({ entry: e, profileID }: { entry: ListEntry; profileID: number
   const name = title?.name ?? e.next.title.name ?? 'Untitled'
   const watchedCount = e.list.watched_count ?? 0
 
-  const watched = useMutation({
-    mutationFn: async () => {
-      const item = e.next.episode
-        ? { type: 'episode' as const, ids: e.next.episode.ids }
-        : { type: 'movie' as const, ids: e.next.title.ids }
-      const { error } = await api.POST('/v1/history', {
-        params: { query: { profile_id: profileID } },
-        body: { items: [{ item }] },
-      })
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queries.invalidateQueries({ queryKey: ['up-next-lists', profileID] })
-      queries.invalidateQueries({ queryKey: ['up-next', profileID] })
-      queries.invalidateQueries({ queryKey: ['history', profileID] })
-    },
+  const watched = useLogWatch(profileID, () => {
+    queries.invalidateQueries({ queryKey: ['up-next-lists', profileID] })
+    queries.invalidateQueries({ queryKey: ['up-next', profileID] })
+    queries.invalidateQueries({ queryKey: ['history', profileID] })
   })
+  const tick = () =>
+    watched.mutate({
+      items: [
+        e.next.episode
+          ? { type: 'episode' as const, ids: e.next.episode.ids }
+          : { type: 'movie' as const, ids: e.next.title.ids },
+      ],
+      label: numbered ? `${name} ${ep(numbered.season, numbered.number)}` : name,
+      released: e.next.episode ? e.next.episode.first_aired : e.next.title.released,
+    })
 
   return (
     <li ref={ref} className={styles.next}>
@@ -291,7 +287,7 @@ function ListNext({ entry: e, profileID }: { entry: ListEntry; profileID: number
         type="button"
         aria-label={`Mark ${name}${numbered ? ` ${ep(numbered.season, numbered.number)}` : ''} as watched`}
         className={watched.isPending ? `${styles.tickbox} ${styles.on}` : styles.tickbox}
-        onClick={() => watched.mutate()}
+        onClick={tick}
         disabled={watched.isPending}
       >
         <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
