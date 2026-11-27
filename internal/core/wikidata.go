@@ -17,14 +17,15 @@ import (
 )
 
 type WikidataTitle struct {
-	QID      string
-	Name     string
-	Original string
-	Year     int
-	Released time.Time
-	Runtime  int
-	TMDB     int32
-	IDs      map[string][]string
+	QID        string
+	Name       string
+	Original   string
+	Year       int
+	Released   time.Time
+	ReleaseDay time.Time
+	Runtime    int
+	TMDB       int32
+	IDs        map[string][]string
 
 	InstanceOf []string
 	Genres     []string
@@ -122,6 +123,9 @@ func saveWikidataIn(ctx context.Context, q *store.Queries, titleID int64, kind s
 	if w.Runtime > 0 {
 		runtime := int16(w.Runtime)
 		params.RuntimeMinutes = &runtime
+	}
+	if !w.ReleaseDay.IsZero() {
+		params.Released = &w.ReleaseDay
 	}
 	if err := q.SaveWikidata(ctx, params); err != nil {
 		return conflicts, kept, err

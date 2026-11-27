@@ -29,7 +29,7 @@ ON CONFLICT DO NOTHING;
 UPDATE titles SET tmdb_id = $2, updated_at = now() WHERE id = $1 AND tmdb_id IS NULL;
 
 -- name: CatalogueTitles :many
-SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.runtime_minutes, t.tmdb_id, t.wikidata_id,
+SELECT t.id, t.kind, t.slug, t.name, t.original_name, t.year, t.runtime_minutes, t.released, t.tmdb_id, t.wikidata_id,
     (t.wikidata_deleted_at IS NOT NULL)::bool AS wikidata_deleted,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'imdb'), '')::text AS imdb,
     coalesce((SELECT min(value) FROM external_ids WHERE title_id = t.id AND provider = 'tvdb'), '')::text AS tvdb,
@@ -173,7 +173,7 @@ LIMIT $1;
 
 -- name: SaveWikidata :exec
 UPDATE titles
-SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, wikidata_checked_at = now(), wikidata_deleted_at = NULL, updated_at = now()
+SET wikidata_id = $2, name = $3, original_name = $4, year = $5, runtime_minutes = $6, released = $7, wikidata_checked_at = now(), wikidata_deleted_at = NULL, updated_at = now()
 WHERE id = $1;
 
 -- name: NameSlug :execrows

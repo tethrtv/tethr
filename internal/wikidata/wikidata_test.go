@@ -175,6 +175,12 @@ func TestFetch(t *testing.T) {
 	if w := found["Q83495"]; w.Name != "The Matrix" || w.Year != 1999 || !w.Released.Equal(time.Date(1999, 3, 31, 0, 0, 0, 0, time.UTC)) || w.TMDB != 603 {
 		t.Errorf("the matrix = %+v", w)
 	}
+	if w := found["Q83495"]; !w.ReleaseDay.Equal(time.Date(1999, 3, 31, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("a film should keep its full release date, got %v", w.ReleaseDay)
+	}
+	if w := found["Q39243484"]; !w.ReleaseDay.IsZero() {
+		t.Errorf("a show's release date is its episodes', got %v", w.ReleaseDay)
+	}
 	if ids := found["Q83495"].IDs; !reflect.DeepEqual(ids, map[string][]string{
 		"imdb":       {"tt0133093"},
 		"letterboxd": {"the-matrix"},
