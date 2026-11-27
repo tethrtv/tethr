@@ -125,7 +125,7 @@ func TestDetails(t *testing.T) {
 	if rec.Body.String() != want {
 		t.Errorf("movie = %s", rec.Body)
 	}
-	if cache := rec.Header().Get("Cache-Control"); !strings.Contains(cache, "s-maxage=2592000") {
+	if cache := rec.Header().Get("Cache-Control"); !strings.HasPrefix(cache, "public, max-age=604800,") || !strings.Contains(cache, "s-maxage=2592000") {
 		t.Errorf("movie cache = %s", cache)
 	}
 

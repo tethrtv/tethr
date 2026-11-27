@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	movieCache  = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800"
+	movieCache  = "public, max-age=604800, s-maxage=2592000, stale-while-revalidate=604800"
 	showCache   = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400"
 	seasonCache = "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400"
 	searchCache = "private, max-age=300"
