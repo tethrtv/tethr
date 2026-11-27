@@ -7,6 +7,7 @@ import { ListCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
 import { ago, date, ep, plural } from '../format'
+import { useNear } from '../near'
 import { useDetails, useEpisode } from '../tmdb'
 import styles from './Lists.module.css'
 import { listParams } from './MyLists'
@@ -153,15 +154,16 @@ function ComingUp({ profileID }: { profileID: number }) {
 
 function Coming({ entry: u, later }: { entry: Upcoming; later: boolean }) {
   const tmdb = u.show.ids.tmdb
-  const show = useDetails('show', tmdb)
-  const episode = useEpisode(tmdb, u.episode.season, u.episode.number)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const show = useDetails('show', tmdb, near)
+  const episode = useEpisode(tmdb, u.episode.season, u.episode.number, near)
   const numbered = u.episode.order ?? u.episode
   const name = show?.name ?? u.show.name ?? 'Untitled show'
   const news = u.episode.number === 1 ? (u.episode.season === 1 ? 'New show' : 'New season') : ''
   const note = [news, u.watchlist && 'on your watchlist'].filter(Boolean).join(', ')
 
   return (
-    <li className={styles.coming}>
+    <li ref={ref} className={styles.coming}>
       <Cover id={u.show.ids.tethr ?? 0} name={name} poster={show?.poster} size="xs" />
       <span className={styles.main}>
         <TitleLink type="show" slug={u.show.slug} className={`${styles.entryTitle} ${styles.titleLink}`}>
@@ -182,8 +184,9 @@ function Coming({ entry: u, later }: { entry: Upcoming; later: boolean }) {
 function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
   const queries = useQueryClient()
   const tmdb = e.show.ids.tmdb
-  const show = useDetails('show', tmdb)
-  const episode = useEpisode(tmdb, e.next.season, e.next.number)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const show = useDetails('show', tmdb, near)
+  const episode = useEpisode(tmdb, e.next.season, e.next.number, near)
   const numbered = e.next.order ?? e.next
   const name = show?.name ?? e.show.name ?? 'Untitled show'
   const left = e.aired - e.watched
@@ -203,7 +206,7 @@ function Next({ entry: e, profileID }: { entry: Entry; profileID: number }) {
   })
 
   return (
-    <li className={styles.next}>
+    <li ref={ref} className={styles.next}>
       <button
         type="button"
         aria-label={`Mark ${name} ${ep(numbered.season, numbered.number)} as watched`}
@@ -254,8 +257,9 @@ function ListNext({ entry: e, profileID }: { entry: ListEntry; profileID: number
   const queries = useQueryClient()
   const tmdb = e.next.title.ids.tmdb
   const film = e.next.type === 'movie'
-  const title = useDetails(film ? 'movie' : 'show', tmdb)
-  const episode = useEpisode(film ? undefined : tmdb, e.next.episode?.season, e.next.episode?.number)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const title = useDetails(film ? 'movie' : 'show', tmdb, near)
+  const episode = useEpisode(film ? undefined : tmdb, e.next.episode?.season, e.next.episode?.number, near)
   const numbered = e.next.episode && (e.next.episode.order ?? e.next.episode)
   const name = title?.name ?? e.next.title.name ?? 'Untitled'
   const watchedCount = e.list.watched_count ?? 0
@@ -279,7 +283,7 @@ function ListNext({ entry: e, profileID }: { entry: ListEntry; profileID: number
   })
 
   return (
-    <li className={styles.next}>
+    <li ref={ref} className={styles.next}>
       <button
         type="button"
         aria-label={`Mark ${name}${numbered ? ` ${ep(numbered.season, numbered.number)}` : ''} as watched`}
@@ -342,8 +346,9 @@ function Paused({ point: p, profileID }: { point: ResumePoint; profileID: number
   const queries = useQueryClient()
   const tmdb = p.item.title.ids.tmdb
   const kind = p.item.type === 'movie' ? 'movie' : 'show'
-  const title = useDetails(kind, tmdb)
-  const episode = useEpisode(kind === 'show' ? tmdb : undefined, p.item.episode?.season, p.item.episode?.number)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const title = useDetails(kind, tmdb, near)
+  const episode = useEpisode(kind === 'show' ? tmdb : undefined, p.item.episode?.season, p.item.episode?.number, near)
   const name = title?.name ?? p.item.title.name ?? 'Untitled'
 
   const clear = useMutation({
@@ -357,7 +362,7 @@ function Paused({ point: p, profileID }: { point: ResumePoint; profileID: number
   })
 
   return (
-    <li className={styles.paused}>
+    <li ref={ref} className={styles.paused}>
       <Cover id={p.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} />
       <div className={styles.main}>
         <TitleLink type={p.item.type} slug={p.item.title.slug} className={`${styles.rowTitle} ${styles.titleLink}`}>

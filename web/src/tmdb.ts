@@ -47,10 +47,10 @@ async function meta<T>(path: string, signedIn = false): Promise<T | null> {
 
 export const image = (path: string | undefined, size = 'w185') => (path ? `${images}${size}${path}` : undefined)
 
-export function useDetails(kind: 'movie' | 'show', id?: number) {
+export function useDetails(kind: 'movie' | 'show', id?: number, near = true) {
   return useQuery({
     queryKey: ['meta', kind, id],
-    enabled: !!id,
+    enabled: !!id && near,
     staleTime: day,
     queryFn: async (): Promise<Details | null> => {
       const t = await meta<Title>(`/${kind === 'movie' ? 'movie' : 'tv'}/${id}`)
@@ -101,17 +101,17 @@ export function useTrending() {
   })
 }
 
-export function useSeason(show?: number, season?: number) {
+export function useSeason(show?: number, season?: number, near = true) {
   return useQuery({
     queryKey: ['meta', 'season', show, season],
-    enabled: !!show && season !== undefined,
+    enabled: !!show && season !== undefined && near,
     staleTime: day,
     queryFn: () => meta<Season>(`/tv/${show}/season/${season}`, true),
   }).data
 }
 
-export function useEpisode(show?: number, season?: number, number?: number) {
-  const e = useSeason(show, season)?.episodes.find((x) => x.number === number)
+export function useEpisode(show?: number, season?: number, number?: number, near = true) {
+  const e = useSeason(show, season, near)?.episodes.find((x) => x.number === number)
   return e ? { name: e.name } : undefined
 }
 

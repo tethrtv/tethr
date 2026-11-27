@@ -6,6 +6,7 @@ import { Cover } from '../components/Cover'
 import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
 import { clock, dayLabel, ep, plural } from '../format'
+import { useNear } from '../near'
 import { useDetails, useEpisode } from '../tmdb'
 import styles from './Lists.module.css'
 
@@ -92,8 +93,9 @@ function Entry({ watch: w, profileID }: { watch: Watch; profileID: number }) {
   const queries = useQueryClient()
   const tmdb = w.item.title.ids.tmdb
   const kind = w.item.type === 'movie' ? 'movie' : 'show'
-  const title = useDetails(kind, tmdb)
-  const episode = useEpisode(kind === 'show' ? tmdb : undefined, w.item.episode?.season, w.item.episode?.number)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const title = useDetails(kind, tmdb, near)
+  const episode = useEpisode(kind === 'show' ? tmdb : undefined, w.item.episode?.season, w.item.episode?.number, near)
   const name = title?.name ?? w.item.title.name ?? 'Untitled'
 
   const remove = useMutation({
@@ -107,7 +109,7 @@ function Entry({ watch: w, profileID }: { watch: Watch; profileID: number }) {
   })
 
   return (
-    <li className={styles.entry}>
+    <li ref={ref} className={styles.entry}>
       <span className={`${styles.code} ${styles.time}`}>{w.precision === 'time' && clock(w.watched_at)}</span>
       <Cover id={w.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} size="xs" />
       <span className={styles.main}>

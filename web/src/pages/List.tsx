@@ -12,6 +12,7 @@ import { TitleLink } from '../components/TitleLink'
 import { useToast } from '../components/Toast'
 import { MissingList } from '../components/Trouble'
 import { ep, plural } from '../format'
+import { useNear } from '../near'
 import { describe } from '../rules'
 import { useDetails } from '../tmdb'
 import own from './List.module.css'
@@ -826,7 +827,8 @@ function Row({
   lifted?: number
   handle: ReactNode
 }) {
-  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb)
+  const [nearRef, near] = useNear<HTMLLIElement>()
+  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb, near)
   const name = title?.name ?? i.item.title.name ?? 'Untitled'
   const [noting, setNoting] = useState(false)
   const [notes, setNotes] = useState(i.notes ?? '')
@@ -870,7 +872,10 @@ function Row({
   if (gone) return null
   return (
     <li
-      ref={ref}
+      ref={(el) => {
+        ref(el)
+        nearRef(el)
+      }}
       className={`${own.item} ${lifted !== undefined ? own.lifted : ''}`}
       style={lifted !== undefined ? { transform: `translateY(${lifted}px)` } : undefined}
     >
@@ -951,11 +956,12 @@ function Row({
 }
 
 function CoverItem({ item: i, isCover, onPick }: { item: Item; isCover: boolean; onPick?: (item: number) => void }) {
-  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb)
+  const [ref, near] = useNear<HTMLLIElement>()
+  const title = useDetails(i.item.type === 'movie' ? 'movie' : 'show', i.item.title.ids.tmdb, near)
   const name = title?.name ?? i.item.title.name ?? 'Untitled'
   const progress = progressWords(i)
   return (
-    <li className={own.cover}>
+    <li ref={ref} className={own.cover}>
       <TitleLink type={i.item.type} slug={i.item.title.slug} className={styles.titleLink}>
         <Cover id={i.item.title.ids.tethr ?? 0} name={name} poster={title?.poster} size="l" />
         <span className={own.coverName}>{name}</span>
