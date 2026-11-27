@@ -173,7 +173,7 @@ func logHeldPlays(ctx context.Context, q *store.Queries, serverUserID, profileID
 		if err != nil {
 			return err
 		}
-		if _, err := watched(ctx, q, profileID, &grantID, r, h.WatchedAt, h.Action, h.DurationSeconds); err != nil {
+		if _, err := watched(ctx, q, profileID, &grantID, r, h.WatchedAt, "", h.Action, h.DurationSeconds); err != nil {
 			return err
 		}
 	}

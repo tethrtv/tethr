@@ -431,3 +431,22 @@ func TestProgressEndpoints(t *testing.T) {
 		t.Errorf("unrated = %v", unrated)
 	}
 }
+
+func TestWatchedOnRelease(t *testing.T) {
+	db := dbtest.New(t)
+	c, _ := signIn(t, db)
+	films, err := core.LookUp(context.Background(), db, "movie", core.IDs{TMDB: 603}, true)
+	if err != nil || len(films) != 1 {
+		t.Fatal(films, err)
+	}
+	if _, err := db.Exec(context.Background(), "UPDATE titles SET released = '1999-03-31' WHERE id = $1", films[0].Title.ID); err != nil {
+		t.Fatal(err)
+	}
+	c.valid("POST", "/sync/history", map[string]any{
+		"movies": []any{map[string]any{"watched_at": "released", "ids": map[string]any{"tmdb": 603}}},
+	}, http.StatusCreated)
+	entries := c.list("GET", "/sync/history/movies", nil)
+	if len(entries) != 1 || entries[0]["watched_at"] != "1999-03-31T12:00:00.000Z" {
+		t.Errorf("history = %v", entries)
+	}
+}

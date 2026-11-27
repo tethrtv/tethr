@@ -3387,6 +3387,10 @@ components:
         runtime_minutes:
           type: integer
           description: From Wikidata. For a show, roughly how long an episode runs.
+        released:
+          type: string
+          format: date
+          description: A film's first release date, from Wikidata, when it's known to the day.
     Season:
       type: object
       required: [ids, number]
@@ -3523,6 +3527,13 @@ components:
                 type: string
                 format: date-time
                 description: Left out, it's now.
+              precision:
+                type: string
+                enum: [time, day, none]
+                description: How much of `watched_at` is known, `time` if left out. With `day` only its date in UTC is kept. With `none` the date isn't known and `watched_at` is ignored.
+              released:
+                type: boolean
+                description: Log it on the day it came out instead of `watched_at`, using a film's release date or each episode's first air date. Anything without a known date is logged with precision `none`.
     NewListings:
       type: object
       required: [items]
@@ -3549,6 +3560,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ItemRef'
+        ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: The IDs of any watches this added, which can be removed again through `DELETE /v1/history/{id}`.
     ResumePoint:
       type: object
       required: [id, progress, paused_at, item]

@@ -1,6 +1,6 @@
 -- name: CreateWatchEvent :one
-INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, precision)
+VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce(sqlc.narg(precision)::text, 'time'))
 RETURNING *;
 
 -- name: RecentWatchEvent :one

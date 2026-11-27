@@ -353,3 +353,78 @@ func TestMadeUpEpisodeNumbers(t *testing.T) {
 		t.Errorf("a made-up season = %+v, %v", rated, err)
 	}
 }
+
+func TestWatchDates(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	caller, _, _ := connectedProfile(t, db)
+
+	films, err := LookUp(ctx, db, "movie", IDs{TMDB: 27205}, true)
+	if err != nil || len(films) != 1 {
+		t.Fatalf("look up = %+v, %v", films, err)
+	}
+	if _, err := db.Exec(ctx, "UPDATE titles SET released = '2010-07-08' WHERE id = $1", films[0].Title.ID); err != nil {
+		t.Fatal(err)
+	}
+	undated := Ref{Kind: "movie", IDs: IDs{TMDB: 157336}}
+	shows, err := LookUp(ctx, db, "show", IDs{TMDB: 1396}, true)
+	if err != nil || len(shows) != 1 {
+		t.Fatalf("look up = %+v, %v", shows, err)
+	}
+	aired := time.Date(2008, 1, 20, 0, 0, 0, 0, time.UTC)
+	if err := SaveOutline(ctx, db, shows[0].Title.ID, []OutlineEpisode{
+		{TMDBID: 62085, Season: 1, Number: 1, FirstAired: &aired},
+		{TMDBID: 62086, Season: 1, Number: 2},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	evening := time.Date(2024, 3, 1, 22, 30, 0, 0, time.UTC)
+	result, err := AddHistory(ctx, db, caller, []Watch{
+		{Ref: inception(), Released: true},
+		{Ref: undated, Released: true},
+		{Ref: episode(1, 1), Released: true, At: evening},
+		{Ref: episode(1, 2), Released: true},
+		{Ref: inception(), At: evening, Precision: "day"},
+		{Ref: inception(), At: evening, Precision: "none"},
+		{Ref: inception(), At: evening},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.IDs) != 7 {
+		t.Fatalf("added ids = %v, want 7", result.IDs)
+	}
+
+	entries, _, err := History(ctx, db, caller.ProfileID, HistoryFilter{}, Page{Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[int64]Entry{}
+	for _, e := range entries {
+		got[e.ID] = e
+	}
+	want := []struct {
+		at        time.Time
+		precision string
+	}{
+		{time.Date(2010, 7, 8, 12, 0, 0, 0, time.UTC), "day"},
+		{UnknownDate, "none"},
+		{aired.Add(12 * time.Hour), "day"},
+		{UnknownDate, "none"},
+		{time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC), "day"},
+		{UnknownDate, "none"},
+		{evening, "time"},
+	}
+	for i, w := range want {
+		e, ok := got[result.IDs[i]]
+		if !ok || !e.At.Equal(w.at) || e.Precision != w.precision {
+			t.Errorf("watch %d = %v %q, want %v %q", i, e.At, e.Precision, w.at, w.precision)
+		}
+	}
+
+	again, err := AddHistory(ctx, db, caller, []Watch{{Ref: inception(), Released: true}})
+	if err != nil || again.Added.Movies != 0 || len(again.IDs) != 0 {
+		t.Errorf("logging the release date twice = %+v, %v", again, err)
+	}
+}

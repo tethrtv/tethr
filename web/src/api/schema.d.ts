@@ -1907,6 +1907,11 @@ export interface components {
             year?: number;
             /** @description From Wikidata. For a show, roughly how long an episode runs. */
             runtime_minutes?: number;
+            /**
+             * Format: date
+             * @description A film's first release date, from Wikidata, when it's known to the day.
+             */
+            released?: string;
         };
         Season: {
             ids: components["schemas"]["Ids"];
@@ -1995,6 +2000,13 @@ export interface components {
                  * @description Left out, it's now.
                  */
                 watched_at?: string;
+                /**
+                 * @description How much of `watched_at` is known, `time` if left out. With `day` only its date in UTC is kept. With `none` the date isn't known and `watched_at` is ignored.
+                 * @enum {string}
+                 */
+                precision?: "time" | "day" | "none";
+                /** @description Log it on the day it came out instead of `watched_at`, using a film's release date or each episode's first air date. Anything without a known date is logged with precision `none`. */
+                released?: boolean;
             }[];
         };
         NewListings: {
@@ -2007,6 +2019,8 @@ export interface components {
             added: number;
             existing: number;
             not_found: components["schemas"]["ItemRef"][];
+            /** @description The IDs of any watches this added, which can be removed again through `DELETE /v1/history/{id}`. */
+            ids?: number[];
         };
         ResumePoint: {
             /** Format: int64 */

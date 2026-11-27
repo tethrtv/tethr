@@ -136,8 +136,8 @@ func (q *Queries) CountListItems(ctx context.Context, listID int64) (int64, erro
 }
 
 const createWatchEvent = `-- name: CreateWatchEvent :one
-INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO watch_events (profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, precision)
+VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8::text, 'time'))
 RETURNING id, profile_id, title_id, episode_id, watched_at, action, grant_id, duration_seconds, created_at, import_id, precision
 `
 
@@ -149,6 +149,7 @@ type CreateWatchEventParams struct {
 	Action          string
 	GrantID         *int64
 	DurationSeconds *float64
+	Precision       *string
 }
 
 func (q *Queries) CreateWatchEvent(ctx context.Context, arg CreateWatchEventParams) (WatchEvent, error) {
@@ -160,6 +161,7 @@ func (q *Queries) CreateWatchEvent(ctx context.Context, arg CreateWatchEventPara
 		arg.Action,
 		arg.GrantID,
 		arg.DurationSeconds,
+		arg.Precision,
 	)
 	var i WatchEvent
 	err := row.Scan(

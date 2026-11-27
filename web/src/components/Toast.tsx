@@ -5,6 +5,7 @@ type Toast = {
   text: string
   commit?: () => Promise<unknown> | undefined
   undo?: () => void
+  action?: { label: string; run: () => void }
 }
 
 const ToastContext = createContext<(t: Toast) => void>(() => {})
@@ -12,7 +13,7 @@ const ToastContext = createContext<(t: Toast) => void>(() => {})
 export const useToast = () => useContext(ToastContext)
 
 export function Toasts({ children }: { children: ReactNode }) {
-  const [shown, setShown] = useState<{ text: string; undo: boolean } | null>(null)
+  const [shown, setShown] = useState<{ text: string; undo: boolean; action?: string } | null>(null)
   const pending = useRef<Toast | null>(null)
   const timer = useRef(0)
 
@@ -31,7 +32,7 @@ export function Toasts({ children }: { children: ReactNode }) {
       clearTimeout(timer.current)
       commit()
       pending.current = t
-      setShown({ text: t.text, undo: !!t.undo })
+      setShown({ text: t.text, undo: !!t.undo, action: t.action?.label })
       timer.current = window.setTimeout(() => {
         commit()
         setShown(null)
@@ -39,6 +40,14 @@ export function Toasts({ children }: { children: ReactNode }) {
     },
     [commit],
   )
+
+  const act = () => {
+    clearTimeout(timer.current)
+    const t = pending.current
+    commit()
+    setShown(null)
+    t?.action?.run()
+  }
 
   const undo = () => {
     clearTimeout(timer.current)
@@ -62,6 +71,11 @@ export function Toasts({ children }: { children: ReactNode }) {
             {shown.undo && (
               <button type="button" className={styles.undo} onClick={undo}>
                 Undo
+              </button>
+            )}
+            {shown.action && (
+              <button type="button" className={styles.undo} onClick={act}>
+                {shown.action}
               </button>
             )}
           </>

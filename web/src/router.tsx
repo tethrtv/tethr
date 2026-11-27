@@ -14,6 +14,7 @@ import { Plain } from './components/Plain'
 import { Shell, useWatching } from './components/Shell'
 import { Toasts } from './components/Toast'
 import { Broken, LostSignal, NotFound } from './components/Trouble'
+import { WatchDates } from './components/WatchDate'
 import { Activate } from './pages/Activate'
 import { Authorize } from './pages/Authorize'
 import { AutoListPage } from './pages/AutoList'
@@ -45,7 +46,9 @@ function Root() {
     <LostSignal />
   ) : (
     <Toasts>
-      <Outlet />
+      <WatchDates>
+        <Outlet />
+      </WatchDates>
     </Toasts>
   )
 }

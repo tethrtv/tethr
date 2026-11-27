@@ -232,7 +232,8 @@ func (s *Server) addHistory(w http.ResponseWriter, r *http.Request) {
 		if t := parseTime(e.watchedAt); t != nil {
 			at = *t
 		}
-		watches = append(watches, core.Watch{Ref: e.ref, At: at})
+		released := e.watchedAt != nil && *e.watchedAt == "released"
+		watches = append(watches, core.Watch{Ref: e.ref, At: at, Released: released})
 	}
 	result, err := core.AddHistory(r.Context(), s.DB, caller(r), watches)
 	if err != nil {

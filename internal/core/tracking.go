@@ -102,7 +102,7 @@ func ScrobbleStop(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) (
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return ScrobbleResult{}, err
 		}
-		event, err := watched(ctx, q, c.ProfileID, grantID(c), r, time.Now(), "scrobble", s.Duration)
+		event, err := watched(ctx, q, c.ProfileID, grantID(c), r, time.Now(), "", "scrobble", s.Duration)
 		if err != nil {
 			return ScrobbleResult{}, err
 		}
@@ -159,7 +159,7 @@ func finishDropped(ctx context.Context, q *store.Queries, profileID int64, next 
 	if w.ExpiresAt.Before(now) {
 		at = w.ExpiresAt
 	}
-	_, err = watched(ctx, q, profileID, w.GrantID, last, at, "scrobble", nil)
+	_, err = watched(ctx, q, profileID, w.GrantID, last, at, "", "scrobble", nil)
 	return err
 }
 
@@ -208,7 +208,7 @@ func pause(ctx context.Context, q *store.Queries, c Caller, s Scrobble, r resolv
 	return ScrobbleResult{ID: p.ID, Action: "pause"}, q.ClearWatching(ctx, c.ProfileID)
 }
 
-func watched(ctx context.Context, q *store.Queries, profileID int64, grant *int64, r resolved, at time.Time, action string, duration *float64) (store.WatchEvent, error) {
+func watched(ctx context.Context, q *store.Queries, profileID int64, grant *int64, r resolved, at time.Time, precision, action string, duration *float64) (store.WatchEvent, error) {
 	event, err := q.CreateWatchEvent(ctx, store.CreateWatchEventParams{
 		ProfileID:       profileID,
 		TitleID:         r.title.ID,
@@ -217,6 +217,7 @@ func watched(ctx context.Context, q *store.Queries, profileID int64, grant *int6
 		Action:          action,
 		GrantID:         grant,
 		DurationSeconds: duration,
+		Precision:       text(precision),
 	})
 	if err != nil {
 		return event, err
@@ -352,8 +353,33 @@ func History(ctx context.Context, db *pgxpool.Pool, profileID int64, f HistoryFi
 var UnknownDate = time.Unix(0, 0).UTC()
 
 type Watch struct {
-	Ref Ref
-	At  time.Time
+	Ref       Ref
+	At        time.Time
+	Precision string
+	Released  bool
+}
+
+func (w Watch) when(r resolved) (time.Time, string) {
+	day := func(t time.Time) time.Time {
+		t = t.UTC()
+		return time.Date(t.Year(), t.Month(), t.Day(), 12, 0, 0, 0, time.UTC)
+	}
+	switch {
+	case w.Released:
+		released := r.title.Released
+		if r.episode != nil {
+			released = r.episode.FirstAired
+		}
+		if released == nil {
+			return UnknownDate, "none"
+		}
+		return day(*released), "day"
+	case w.Precision == "none":
+		return UnknownDate, "none"
+	case w.Precision == "day":
+		return day(w.At), "day"
+	}
+	return w.At, "time"
 }
 
 type Counts struct {
@@ -382,6 +408,7 @@ type SyncResult struct {
 	Deleted  Counts
 	NotFound []Ref
 	NotIDs   []int64
+	IDs      []int64
 	ListAt   time.Time
 	Listed   int64
 }
@@ -403,17 +430,20 @@ func AddHistory(ctx context.Context, db *pgxpool.Pool, c Caller, watches []Watch
 			if err != nil {
 				return err
 			}
-			exists, err := q.WatchEventExists(ctx, store.WatchEventExistsParams{ProfileID: c.ProfileID, TitleID: r.title.ID, EpisodeID: r.episodeID(), WatchedAt: w.At})
+			at, precision := w.when(r)
+			exists, err := q.WatchEventExists(ctx, store.WatchEventExistsParams{ProfileID: c.ProfileID, TitleID: r.title.ID, EpisodeID: r.episodeID(), WatchedAt: at})
 			if err != nil {
 				return err
 			}
 			if exists {
 				continue
 			}
-			if _, err := watched(ctx, q, c.ProfileID, grantID(c), r, w.At, "watch", nil); err != nil {
+			event, err := watched(ctx, q, c.ProfileID, grantID(c), r, at, precision, "watch", nil)
+			if err != nil {
 				return err
 			}
 			result.Added.add(w.Ref.Kind)
+			result.IDs = append(result.IDs, event.ID)
 		}
 		return nil
 	})
