@@ -6,6 +6,7 @@ import { Cover } from '../components/Cover'
 import { ListCover } from '../components/ListCover'
 import { useWatching } from '../components/Shell'
 import { TitleLink } from '../components/TitleLink'
+import { WaitingPlays } from '../components/WaitingPlays'
 import { ago, date, ep, plural } from '../format'
 import { useNear } from '../near'
 import { useDetails, useEpisode } from '../tmdb'
@@ -63,6 +64,8 @@ export function UpNext() {
           )}
         </p>
       </header>
+
+      <WaitingPlays />
 
       {!!paused.data?.length && (
         <section>

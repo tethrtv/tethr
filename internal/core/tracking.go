@@ -74,6 +74,10 @@ func ScrobblePause(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) 
 	})
 }
 
+func StopWatching(ctx context.Context, db *pgxpool.Pool, c Caller) error {
+	return store.New(db).ClearWatching(ctx, c.ProfileID)
+}
+
 func ScrobbleStop(ctx context.Context, db *pgxpool.Pool, c Caller, s Scrobble) (ScrobbleResult, error) {
 	if s.Progress < 1 {
 		return ScrobbleResult{}, ErrProgressTooLow

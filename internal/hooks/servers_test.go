@@ -64,6 +64,19 @@ func TestPlex(t *testing.T) {
 	if p := playback(t, h, "episode"); len(p) != 0 {
 		t.Errorf("stopping after the scrobble shouldn't leave a resume point: %+v", p)
 	}
+	send(episode("media.stop", 0))
+	if p := playback(t, h, "episode"); len(p) != 0 {
+		t.Errorf("plex resets the offset once something is watched, so a stop at 0 shouldn't leave a resume point: %+v", p)
+	}
+	send(episode("media.play", 0))
+	send(episode("media.stop", 0))
+	var watching int
+	if err := h.db.QueryRow(context.Background(), "SELECT count(*) FROM watching WHERE profile_id = $1", h.profile).Scan(&watching); err != nil || watching != 0 {
+		t.Errorf("stopping in the first moments should still end watching now: %d, %v", watching, err)
+	}
+	if p := playback(t, h, "episode"); len(p) != 0 {
+		t.Errorf("or leave a resume point: %+v", p)
+	}
 
 	send(`{"event":"media.scrobble","Account":{"id":2,"title":"guest"},"Server":{"title":"Plex Box"},"Metadata":{"type":"movie","Guid":[{"id":"tmdb://27205"}]}}`)
 	if len(h.history(t)) != 1 {
@@ -76,6 +89,43 @@ func TestPlex(t *testing.T) {
 	}
 	if code := h.post("/hooks/plex/"+secret, "application/json", "{}"); code != http.StatusBadRequest {
 		t.Errorf("not a form = %d", code)
+	}
+}
+
+func TestPlexOldAgents(t *testing.T) {
+	h := newHousehold(t)
+	_, secret, err := core.AddMediaServer(context.Background(), h.db, h.account, "plex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	send := func(kind, guid string) {
+		contentType, body := form("payload", `{"event":"media.scrobble","Account":{"id":1,"title":"nathan"},"Server":{"title":"Old Box"},"Metadata":{"type":"`+kind+`","guid":"`+guid+`"}}`)
+		if code := h.post("/hooks/plex/"+secret, contentType, body); code != http.StatusNoContent {
+			t.Fatalf("%s = %d", guid, code)
+		}
+	}
+	send("movie", "com.plexapp.agents.none://x")
+	h.matchEveryone(t)
+
+	send("episode", "com.plexapp.agents.thetvdb://81189/1/2?lang=en")
+	send("movie", "com.plexapp.agents.imdb://tt0137523?lang=en")
+	send("movie", "com.plexapp.agents.themoviedb://27205?lang=en")
+	send("episode", "com.plexapp.agents.themoviedb://1396/2/3?lang=en")
+	send("movie", "com.plexapp.agents.none://abc")
+	send("episode", "com.plexapp.agents.hama://anidb-1/1/1?lang=en")
+
+	got := h.history(t)
+	if len(got) != 4 {
+		t.Fatalf("history = %d, want the four the old agents name", len(got))
+	}
+	var episodes []string
+	for _, w := range got {
+		if w.Item.Episode != nil {
+			episodes = append(episodes, strconv.Itoa(int(w.Item.Episode.SeasonNumber))+"x"+strconv.Itoa(int(w.Item.Episode.EpisodeNumber)))
+		}
+	}
+	if len(episodes) != 2 || episodes[0] != "2x3" || episodes[1] != "1x2" {
+		t.Errorf("episodes = %v", episodes)
 	}
 }
 

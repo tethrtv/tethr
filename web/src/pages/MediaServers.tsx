@@ -23,12 +23,16 @@ const pluginRepository = 'https://tethrtv.github.io/jellyfin-plugin/manifest.jso
 export function MediaServers() {
   const me = useSignedIn()
   const queries = useQueryClient()
-  const [address, setAddress] = useState<{ kind: Kind; url: string } | null>(null)
+  const [address, setAddress] = useState<{ kind: Kind; url: string; server: number } | null>(null)
+  const [listening, setListening] = useState<number | null>(null)
   const servers = useQuery({
     queryKey: ['media-servers'],
     enabled: !!me,
+    refetchInterval: listening ? 3000 : false,
     queryFn: async () => (await api.GET('/v1/media-servers')).data ?? [],
   })
+  const heard = servers.data?.find((s) => s.id === listening)
+  if (listening && servers.data && !heard) setListening(null)
   const add = useMutation({
     mutationFn: async (kind: Kind) => {
       const { data, error } = await api.POST('/v1/media-servers', { body: { kind } })
@@ -36,7 +40,7 @@ export function MediaServers() {
       return data
     },
     onSuccess: (data) => {
-      setAddress({ kind: data.server.kind, url: apiURL + data.path })
+      setAddress({ kind: data.server.kind, url: apiURL + data.path, server: data.server.id })
       queries.invalidateQueries({ queryKey: ['media-servers'] })
     },
   })
@@ -57,7 +61,20 @@ export function MediaServers() {
         </p>
       </header>
 
-      {address && <Setup kind={address.kind} address={address.url} onDone={() => setAddress(null)} />}
+      {address && (
+        <Setup
+          kind={address.kind}
+          address={address.url}
+          onDone={() => {
+            const known = servers.data?.find((s) => s.id === address.server)
+            if (!known?.users.length || known.users.some((u) => !u.profile_id && !u.ignored)) {
+              setListening(address.server)
+            }
+            setAddress(null)
+          }}
+        />
+      )}
+      {heard && <FirstPlay server={heard} profiles={me.profiles} onDone={() => setListening(null)} />}
 
       <section>
         <h2 className={home.sectionTitle}>Tethr for Jellyfin</h2>
@@ -85,7 +102,7 @@ export function MediaServers() {
                 key={s.id}
                 server={s}
                 profiles={me.profiles}
-                onAddress={(url) => setAddress({ kind: s.kind, url })}
+                onAddress={(url) => setAddress({ kind: s.kind, url, server: s.id })}
               />
             ))}
           </ul>
@@ -121,6 +138,7 @@ const steps: Record<Kind, string[]> = {
     'Webhooks need Plex Pass on the account that owns the server.',
     'In Plex, open your account settings and choose Webhooks.',
     'Choose Add Webhook, paste the address and save.',
+    'Tethr hears about what you play. Marking something as played in Plex isn’t sent.',
   ],
   emby: [
     'Webhooks need Emby Premiere.',
@@ -149,8 +167,112 @@ function Setup({ kind, address, onDone }: { kind: Kind; address: string; onDone:
         {steps[kind].map((step) => (
           <li key={step}>{step}</li>
         ))}
-        <li>Play something. Each person shows up here after their first play, ready to match to a profile.</li>
       </ol>
+    </div>
+  )
+}
+
+function useMatch(server: number) {
+  const queries = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ user, profile }: { user: number; profile: number | null }) => {
+      const { error } = await api.PUT('/v1/media-servers/{id}/users/{user}', {
+        params: { path: { id: server, user } },
+        body: { profile_id: profile },
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queries.invalidateQueries({ queryKey: ['media-servers'] })
+      queries.invalidateQueries({ queryKey: ['connections'] })
+    },
+  })
+}
+
+function FirstPlay({
+  server: s,
+  profiles,
+  onDone,
+}: {
+  server: MediaServer
+  profiles: Me['profiles']
+  onDone: () => void
+}) {
+  const match = useMatch(s.id)
+  const [chosen, setChosen] = useState(profiles.length === 1 ? String(profiles[0].id) : '')
+  const person = s.users.find((u) => !u.profile_id && !u.ignored)
+  const name = names[s.kind]
+
+  if (!s.users.length) {
+    return (
+      <div className={styles.secret} role="status">
+        <p>
+          Now play anything on your {name} server. Whoever’s watching shows up here as soon as it starts, ready to match
+          to a profile.
+        </p>
+        <p className={home.note}>Nothing yet. This updates by itself.</p>
+        <div className={styles.secretRow}>
+          <Button variant="text" onClick={onDone}>
+            I’ll do it later
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (person) {
+    return (
+      <div className={styles.secret} role="status">
+        <p>
+          {name} says <strong>{person.name}</strong> is watching. Whose history should their plays go to?
+        </p>
+        <div className={styles.secretRow}>
+          <select value={chosen} onChange={(e) => setChosen(e.target.value)} aria-label={`Profile for ${person.name}`}>
+            <option value="" disabled>
+              Choose a profile
+            </option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="primary"
+            disabled={!chosen}
+            aria-busy={match.isPending}
+            onClick={() => match.mutate({ user: person.id, profile: Number(chosen) })}
+          >
+            Match
+          </Button>
+          <Button
+            variant="text"
+            disabled={match.isPending}
+            onClick={() => match.mutate({ user: person.id, profile: null })}
+          >
+            Don’t log them
+          </Button>
+        </div>
+        {match.isError && <p className={home.error}>{problemMessage(match.error)}</p>}
+      </div>
+    )
+  }
+
+  const last = s.users.findLast((u) => u.profile_id || u.ignored)
+  const profile = profiles.find((p) => p.id === last?.profile_id)
+  return (
+    <div className={styles.secret} role="status">
+      <p>
+        {last && profile
+          ? `Done. What ${last.name} finishes on ${name} now goes to ${profile.name}’s history.`
+          : `Done. Tethr won’t log what ${last?.name ?? 'they'} play${last ? 's' : ''} on ${name}.`}{' '}
+        Anyone else who plays something shows up under Your servers.
+      </p>
+      <div className={styles.secretRow}>
+        <Button variant="primary" onClick={onDone}>
+          Finish
+        </Button>
+      </div>
     </div>
   )
 }
@@ -170,16 +292,7 @@ function ServerRow({
     queries.invalidateQueries({ queryKey: ['media-servers'] })
     queries.invalidateQueries({ queryKey: ['connections'] })
   }
-  const match = useMutation({
-    mutationFn: async ({ user, profile }: { user: number; profile: number | null }) => {
-      const { error } = await api.PUT('/v1/media-servers/{id}/users/{user}', {
-        params: { path: { id: s.id, user } },
-        body: { profile_id: profile },
-      })
-      if (error) throw error
-    },
-    onSuccess: refresh,
-  })
+  const match = useMatch(s.id)
   const address = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST('/v1/media-servers/{id}/address', { params: { path: { id: s.id } } })

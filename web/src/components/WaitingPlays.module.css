@@ -1,0 +1,12 @@
+.waiting {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink);
+  font-size: 0.9375rem;
+}
+
+.waiting a {
+  color: inherit;
+  font-weight: 650;
+}
